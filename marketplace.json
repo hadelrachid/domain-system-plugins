@@ -1,5 +1,5 @@
 {
-    "updated_at": "2026-11-07T01:37:48+01:00",
+    "updated_at": "2026-11-07T01:40:32+01:00",
     "repository": "https://github.com/hadelrachid/domain-system-plugins",
     "plugins": {
         "academy": {
@@ -49,6 +49,18 @@
             "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/commerce.zip",
             "sha256": "74600833e727f0396fb0c629fe5e9d51fbeda5cb410efb003996df7bb125e428",
             "size_bytes": 73389
+        },
+        "flextheme": {
+            "slug": "flextheme",
+            "name": "flextheme",
+            "title": "flextheme",
+            "version": "2.6.0",
+            "os_version": "2.6",
+            "description": "Motor de renderização de vitrines e temas (Frontend CMS)",
+            "zip_filename": "flextheme.zip",
+            "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/flextheme.zip",
+            "sha256": "f981c6386cf344ae09fba6a54c2f9cdfb2425fac33dfc4b049c08b4225a85082",
+            "size_bytes": 1090483
         },
         "radio_online": {
             "slug": "radio_online",

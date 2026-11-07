@@ -12,6 +12,7 @@ Este ecossistema foi projetado para manter o núcleo (*Core*) do Domain System l
 | :--- | :--- | :---: | :--- |
 | **`academy`** | Academy LMS | `v2.6.0` | Plataforma EAD completa: cursos, módulos, aulas em vídeo, leitor de PDF embutido, emissão de certificados e portal do aluno. |
 | **`commerce`** | DomainCommerce | `v2.6.0` | Liquidação financeira com Pix automático, Cartão e Boleto via Mercado Pago, checkout internacional PayPal e webhooks de afiliados. |
+| **`flextheme`** | FlexTheme & Builder | `v2.6.0` | Motor visual do CMS: Full Site Editing (FSE), 14 blocos semânticos, editor visual Drag & Drop (Flex Builder), cabeçalhos e rodapés dinâmicos. |
 | **`seo`** | SEO Engine | `v2.6.0` | Gerenciamento de meta tags, OpenGraph, sitemap e otimização para mecanismos de busca. |
 | **`analytics`** | RachidD Analytics | `v2.6.0` | Coleta de métricas e visualização de tráfego sem depender de scripts invasivos externos. |
 | **`radio_online`** | Rádio Online | `v2.6.0` | Player de áudio em streaming com controles para barras de layout. |

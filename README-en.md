@@ -12,6 +12,7 @@ This ecosystem was designed to keep the Domain System core engine lightweight, f
 | :--- | :--- | :---: | :--- |
 | **`academy`** | Academy LMS | `v2.6.0` | Complete learning platform: courses, modules, video lessons, embedded PDF reader, completion certificates, and student portal. |
 | **`commerce`** | DomainCommerce | `v2.6.0` | Payment engine featuring instant Pix, credit cards, and bank slips via Mercado Pago, global PayPal checkout, and affiliate webhooks. |
+| **`flextheme`** | FlexTheme & Builder | `v2.6.0` | CMS visual engine: Full Site Editing (FSE), 14 semantic blocks, Drag & Drop visual editor (Flex Builder), dynamic headers and footers. |
 | **`seo`** | SEO Engine | `v2.6.0` | Meta tags, OpenGraph, sitemaps, and search engine optimization management. |
 | **`analytics`** | RachidD Analytics | `v2.6.0` | Lightweight traffic metrics and analytics without third-party tracking scripts. |
 | **`radio_online`** | Radio Online | `v2.6.0` | Streaming audio player with controls for layout bars. |
