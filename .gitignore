@@ -1,0 +1,14 @@
+# Builds & Distribuição
+dist/
+*.zip
+
+# Dependências locais e caches
+vendor/
+.cache/
+*.tmp
+*.log
+
+# Sistema Operacional
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,35 @@
+name: Build and Release Plugins
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Código
+        uses: actions/checkout@v4
+
+      - name: Preparar Ambiente PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: zip, json
+
+      - name: Construir Pacotes ZIP dos Plugins e Atualizar marketplace.json
+        run: php tools/build-plugins.php
+
+      - name: Criar Release e Fazer Upload dos Pacotes
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/*.zip
+            dist/*.zip.sha256
+            marketplace.json
+          generate_release_notes: true
