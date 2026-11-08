@@ -1,5 +1,5 @@
 {
-    "updated_at": "2026-11-08T19:55:33+01:00",
+    "updated_at": "2026-11-08T20:44:50+01:00",
     "repository": "https://github.com/hadelrachid/domain-system-plugins",
     "plugins": {
         "academy": {
@@ -11,8 +11,8 @@
             "description": "LMS Híbrido (HTML/MD + Editor em Blocos + Fábrica Automática de Páginas PHP + 3 Perfis Mobile) para o Domain-System OS.",
             "zip_filename": "academy.zip",
             "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/academy.zip",
-            "sha256": "c1c04dfe1b21643eb5b64f670395894c7d5dbfad658a8a2961260b049914b50d",
-            "size_bytes": 151430
+            "sha256": "6c3192c2d529a6c2da9529b95f31899de68ea1f8c093e781c6e72862b5b7ed07",
+            "size_bytes": 152528
         },
         "analytics": {
             "slug": "analytics",
@@ -59,8 +59,8 @@
             "description": "Motor de renderização de vitrines e temas (Frontend CMS)",
             "zip_filename": "flextheme.zip",
             "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/flextheme.zip",
-            "sha256": "f981c6386cf344ae09fba6a54c2f9cdfb2425fac33dfc4b049c08b4225a85082",
-            "size_bytes": 1090483
+            "sha256": "0d68c2a2293a167d13b4e801539fed259776b54772b7e969825c6247dc171721",
+            "size_bytes": 1090725
         },
         "radio_online": {
             "slug": "radio_online",
