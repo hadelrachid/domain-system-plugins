@@ -1,5 +1,5 @@
 {
-    "updated_at": "2026-11-07T01:40:32+01:00",
+    "updated_at": "2026-11-08T19:44:47+01:00",
     "repository": "https://github.com/hadelrachid/domain-system-plugins",
     "plugins": {
         "academy": {
@@ -11,8 +11,8 @@
             "description": "LMS Híbrido (HTML/MD + Editor em Blocos + Fábrica Automática de Páginas PHP + 3 Perfis Mobile) para o Domain-System OS.",
             "zip_filename": "academy.zip",
             "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/academy.zip",
-            "sha256": "d59ba837940b26f2415e341234c5498ea088062565eaf5a29924795dfa387ec2",
-            "size_bytes": 149802
+            "sha256": "18229de5d5231ada08c92d52ec63941f5092b06dc8325883a10ceae1c761b04f",
+            "size_bytes": 150729
         },
         "analytics": {
             "slug": "analytics",
