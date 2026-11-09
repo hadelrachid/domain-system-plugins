@@ -1,5 +1,5 @@
 {
-    "updated_at": "2026-11-08T23:42:24+01:00",
+    "updated_at": "2026-11-09T05:31:41+01:00",
     "repository": "https://github.com/hadelrachid/domain-system-plugins",
     "plugins": {
         "academy": {
@@ -59,8 +59,8 @@
             "description": "Motor de renderização de vitrines e temas (Frontend CMS)",
             "zip_filename": "flextheme.zip",
             "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/flextheme.zip",
-            "sha256": "4a0324f6453902ed1489808eac4758ce2841a8701588497490e595edd1bf59fc",
-            "size_bytes": 1096422
+            "sha256": "1df0647dbb403b5c62df9e4a59db47cd3f4bec01046102f73005902a60b6eb2d",
+            "size_bytes": 1235613
         },
         "radio_online": {
             "slug": "radio_online",
