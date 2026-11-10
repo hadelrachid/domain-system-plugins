@@ -1,5 +1,5 @@
 {
-    "updated_at": "2026-11-10T23:27:50+01:00",
+    "updated_at": "2026-11-11T00:19:32+01:00",
     "repository": "https://github.com/hadelrachid/domain-system-plugins",
     "plugins": {
         "academy": {
@@ -47,8 +47,8 @@
             "description": "DomainCommerce: Motor de Comércio Eletrônico e Liquidação Financeira Desacoplado (Pix, Cartão e Boleto via Mercado Pago e PayPal) com Webhooks Reativos para o Domain-System OS.",
             "zip_filename": "commerce.zip",
             "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/commerce.zip",
-            "sha256": "deaf2b1d90e7cb27ffdad2e591702e7c4c74b023e3227cd2ea9eafc2c990a826",
-            "size_bytes": 78271
+            "sha256": "2dd95d8045d803904358aead77a4b63f6bec107680b73af07b6e111254130569",
+            "size_bytes": 78754
         },
         "domain_drop": {
             "slug": "domain_drop",
