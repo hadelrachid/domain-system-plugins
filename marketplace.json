@@ -1,5 +1,5 @@
 {
-    "updated_at": "2026-11-10T03:18:02+01:00",
+    "updated_at": "2026-11-10T03:19:34+01:00",
     "repository": "https://github.com/hadelrachid/domain-system-plugins",
     "plugins": {
         "academy": {
@@ -47,8 +47,8 @@
             "description": "DomainCommerce: Motor de Comércio Eletrônico e Liquidação Financeira Desacoplado (Pix, Cartão e Boleto via Mercado Pago e PayPal) com Webhooks Reativos para o Domain-System OS.",
             "zip_filename": "commerce.zip",
             "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/commerce.zip",
-            "sha256": "5fe4606c0342ee767bbcaf1fca14383faa3c69d21e2e388fd0ec00fdb568e2c9",
-            "size_bytes": 147530
+            "sha256": "af0b646efd27d1ce320e89f5bab0ff1513abf4e85bd836f29698a6bb53fe2edb",
+            "size_bytes": 73605
         },
         "domain_drop": {
             "slug": "domain_drop",
@@ -59,8 +59,8 @@
             "description": "Motor autônomo de dropshipping e mineração de produtos virais integrado ao AliExpress Open Platform (App ISV 558628), precificação dinâmica e enriquecimento por IA.",
             "zip_filename": "domain_drop.zip",
             "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/domain_drop.zip",
-            "sha256": "016370956f91372fac0fc2fd7204917412831320afd3c8d5385ef8e0d2f3596c",
-            "size_bytes": 61517
+            "sha256": "69c2c1396abb7fca8d041c86aac0fd5cf8d6580bbc058de1f16b9415acb4195c",
+            "size_bytes": 34038
         },
         "flextheme": {
             "slug": "flextheme",
