@@ -1,5 +1,5 @@
 {
-    "updated_at": "2026-11-10T04:45:04+01:00",
+    "updated_at": "2026-11-10T04:50:07+01:00",
     "repository": "https://github.com/hadelrachid/domain-system-plugins",
     "plugins": {
         "academy": {
@@ -59,8 +59,8 @@
             "description": "Motor autônomo de dropshipping e mineração de produtos virais integrado ao AliExpress Open Platform (App ISV 558628), precificação dinâmica e enriquecimento por IA.",
             "zip_filename": "domain_drop.zip",
             "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/domain_drop.zip",
-            "sha256": "55bb26f61fc20175473ef09eab73d3b250e0a21f6335f8defd6383825420c9dc",
-            "size_bytes": 45737
+            "sha256": "e5ab2f67e0f5286fa876d67786268708db96af7964c65daa10d1eccba40fdfa6",
+            "size_bytes": 45743
         },
         "flextheme": {
             "slug": "flextheme",
