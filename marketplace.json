@@ -1,5 +1,5 @@
 {
-    "updated_at": "2026-11-09T23:33:38+01:00",
+    "updated_at": "2026-11-10T02:59:57+01:00",
     "repository": "https://github.com/hadelrachid/domain-system-plugins",
     "plugins": {
         "academy": {
@@ -50,6 +50,18 @@
             "sha256": "74600833e727f0396fb0c629fe5e9d51fbeda5cb410efb003996df7bb125e428",
             "size_bytes": 73389
         },
+        "domain_drop": {
+            "slug": "domain_drop",
+            "name": "domain_drop",
+            "title": "domain_drop",
+            "version": "2.6.0",
+            "os_version": "2.6",
+            "description": "Motor autônomo de dropshipping e mineração de produtos virais integrado ao AliExpress Open Platform (App ISV 558628), precificação dinâmica e enriquecimento por IA.",
+            "zip_filename": "domain_drop.zip",
+            "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/domain_drop.zip",
+            "sha256": "2d6e39cb62dd505ba579452635c8af289195f79ecec619e76535c701e7b4be6f",
+            "size_bytes": 26997
+        },
         "flextheme": {
             "slug": "flextheme",
             "name": "flextheme",
@@ -59,8 +71,8 @@
             "description": "Motor de renderização de vitrines e temas (Frontend CMS)",
             "zip_filename": "flextheme.zip",
             "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/flextheme.zip",
-            "sha256": "c77b809c02d885ceb7d7987c8c1a117dd2f1430b79413712bd496cfeaeae2ff1",
-            "size_bytes": 1050001
+            "sha256": "7e5a74ae3b1814cad85ac68c5c8c2566dda91f245d4d1d2860c523d000588830",
+            "size_bytes": 1050016
         },
         "radio_online": {
             "slug": "radio_online",
