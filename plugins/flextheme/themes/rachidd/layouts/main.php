@@ -24,6 +24,7 @@ $seo->setCanonical('https://rachidd.com')
     
     <!-- Modern Font -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Fira+Code:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="<?= (defined('BASE_URL') ? BASE_URL : '') ?>/assets/css/hero-stars.css">
     
     <style>
         /* CSS Inline Crítico para performance máxima no LCP (Largest Contentful Paint) */
