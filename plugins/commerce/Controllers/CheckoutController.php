@@ -90,12 +90,17 @@ class CheckoutController
             return new Response("<h1>404 - Item não encontrado</h1>", 404);
         }
 
+        $isPhysicalOrDropship = (($course['type'] ?? '') === 'dropship_product')
+            || (($course['type'] ?? '') === 'product')
+            || (str_contains($request->server['REQUEST_URI'] ?? '', '/checkout/produto/'));
+
         $userId = (int)$this->session->get('academy_student_id', 0);
         if ($userId <= 0) {
             $userId = (int)$this->session->get('user_id', 0);
         }
 
-        if ($userId <= 0) {
+        // Cursos digitais exigem login prévio; produtos de loja/dropshipping permitem Guest Checkout
+        if ($userId <= 0 && !$isPhysicalOrDropship) {
             $checkoutUri = $baseUrl . '/checkout/curso/' . $courseId;
             return Response::redirect($baseUrl . '/aluno/login?redirect=' . urlencode($checkoutUri));
         }
@@ -139,9 +144,9 @@ class CheckoutController
             }
         }
         $csrfToken = (string)$this->session->getCsrfToken();
-        $userEmail = (string)$this->session->get('academy_student_email', (string)$this->session->get('user_email', ''));
-        $userName = (string)$this->session->get('academy_student_name', (string)$this->session->get('user_name', 'Aluno'));
-        $userCpf = (string)$this->session->get('user_cpf', (string)$this->session->get('academy_student_cpf', ''));
+        $userEmail = (string)$this->session->get('academy_student_email', (string)$this->session->get('user_email', (string)$this->session->get('customer_email', '')));
+        $userName = (string)$this->session->get('academy_student_name', (string)$this->session->get('user_name', (string)$this->session->get('customer_name', $isPhysicalOrDropship ? '' : 'Aluno')));
+        $userCpf = (string)$this->session->get('user_cpf', (string)$this->session->get('academy_student_cpf', (string)$this->session->get('customer_cpf', '')));
 
         $courseImage = '';
         if (!empty($course['image'])) {
@@ -156,16 +161,17 @@ class CheckoutController
         }
 
         $html = $this->renderView('front/checkout', [
-            'baseUrl'        => $baseUrl,
-            'course'         => $course,
-            'courseImage'    => $courseImage,
-            'gateways'       => $gateways,
-            'coursePlatform' => $coursePlatform,
-            'csrfToken'      => $csrfToken,
-            'userEmail'      => $userEmail,
-            'userName'       => $userName,
-            'userCpf'        => $userCpf,
-            'total'          => (float)($course['price'] ?? 0.0),
+            'baseUrl'              => $baseUrl,
+            'course'               => $course,
+            'courseImage'          => $courseImage,
+            'gateways'             => $gateways,
+            'coursePlatform'       => $coursePlatform,
+            'csrfToken'            => $csrfToken,
+            'userEmail'            => $userEmail,
+            'userName'             => $userName,
+            'userCpf'              => $userCpf,
+            'total'                => (float)($course['price'] ?? 0.0),
+            'isPhysicalOrDropship' => $isPhysicalOrDropship,
         ]);
 
         return new ViewResponse($html);
@@ -464,6 +470,68 @@ class CheckoutController
         }
 
         return Response::redirect($baseUrl . '/aluno/painel?payment_status=pending&gateway=paypal&order_ref=' . urlencode($orderRef));
+    }
+
+    /**
+     * Tela de Confirmação de Pedido: GET /checkout/sucesso/{orderRef}
+     */
+    public function orderSuccess(Request $request, string $orderRef): ResponseInterface
+    {
+        $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
+        $order = $this->orderRepo->findByOrderRef($orderRef);
+
+        if (!$order) {
+            return Response::redirect($baseUrl . '/');
+        }
+
+        $itemId = (int)($order['item_id'] ?? 0);
+        $itemType = (string)($order['item_type'] ?? 'course');
+        $itemData = null;
+
+        if ($this->itemResolver !== null) {
+            $resolved = $this->itemResolver->resolve($itemType, $itemId)
+                     ?? $this->itemResolver->resolve('dropship_product', $itemId)
+                     ?? $this->itemResolver->resolve('product', $itemId);
+            if ($resolved) {
+                $itemData = [
+                    'title' => $resolved->getTitle(),
+                    'image' => $resolved->getThumbnailUrl(),
+                    'price' => $resolved->getPrice(),
+                ];
+            }
+        }
+
+        if ($itemData === null && $this->courseRepo !== null) {
+            $c = $this->courseRepo->findById($itemId);
+            if ($c) {
+                $itemData = [
+                    'title' => $c['title'] ?? 'Curso',
+                    'image' => $c['thumbnail'] ?? '',
+                    'price' => $c['price'] ?? 0.0,
+                ];
+            }
+        }
+
+        // Tenta obter os dados do pedido de dropshipping se houver
+        $dropshipOrder = null;
+        try {
+            $connection = \DomainSystem\Core\Database\Connection::getInstance();
+            if ($connection) {
+                $dropRepo = new \DomainSystem\Plugins\domain_drop\Repositories\PdoDropshipOrderRepository($connection);
+                $dropshipOrder = $dropRepo->findByOrderRef($orderRef);
+            }
+        } catch (\Throwable $e) {
+            // Silencioso
+        }
+
+        $html = $this->renderView('front/success', [
+            'baseUrl'       => $baseUrl,
+            'order'         => $order,
+            'item'          => $itemData,
+            'dropshipOrder' => $dropshipOrder,
+        ]);
+
+        return new ViewResponse($html);
     }
 
     private function renderView(string $viewName, array $data = []): string
