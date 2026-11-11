@@ -587,12 +587,27 @@ $currentSort = trim((string)($_GET['sort'] ?? ''));
         }
     }
 
+    window.closeCatDrawer = closeDrawer;
+
     if (btnToggle) btnToggle.addEventListener('click', openDrawer);
     if (btnClose) btnClose.addEventListener('click', closeDrawer);
     if (overlay) overlay.addEventListener('click', closeDrawer);
 
     window.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') closeDrawer();
+    });
+
+    // Filtragem dinâmica instantânea no Palco (sem reload e sem pular para cima!)
+    document.addEventListener('click', function(e) {
+        var link = e.target.closest('.cat-drawer-item, .header-quick-chips a');
+        if (link && link.href) {
+            var stage = document.getElementById('storeDynamicStage');
+            if (stage && window.filterCatalogDynamically) {
+                e.preventDefault();
+                closeDrawer();
+                window.filterCatalogDynamically(link.href);
+            }
+        }
     });
 })();
 </script>
