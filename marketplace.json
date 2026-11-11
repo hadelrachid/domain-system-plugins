@@ -1,5 +1,5 @@
 {
-    "updated_at": "2026-11-11T20:50:58+01:00",
+    "updated_at": "2026-11-11T21:00:39+01:00",
     "repository": "https://github.com/hadelrachid/domain-system-plugins",
     "plugins": {
         "academy": {
@@ -47,8 +47,8 @@
             "description": "DomainCommerce: Motor de Comércio Eletrônico e Liquidação Financeira Desacoplado (Pix, Cartão e Boleto via Mercado Pago e PayPal) com Webhooks Reativos para o Domain-System OS.",
             "zip_filename": "commerce.zip",
             "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/commerce.zip",
-            "sha256": "0b58f42b0295a750eebd517db6c80f21319c73b1b487d91a4bf09f1368e2b072",
-            "size_bytes": 80843
+            "sha256": "1bb8fe893e593c2963a48100285fcb465e8d1b17300b81b06e5748fe2a98fb9f",
+            "size_bytes": 81013
         },
         "domain_drop": {
             "slug": "domain_drop",
@@ -59,8 +59,8 @@
             "description": "Motor autônomo de dropshipping e mineração de produtos virais integrado ao AliExpress Open Platform (App ISV 558628), precificação dinâmica e enriquecimento por IA.",
             "zip_filename": "domain_drop.zip",
             "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/domain_drop.zip",
-            "sha256": "f6e523c4e17a3381de32020ac521f500023369352fedf1a9c5db1e91bc5fa913",
-            "size_bytes": 99034
+            "sha256": "24919961a4eda99d0bd257775eb68cf3779fd38d15aa0af00cb8c38dab4f5dd3",
+            "size_bytes": 100609
         },
         "flextheme": {
             "slug": "flextheme",
@@ -71,8 +71,8 @@
             "description": "Motor de renderização de vitrines e temas (Frontend CMS)",
             "zip_filename": "flextheme.zip",
             "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/flextheme.zip",
-            "sha256": "9f5c0dd3582184f0978e6f7e26f2dc00d2fc914e10d50800fc88e035d0c3c9bd",
-            "size_bytes": 3444400
+            "sha256": "c57553e91d84b4a13df0b7be0bf5eaf8ccbd04be997e3484a3c1c53f1e71a90f",
+            "size_bytes": 3444543
         },
         "radio_online": {
             "slug": "radio_online",
