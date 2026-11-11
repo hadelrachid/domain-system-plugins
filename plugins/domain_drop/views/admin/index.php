@@ -118,19 +118,19 @@
             <div>
                 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
                     <span style="font-size: 16px; font-weight: 800; color: #FFE082; text-transform: uppercase; letter-spacing: 0.5px;">
-                        Ciclo Autônomo 24 Horas • Rotação de 6 Categorias
+                        Ciclo Autônomo 24 Horas • Rotação de 9 Categorias
                     </span>
                     <span style="background: rgba(34,197,94,0.2); color: #4ade80; border: 1px solid rgba(34,197,94,0.4); padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase;">
                         Ativo
                     </span>
                 </div>
                 <div style="font-size: 13px; color: #cbd5e1;">
-                    Renova o catálogo automaticamente minerando produtos virais aleatórios em todas as 6 categorias oficiais a cada 24 horas.
+                    Renova o catálogo automaticamente minerando produtos virais em todas as 9 categorias oficiais a cada 24 horas.
                 </div>
                 <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">
                     Último ciclo: <strong style="color: #fff;"><?= htmlspecialchars((string)($cycleInfo['last_cycle_date'] ?? 'Pendente')) ?></strong>
                     &nbsp;•&nbsp; 
-                    6 Categorias: <span style="color: #F0D060;">Eletrônicos & Gadget, Casa Inteligente & Organização, Beleza, Cuidados & Estilo, Ferramentas & Utilidades, Pet Shop & Pets Virais, Acessórios para Veículos</span>
+                    9 Categorias: <span style="color: #F0D060;">Eletrônicos, Casa, Beleza, Ferramentas, Pet Shop, Veículos, Moda/Roupas, Lingerie/Íntima, Sex Shop (+18)</span>
                 </div>
             </div>
         </div>
@@ -199,8 +199,8 @@
     })();
     </script>
 
-    <!-- Quick Operations: 1-Click Miner & Single Product Import -->
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; margin-bottom: 28px;">
+    <!-- Quick Operations: 1-Click Miner, Single Product Import & Browser Code Ingestion -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 28px;">
         
         <!-- 1-Click Mining Card -->
         <div style="background: var(--bg-panel, #1d2327); border: 1px solid var(--border, rgba(255,255,255,0.1)); border-radius: 8px; padding: 22px;">
@@ -223,6 +223,9 @@
                             <option value="Ferramentas & Utilidades">Ferramentas & Utilidades</option>
                             <option value="Pet Shop & Pets Virais">Pet Shop & Pets Virais</option>
                             <option value="Acessórios para Veículos">Acessórios para Veículos</option>
+                            <option value="Moda, Roupas & Vestuário">Moda, Roupas & Vestuário</option>
+                            <option value="Moda Íntima, Lingeries & Pijamas">Moda Íntima, Lingeries & Pijamas</option>
+                            <option value="Sex Shop & Produtos Adultos (+18)">🔞 Sex Shop & Produtos Adultos (+18)</option>
                         </select>
                     </div>
                     <div>
@@ -267,6 +270,45 @@
 
                 <button type="submit" style="background: rgba(69, 243, 255, 0.15); border: 1px solid rgba(69, 243, 255, 0.4); color: #45f3ff; padding: 10px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
                     <i class="fas fa-download"></i> Importar Produto & Aplicar IA
+                </button>
+            </form>
+        </div>
+
+        <!-- Browser Source / Frame Ingestion Card (100% Anti-Bot Bypass) -->
+        <div style="background: var(--bg-panel, #1d2327); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 22px; position: relative;">
+            <div style="position: absolute; top: 16px; right: 16px; background: rgba(16, 185, 129, 0.2); color: #34d399; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.4); text-transform: uppercase;">
+                100% Anti-Robô
+            </div>
+            <h3 style="margin: 0 0 8px 0; font-size: 17px; font-weight: 600; color: #fff; display: flex; align-items: center; gap: 8px;">
+                <i class="fas fa-code" style="color: #10b981;"></i> Código do Navegador
+            </h3>
+            <p style="margin: 0 0 12px 0; color: var(--text-muted, #94a3b8); font-size: 13px;">
+                Abra o anúncio no navegador, copie o código-fonte (Ctrl+U ou F12) e cole aqui. Evita qualquer bloqueio de robô ou verificação deslizante.
+            </p>
+            <form action="<?= $baseUrl ?>/admin/dropship/import-browser-source" method="POST" style="display: flex; flex-direction: column; gap: 10px;">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 10px;">
+                    <div>
+                        <label style="display: block; font-size: 11px; color: var(--text-muted, #94a3b8); margin-bottom: 2px;">Código HTML ou JSON do Anúncio</label>
+                        <textarea name="raw_source" rows="2" placeholder="Cole aqui o HTML (Ctrl+U) ou JSON do anúncio..." required style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(16, 185, 129, 0.3); color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; font-family: monospace; box-sizing: border-box; resize: vertical;"></textarea>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 11px; color: var(--text-muted, #94a3b8); margin-bottom: 2px;">Categoria</label>
+                        <select name="category" style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border, rgba(255,255,255,0.15)); color: #fff; padding: 7px 8px; border-radius: 6px; font-size: 12px;">
+                            <option value="">Inferir Auto</option>
+                            <option value="Eletrônicos & Gadget">Eletrônicos</option>
+                            <option value="Casa Inteligente & Organização">Casa Inteligente</option>
+                            <option value="Beleza, Cuidados & Estilo">Beleza & Estilo</option>
+                            <option value="Ferramentas & Utilidades">Ferramentas</option>
+                            <option value="Pet Shop & Pets Virais">Pet Shop</option>
+                            <option value="Acessórios para Veículos">Veículos</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button type="submit" style="background: linear-gradient(135deg, #059669 0%, #10b981 100%); border: none; color: #fff; padding: 9px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);">
+                    <i class="fas fa-file-import"></i> Processar Código & Importar
                 </button>
             </form>
         </div>

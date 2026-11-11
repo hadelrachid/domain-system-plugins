@@ -202,10 +202,12 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
             $router->addRoute('GET', '/admin/dropship', [DropshipAdminController::class, 'index'], 'domain_drop', ['admin']);
             $router->addRoute('POST', '/admin/dropship/mine', [DropshipAdminController::class, 'mine'], 'domain_drop', ['admin']);
             $router->addRoute('POST', '/admin/dropship/import-url', [DropshipAdminController::class, 'importUrl'], 'domain_drop', ['admin']);
+            $router->addRoute('POST', '/admin/dropship/import-browser-source', [DropshipAdminController::class, 'importBrowserSource'], 'domain_drop', ['admin']);
             $router->addRoute('GET', '/admin/dropship/orders', [DropshipAdminController::class, 'orders'], 'domain_drop', ['admin']);
             $router->addRoute('POST', '/admin/dropship/orders/{id}/fulfillment', [DropshipAdminController::class, 'updateFulfillment'], 'domain_drop', ['admin']);
             $router->addRoute('GET', '/admin/dropship/settings', [DropshipAdminController::class, 'settings'], 'domain_drop', ['admin']);
             $router->addRoute('POST', '/admin/dropship/settings', [DropshipAdminController::class, 'saveSettings'], 'domain_drop', ['admin']);
+            $router->addRoute('POST', '/admin/dropship/test-connection', [DropshipAdminController::class, 'testConnection'], 'domain_drop', ['admin']);
             $router->addRoute('POST', '/admin/dropship/product/{id}/sync-images', [DropshipAdminController::class, 'syncImages'], 'domain_drop', ['admin']);
             $router->addRoute('POST', '/admin/dropship/product/{id}/price', [DropshipAdminController::class, 'updatePrice'], 'domain_drop', ['admin']);
             $router->addRoute('POST', '/admin/dropship/run-daily-cycle', [DropshipAdminController::class, 'runDailyCycle'], 'domain_drop', ['admin']);
