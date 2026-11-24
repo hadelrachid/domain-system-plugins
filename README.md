@@ -12,14 +12,14 @@ Todos os módulos são distribuídos sob a licença **MIT** e exigem o **Domain-
 
 | Plugin / Módulo | Repositório Dedicado | Versão | Descrição |
 | :--- | :--- | :---: | :--- |
-| **DomainCommerce** | [hadelrachid/commerce](https://github.com/hadelrachid/commerce) | `v2.8.4` | Motor de comércio eletrônico, checkout multigateway (Pix, Cartão, Boleto, Mercado Pago, PayPal) e webhooks de afiliados. |
-| **DomainDrop** | [hadelrachid/domain_drop](https://github.com/hadelrachid/domain_drop) | `v2.8.4` | Módulo autônomo de Dropshipping com sincronização direta via API oficial do AliExpress e precificação inteligente. |
-| **Academy LMS** | [hadelrachid/academy](https://github.com/hadelrachid/academy) | `v2.8.4` | Plataforma EAD completa com gestão de cursos, módulos, player multimídia, leitor de PDF e certificação. |
-| **FlexTheme & Builder** | [hadelrachid/flextheme](https://github.com/hadelrachid/flextheme) | `v2.8.4` | Motor visual com Full Site Editing (FSE), blocos modulares dinâmicos e construtor visual de páginas. |
-| **SEO & Theme Engine** | [hadelrachid/seo](https://github.com/hadelrachid/seo) | `v2.8.4` | Otimização para buscadores (SEO), auditoria PageSpeed, compressão nativa de assets e meta tags OpenGraph. |
-| **RachidD Analytics** | [hadelrachid/analytics](https://github.com/hadelrachid/analytics) | `v2.8.4` | Monitoramento analítico de acessos em tempo real, privado e nativo, sem depender de scripts externos. |
-| **Rádio Online** | [hadelrachid/radio_online](https://github.com/hadelrachid/radio_online) | `v2.8.4` | Reprodutor e widget de streaming de rádio ao vivo integrado às barras e temas do sistema. |
-| **Clock Widget** | [hadelrachid/clock_widget](https://github.com/hadelrachid/clock_widget) | `v2.8.4` | Widget de relógio digital customizável para cabeçalhos e dashboards do CockPit. |
+| **DomainCommerce** | [hadelrachid/commerce](https://github.com/hadelrachid/commerce) | `v2.8.6` | Motor de comércio eletrônico, checkout multigateway (Pix, Cartão, Boleto, Mercado Pago, PayPal) e webhooks de afiliados. |
+| **DomainDrop** | [hadelrachid/domain_drop](https://github.com/hadelrachid/domain_drop) | `v2.8.6` | Módulo autônomo de Dropshipping com sincronização direta via API oficial do AliExpress e precificação inteligente. |
+| **Academy LMS** | [hadelrachid/academy](https://github.com/hadelrachid/academy) | `v2.8.6` | Plataforma EAD completa com gestão de cursos, módulos, player multimídia, leitor de PDF e certificação. |
+| **FlexTheme & Builder** | [hadelrachid/flextheme](https://github.com/hadelrachid/flextheme) | `v2.8.6` | Motor visual com Full Site Editing (FSE), blocos modulares dinâmicos e construtor visual de páginas. |
+| **SEO & Theme Engine** | [hadelrachid/seo](https://github.com/hadelrachid/seo) | `v2.8.6` | Otimização para buscadores (SEO), auditoria PageSpeed, compressão nativa de assets e meta tags OpenGraph. |
+| **RachidD Analytics** | [hadelrachid/analytics](https://github.com/hadelrachid/analytics) | `v2.8.6` | Monitoramento analítico de acessos em tempo real, privado e nativo, sem depender de scripts externos. |
+| **Rádio Online** | [hadelrachid/radio_online](https://github.com/hadelrachid/radio_online) | `v2.8.6` | Reprodutor e widget de streaming de rádio ao vivo integrado às barras e temas do sistema. |
+| **Clock Widget** | [hadelrachid/clock_widget](https://github.com/hadelrachid/clock_widget) | `v2.8.6` | Widget de relógio digital customizável para cabeçalhos e dashboards do CockPit. |
 
 ---
 
