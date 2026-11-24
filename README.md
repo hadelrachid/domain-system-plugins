@@ -1,67 +1,40 @@
-# Domain System Plugins
+# Domain-System Plugins Hub 🚀
 
-Repositório oficial de plugins, módulos de aplicação e extensões para o [Domain System](https://github.com/hadelrachid/domain-system).
+> Catálogo central e diretório oficial de extensões e módulos para o **[Domain-System OS (CockPit)](https://github.com/hadelrachid/domain-system)**.
 
-Este ecossistema foi projetado para manter o núcleo (*Core*) do Domain System leve, rápido e previsível, permitindo que funcionalidades pesadas de negócio — como plataformas completas de cursos (LMS) e motores de pagamento — operem de forma desacoplada e modular.
+Cada módulo de negócio possui seu **repositório independente e dedicado** no GitHub, permitindo versionamento semântico desacoplado, releases ágeis e ciclos de vida isolados do núcleo do sistema.
+
+Todos os módulos são distribuídos sob a licença **MIT** e exigem o **Domain-System OS** para funcionar.
 
 ---
 
-## 📦 Plugins Disponíveis
+## 📦 Repositórios Oficiais dos Plugins
 
-| Plugin / Slug | Nome Oficial | Versão | Descrição |
+| Plugin / Módulo | Repositório Dedicado | Versão | Descrição |
 | :--- | :--- | :---: | :--- |
-| **`academy`** | Academy LMS | `v2.6.0` | Plataforma EAD completa: cursos, módulos, aulas em vídeo, leitor de PDF embutido, emissão de certificados e portal do aluno. |
-| **`commerce`** | DomainCommerce | `v2.6.0` | Liquidação financeira com Pix automático, Cartão e Boleto via Mercado Pago, checkout internacional PayPal e webhooks de afiliados. |
-| **`flextheme`** | FlexTheme & Builder | `v2.6.0` | Motor visual do CMS: Full Site Editing (FSE), 14 blocos semânticos, editor visual Drag & Drop (Flex Builder), cabeçalhos e rodapés dinâmicos. |
-| **`seo`** | SEO Engine | `v2.6.0` | Gerenciamento de meta tags, OpenGraph, sitemap e otimização para mecanismos de busca. |
-| **`analytics`** | RachidD Analytics | `v2.6.0` | Coleta de métricas e visualização de tráfego sem depender de scripts invasivos externos. |
-| **`radio_online`** | Rádio Online | `v2.6.0` | Player de áudio em streaming com controles para barras de layout. |
-| **`clock_widget`** | Clock Widget | `v2.6.0` | Relógio digital personalizável para cabeçalhos e barras laterais. |
+| **DomainCommerce** | [hadelrachid/commerce](https://github.com/hadelrachid/commerce) | `v2.8.4` | Motor de comércio eletrônico, checkout multigateway (Pix, Cartão, Boleto, Mercado Pago, PayPal) e webhooks de afiliados. |
+| **DomainDrop** | [hadelrachid/domain_drop](https://github.com/hadelrachid/domain_drop) | `v2.8.4` | Módulo autônomo de Dropshipping com sincronização direta via API oficial do AliExpress e precificação inteligente. |
+| **Academy LMS** | [hadelrachid/academy](https://github.com/hadelrachid/academy) | `v2.8.4` | Plataforma EAD completa com gestão de cursos, módulos, player multimídia, leitor de PDF e certificação. |
+| **FlexTheme & Builder** | [hadelrachid/flextheme](https://github.com/hadelrachid/flextheme) | `v2.8.4` | Motor visual com Full Site Editing (FSE), blocos modulares dinâmicos e construtor visual de páginas. |
+| **SEO & Theme Engine** | [hadelrachid/seo](https://github.com/hadelrachid/seo) | `v2.8.4` | Otimização para buscadores (SEO), auditoria PageSpeed, compressão nativa de assets e meta tags OpenGraph. |
+| **RachidD Analytics** | [hadelrachid/analytics](https://github.com/hadelrachid/analytics) | `v2.8.4` | Monitoramento analítico de acessos em tempo real, privado e nativo, sem depender de scripts externos. |
+| **Rádio Online** | [hadelrachid/radio_online](https://github.com/hadelrachid/radio_online) | `v2.8.4` | Reprodutor e widget de streaming de rádio ao vivo integrado às barras e temas do sistema. |
+| **Clock Widget** | [hadelrachid/clock_widget](https://github.com/hadelrachid/clock_widget) | `v2.8.4` | Widget de relógio digital customizável para cabeçalhos e dashboards do CockPit. |
 
 ---
 
-## 🧩 Filosofia e Arquitetura
+## 🚀 Como Instalar Qualquer Plugin no Domain-System (CockPit)
 
-Todos os plugins deste repositório seguem os padrões do **Domain System**:
-
-1. **Isolamento em Ring 3:** Plugins nunca acessam o banco de dados diretamente; utilizam os contratos e serviços expostos pelo `$runtime` (`OsRuntimeInterface`).
-2. **Proteção por Circuit Breaker:** Se um plugin falhar ou disparar uma exceção não tratada em produção, o **No-Break Shield** isola a falha, preservando o site e o checkout no ar.
-3. **Manifesto `plugin.json`:** Cada extensão declara suas dependências, versão mínima do sistema operacional (`os_version`) e metadados.
-4. **Migrations Próprias:** Módulos que exigem persistência possuem sua própria pasta `migrations/` gerenciada automaticamente pelo instalador.
-
----
-
-## 🚀 Como Instalar um Plugin no Domain System
-
-### Método 1: Pelo Painel Administrativo (Recomendado)
-1. Acesse o painel administrativo do seu site: `/admin/plugins`.
-2. Baixe o arquivo `.zip` do plugin desejado na aba de [Releases](https://github.com/hadelrachid/domain-system-plugins/releases).
-3. Faça o upload do ZIP na área de instalação.
-4. O sistema valida a segurança do código, descompacta os arquivos em `src/Plugins/{slug}` e executa as migrations automaticamente.
-
-### Método 2: Instalação Manual
-1. Baixe o código do plugin ou clone este repositório.
-2. Copie a pasta do plugin desejado para `src/Plugins/` na raiz da sua instalação do Domain System:
-   ```bash
-   cp -r plugins/academy /caminho/do/domain-system/src/Plugins/academy
-   ```
-3. Acesse `/admin/plugins` e ative o plugin com um clique.
-
----
-
-## 🛠️ Ferramentas para Desenvolvedores
-
-### Empacotamento de Plugins
-Para gerar os arquivos `.zip` para distribuição e atualizar o catálogo `marketplace.json`:
-
-```bash
-php tools/build-plugins.php
-```
-
-Os pacotes serão gerados na pasta `dist/` com seus respectivos hashes SHA-256 de integridade.
+1. Acesse o **repositório dedicado** do plugin desejado na tabela acima e vá para a aba **[Releases]**.
+2. Baixe o arquivo `.zip` da versão estável mais recente (ex: `commerce.zip`, `domain_drop.zip`).
+3. Abra o painel administrativo do seu site **Domain-System (CockPit)** em `/admin`.
+4. No menu lateral, clique em **Módulos (Plugins)**.
+5. No topo da página, clique no botão **Adicionar Novo**.
+6. Selecione o arquivo `.zip` baixado e clique em **Instalar Agora**.
+7. O sistema descompactará o pacote na pasta canônica do plugin (`src/Plugins/{slug}`), executará as migrações de banco de dados e registrará os ganchos com segurança.
 
 ---
 
 ## 📄 Licença
 
-Distribuído sob a licença **MIT**. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+Todos os módulos são distribuídos sob a licença **MIT**. Consulte o arquivo [LICENSE](LICENSE) para detalhes.
