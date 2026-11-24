@@ -24,10 +24,10 @@
             </div>
             <h1 style="margin: 0; font-size: 26px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 10px;">
                 <i class="fas fa-sliders-h" style="color: #ff4747;"></i>
-                Configurações da API & Margens de Lucro
+                Configurações da API &amp; Conexão AliExpress
             </h1>
             <p style="margin: 6px 0 0 0; color: var(--text-muted, #94a3b8); font-size: 13px;">
-                Gerenciamento de credenciais oficiais do AliExpress Open Platform e parâmetros da precificação dinâmica.
+                Gerenciamento de credenciais oficiais do AliExpress Open Platform e conectividade do Gateway.
             </p>
         </div>
 
@@ -48,6 +48,147 @@
             <i class="fas fa-check-circle" style="font-size: 18px;"></i> <?= htmlspecialchars((string)$flashMsg) ?>
         </div>
     <?php endif; ?>
+
+    <?php
+    // Variáveis analíticas de telemetria e validade
+    $atExpiresAt = (int)($config['access_token_expires_at'] ?? 0);
+    $hasAccessToken = !empty($config['access_token']);
+    $atRemaining = max(0, $atExpiresAt - time());
+    $atDays = (int)floor($atRemaining / 86400);
+    $atHours = (int)floor(($atRemaining % 86400) / 3600);
+    $atMinutes = (int)floor(($atRemaining % 3600) / 60);
+
+    $rtExpiresAt = (int)($config['refresh_token_expires_at'] ?? 0);
+    $rtRemaining = max(0, $rtExpiresAt - time());
+    $rtDays = (int)floor($rtRemaining / 86400);
+
+    $requestsUsed = (int)($apiUsage['requests_this_month'] ?? 0);
+    $quotaLimit = max(1, (int)($apiUsage['monthly_quota_limit'] ?? 1000000));
+    $pctUsed = (float)($apiUsage['percentage_used'] ?? 0.0);
+    $pctFree = (float)($apiUsage['percentage_available'] ?? 100.0);
+
+    $lastDaily = (int)($config['last_daily_cycle_at'] ?? 0);
+    $nextDailySec = max(0, 86400 - (time() - $lastDaily));
+    $dailyH = (int)floor($nextDailySec / 3600);
+    $dailyM = (int)floor(($nextDailySec % 3600) / 60);
+
+    $syncHours = max(1, (int)($config['price_sync_interval_hours'] ?? 6));
+    $lastPriceSync = (int)($config['last_price_sync_at'] ?? 0);
+    $nextPriceSec = max(0, ($syncHours * 3600) - (time() - $lastPriceSync));
+    $priceH = (int)floor($nextPriceSec / 3600);
+    $priceM = (int)floor(($nextPriceSec % 3600) / 60);
+    ?>
+
+    <!-- Painel Executivo: Telemetria de Quota, Token e Ciclos Operacionais -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 18px; margin-bottom: 24px;">
+
+        <!-- Widget 1: Contador Mensal de Requisições (Quota API) -->
+        <div style="background: var(--bg-panel, #1d2327); border: 1px solid var(--border, rgba(255,255,255,0.15)); border-radius: 8px; padding: 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <span style="font-size: 13px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-chart-line" style="color: #45f3ff;"></i> Requisições da API
+                </span>
+                <span style="font-size: 11px; font-weight: 700; color: #4ade80; background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.3); padding: 2px 8px; border-radius: 10px;">
+                    <?= number_format($pctFree, 1, ',', '.') ?>% Livre
+                </span>
+            </div>
+
+            <div style="font-size: 24px; font-weight: 800; color: #fff; margin-bottom: 4px; font-family: monospace;">
+                <?= number_format($requestsUsed, 0, ',', '.') ?> <span style="font-size: 14px; font-weight: 500; color: #94a3b8;">/ <?= number_format($quotaLimit, 0, ',', '.') ?></span>
+            </div>
+
+            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 12px;">
+                Cota oficial do mês (<?= htmlspecialchars((string)($apiUsage['current_month'] ?? date('Y-m'))) ?>)
+            </div>
+
+            <!-- Barra de Progresso Visual -->
+            <div style="width: 100%; height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
+                <div style="width: <?= min(100.0, max(1.0, $pctUsed)) ?>%; height: 100%; background: linear-gradient(90deg, #45f3ff 0%, #22c55e 100%); border-radius: 4px; transition: width 0.3s ease;"></div>
+            </div>
+
+            <div style="font-size: 11px; color: #94a3b8; display: flex; justify-content: space-between;">
+                <span>Total histórico: <strong style="color: #fff;"><?= number_format((int)($apiUsage['requests_total'] ?? 0), 0, ',', '.') ?></strong></span>
+                <span style="color: #4ade80;"><i class="fas fa-shield-alt"></i> Quota Saudável</span>
+            </div>
+        </div>
+
+        <!-- Widget 2: Validade do Access Token & Renovação Automática -->
+        <div style="background: var(--bg-panel, #1d2327); border: 1px solid var(--border, rgba(255,255,255,0.15)); border-radius: 8px; padding: 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <span style="font-size: 13px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-key" style="color: #f97316;"></i> Validade do Token
+                </span>
+                <?php if ($hasAccessToken && $atRemaining > 0): ?>
+                    <span style="font-size: 11px; font-weight: 700; color: #4ade80; background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.3); padding: 2px 8px; border-radius: 10px;">
+                        🟢 Ativo
+                    </span>
+                <?php else: ?>
+                    <span style="font-size: 11px; font-weight: 700; color: #f59e0b; background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.3); padding: 2px 8px; border-radius: 10px;">
+                        ⚠️ Pendente
+                    </span>
+                <?php endif; ?>
+            </div>
+
+            <?php if ($hasAccessToken && $atRemaining > 0): ?>
+                <div style="font-size: 24px; font-weight: 800; color: #fff; margin-bottom: 4px; font-family: monospace;">
+                    <?= $atDays ?><span style="font-size: 14px; font-weight: 600; color: #94a3b8;">d</span>
+                    <?= $atHours ?><span style="font-size: 14px; font-weight: 600; color: #94a3b8;">h</span>
+                    <?= $atMinutes ?><span style="font-size: 14px; font-weight: 600; color: #94a3b8;">m</span>
+                </div>
+
+                <div style="font-size: 11px; color: #94a3b8; margin-bottom: 12px;">
+                    Expira em <?= date('d/m/Y \à\s H:i', $atExpiresAt) ?>
+                </div>
+
+                <div style="background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.25); border-radius: 6px; padding: 7px 10px; font-size: 11px; color: #4ade80; display: flex; align-items: center; gap: 7px;">
+                    <i class="fas fa-sync-alt fa-spin"></i>
+                    <span>Renovação automática ativa (30 min antes)</span>
+                </div>
+            <?php else: ?>
+                <div style="font-size: 15px; font-weight: 700; color: #f59e0b; margin-bottom: 8px;">
+                    Token não detectado
+                </div>
+                <div style="font-size: 12px; color: #94a3b8; margin-bottom: 12px;">
+                    Clique no botão de conexão OAuth2 abaixo para autenticar.
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <!-- Widget 3: Harmonização de Ciclos (6h Preço vs 24h Ofertas) -->
+        <div style="background: var(--bg-panel, #1d2327); border: 1px solid var(--border, rgba(255,255,255,0.15)); border-radius: 8px; padding: 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <span style="font-size: 13px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-clock" style="color: #FFE082;"></i> Ciclos Operacionais
+                </span>
+                <span style="font-size: 11px; font-weight: 700; color: #38bdf8; background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.3); padding: 2px 8px; border-radius: 10px;">
+                    Harmonizados
+                </span>
+            </div>
+
+            <!-- Ciclo 24 Horas -->
+            <div style="margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.07);">
+                <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 2px;">
+                    <span style="color: #FFE082; font-weight: 700;">🔥 Ofertas 24 Horas:</span>
+                    <strong style="color: #fff; font-family: monospace;"><?= $dailyH ?>h <?= $dailyM ?>m</strong>
+                </div>
+                <div style="font-size: 10px; color: #94a3b8;">
+                    Garante estabilidade dos preços promocionais do cronômetro.
+                </div>
+            </div>
+
+            <!-- Sentinela 6 Horas -->
+            <div>
+                <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 2px;">
+                    <span style="color: #38bdf8; font-weight: 700;">🛡️ Sentinela de Preços:</span>
+                    <strong style="color: #fff; font-family: monospace;"><?= $priceH ?>h <?= $priceM ?>m</strong>
+                </div>
+                <div style="font-size: 10px; color: #94a3b8;">
+                    Monitora flutuação cambial (Dólar/Real) sem zerar o relógio de 24h.
+                </div>
+            </div>
+        </div>
+
+    </div>
 
     <!-- Live Test Connection Card -->
     <div id="aliexpressConnCard" style="background: var(--bg-panel, #1d2327); border: 1px solid var(--border, rgba(255,255,255,0.15)); border-radius: 8px; padding: 20px 24px; margin-bottom: 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
@@ -98,62 +239,80 @@
             <label style="display: block; font-size: 13px; font-weight: 500; color: #fff; margin-bottom: 6px;">
                 App Secret
             </label>
-            <input type="password" name="app_secret" placeholder="<?= !empty($config['app_secret']) ? '•••••••••••••••••••••••••••••••• (Salvo com segurança)' : 'Cole seu App Secret aqui' ?>" style="width: 100%; background: rgba(0,0,0,0.25); border: 1px solid var(--border, rgba(255,255,255,0.15)); color: #fff; padding: 10px 14px; border-radius: 6px; font-size: 13px; box-sizing: border-box; font-family: monospace;">
+            <?php
+            $rawSecret = trim((string)($config['app_secret'] ?? ''));
+            $maskedSecret = $rawSecret !== '' ? ('••••••••••••••••' . substr($rawSecret, -4)) : '';
+            ?>
+            <div style="display: flex; align-items: stretch;">
+                <input type="password" id="input_app_secret" name="app_secret" value="<?= htmlspecialchars($maskedSecret, ENT_QUOTES, 'UTF-8') ?>" placeholder="Cole seu App Secret aqui" style="flex: 1; min-width: 0; background: rgba(0,0,0,0.25); border: 1px solid var(--border, rgba(255,255,255,0.15)); border-right: none; border-top-left-radius: 6px; border-bottom-left-radius: 6px; border-top-right-radius: 0; border-bottom-right-radius: 0; color: #fff; padding: 10px 14px; font-size: 13px; box-sizing: border-box; font-family: monospace;">
+                <button type="button" onclick="ddToggleSecret('input_app_secret', this)" style="background: rgba(255,255,255,0.06); border: 1px solid var(--border, rgba(255,255,255,0.15)); border-left: 1px solid rgba(255,255,255,0.08); border-top-right-radius: 6px; border-bottom-right-radius: 6px; border-top-left-radius: 0; border-bottom-left-radius: 0; padding: 0 14px; cursor: pointer; font-size: 17px; display: inline-flex; align-items: center; justify-content: center; color: #cbd5e1; transition: background 0.15s ease;" onmouseover="this.style.background='rgba(255,255,255,0.12)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'" title="Revelar ou ocultar App Secret" aria-label="Mostrar ou ocultar chave">👁️</button>
+            </div>
             <span style="font-size: 11px; color: var(--text-muted, #94a3b8); display: block; margin-top: 4px;">
-                Armazenado com segurança em <code>config/plugins/domain_drop.json</code> (protegido contra commit no Git). Deixe em branco para manter o atual.
+                Armazenado com segurança e mascarado (protegido contra vazamento). Deixe o valor mascarado para manter o atual, ou cole um novo App Secret.
             </span>
         </div>
 
         <div style="margin-bottom: 18px;">
-            <label style="display: block; font-size: 13px; font-weight: 500; color: #fff; margin-bottom: 6px;">
-                Access Token OAuth2 (Sessão do Dropshipper)
-            </label>
-            <input type="password" name="access_token" placeholder="<?= !empty($config['access_token']) ? '•••••••••••••••••••••••••••••••• (Token Ativo)' : 'Cole o Access Token de autorização OAuth (opcional)' ?>" style="width: 100%; background: rgba(0,0,0,0.25); border: 1px solid var(--border, rgba(255,255,255,0.15)); color: #fff; padding: 10px 14px; border-radius: 6px; font-size: 13px; box-sizing: border-box; font-family: monospace;">
-            <span style="font-size: 11px; color: var(--text-muted, #94a3b8); display: block; margin-top: 4px;">
-                Token de sessão concedido pelo AliExpress para chamadas autenticadas de produtos e pedidos dropshipping. Caso não possua, o motor utilizará a base inteligente curada.
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px;">
+                <label style="font-size: 13px; font-weight: 500; color: #fff; margin: 0;">
+                    Access Token OAuth2 (Sessão do Dropshipper)
+                </label>
+                <a href="<?= htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8') ?>/admin/dropship/oauth/authorize" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px; background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); color: #fff; font-size: 12px; font-weight: 700; text-decoration: none; box-shadow: 0 2px 8px rgba(249, 115, 22, 0.35);">
+                    🔗 Conectar Conta AliExpress (OAuth2)
+                </a>
+            </div>
+            <?php
+            $rawAccessToken = trim((string)($config['access_token'] ?? ''));
+            $maskedAccessToken = $rawAccessToken !== '' ? ('••••••••••••••••' . substr($rawAccessToken, -4)) : '';
+            ?>
+            <div style="display: flex; align-items: stretch;">
+                <input type="password" id="input_access_token" name="access_token" value="<?= htmlspecialchars($maskedAccessToken, ENT_QUOTES, 'UTF-8') ?>" placeholder="Cole o Access Token ou clique em Conectar Conta AliExpress (OAuth2)" style="flex: 1; min-width: 0; background: rgba(0,0,0,0.25); border: 1px solid var(--border, rgba(255,255,255,0.15)); border-right: none; border-top-left-radius: 6px; border-bottom-left-radius: 6px; border-top-right-radius: 0; border-bottom-right-radius: 0; color: #fff; padding: 10px 14px; font-size: 13px; box-sizing: border-box; font-family: monospace;">
+                <button type="button" onclick="ddToggleSecret('input_access_token', this)" style="background: rgba(255,255,255,0.06); border: 1px solid var(--border, rgba(255,255,255,0.15)); border-left: 1px solid rgba(255,255,255,0.08); border-top-right-radius: 6px; border-bottom-right-radius: 6px; border-top-left-radius: 0; border-bottom-left-radius: 0; padding: 0 14px; cursor: pointer; font-size: 17px; display: inline-flex; align-items: center; justify-content: center; color: #cbd5e1; transition: background 0.15s ease;" onmouseover="this.style.background='rgba(255,255,255,0.12)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'" title="Revelar ou ocultar Access Token" aria-label="Mostrar ou ocultar token">👁️</button>
+            </div>
+            <?php
+            $oauthIsHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+                || strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https'
+                || (int)($_SERVER['SERVER_PORT'] ?? 80) === 443;
+            $oauthScheme = $oauthIsHttps ? 'https' : 'http';
+            $oauthHost = (string)($_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? 'localhost'));
+            $oauthCallbackDisplay = (str_starts_with($baseUrl, 'http://') || str_starts_with($baseUrl, 'https://'))
+                ? rtrim($baseUrl, '/') . '/admin/dropship/callback'
+                : ($oauthScheme . '://' . $oauthHost . $baseUrl . '/admin/dropship/callback');
+            ?>
+            <span style="font-size: 11px; color: var(--text-muted, #94a3b8); display: block; margin-top: 6px; line-height: 1.5;">
+                Cadastre no App Console do AliExpress (<strong>Callback URL</strong>): <code style="color: #45f3ff; user-select: all;"><?= htmlspecialchars($oauthCallbackDisplay, ENT_QUOTES, 'UTF-8') ?></code>
             </span>
         </div>
 
         <div style="margin-bottom: 24px;">
             <label style="display: block; font-size: 13px; font-weight: 500; color: #fff; margin-bottom: 6px;">
-                Callback URL Cadastrada
+                Gateway Oficial da API (AliExpress IOP)
             </label>
-            <input type="text" readonly value="<?= $baseUrl ?>/admin/dropship/callback" style="width: 100%; background: rgba(0,0,0,0.4); border: 1px solid var(--border, rgba(255,255,255,0.1)); color: #94a3b8; padding: 10px 14px; border-radius: 6px; font-size: 13px; box-sizing: border-box; font-family: monospace;">
+            <input type="text" readonly value="https://api-sg.aliexpress.com/sync" style="width: 100%; background: rgba(0,0,0,0.4); border: 1px solid var(--border, rgba(255,255,255,0.1)); color: #94a3b8; padding: 10px 14px; border-radius: 6px; font-size: 13px; box-sizing: border-box; font-family: monospace;">
             <span style="font-size: 11px; color: var(--text-muted, #94a3b8); display: block; margin-top: 4px;">
-                URL de redirecionamento configurada no AliExpress Console.
+                Endpoint global HMAC-SHA256 utilizado para sincronização de catálogo, rastreio e pedidos.
             </span>
         </div>
 
-        <h3 style="margin: 28px 0 18px 0; font-size: 16px; font-weight: 600; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px;">
-            <i class="fas fa-calculator" style="color: #45f3ff; margin-right: 6px;"></i> Motor de Precificação Dinâmica & Margens
-        </h3>
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
-            <div>
-                <label style="display: block; font-size: 13px; font-weight: 500; color: #fff; margin-bottom: 6px;">
-                    Markup Padrão (%)
-                </label>
-                <div style="position: relative;">
-                    <input type="number" step="1" min="10" name="default_markup_percent" value="<?= (float)($config['default_markup_percent'] ?? 100.0) ?>" required style="width: 100%; background: rgba(0,0,0,0.25); border: 1px solid var(--border, rgba(255,255,255,0.15)); color: #fff; padding: 10px 14px; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
-                    <span style="position: absolute; right: 12px; top: 10px; color: #94a3b8; font-size: 13px;">%</span>
+        <!-- Card de Redirecionamento da Estratégia de Precificação -->
+        <div style="margin: 28px 0 20px 0; background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(6, 78, 59, 0.15) 100%); border: 1.5px solid rgba(16, 185, 129, 0.35); border-radius: 8px; padding: 20px 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+            <div style="display: flex; align-items: center; gap: 14px; max-width: 580px;">
+                <div style="width: 44px; height: 44px; border-radius: 8px; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); display: flex; align-items: center; justify-content: center; color: #10b981; font-size: 20px; flex-shrink: 0;">
+                    <i class="fas fa-coins"></i>
                 </div>
-                <span style="font-size: 11px; color: var(--text-muted, #94a3b8); display: block; margin-top: 4px;">
-                    Ex: 100% significa dobrar o valor de custo convertido (2x).
-                </span>
-            </div>
-
-            <div>
-                <label style="display: block; font-size: 13px; font-weight: 500; color: #fff; margin-bottom: 6px;">
-                    Lucro Mínimo por Item (R$)
-                </label>
-                <div style="position: relative;">
-                    <input type="number" step="0.5" min="0" name="min_profit_margin_brl" value="<?= (float)($config['min_profit_margin_brl'] ?? 30.0) ?>" required style="width: 100%; background: rgba(0,0,0,0.25); border: 1px solid var(--border, rgba(255,255,255,0.15)); color: #fff; padding: 10px 14px; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
-                    <span style="position: absolute; right: 12px; top: 10px; color: #94a3b8; font-size: 13px;">R$</span>
+                <div>
+                    <h4 style="margin: 0 0 4px 0; color: #fff; font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                        Margens de Lucro &amp; Sentinela de Volatilidade
+                        <span style="font-size: 11px; background: rgba(16, 185, 129, 0.2); color: #5cd67d; padding: 2px 8px; border-radius: 10px; font-weight: 600;">Centralizado no Catálogo</span>
+                    </h4>
+                    <p style="margin: 0; color: #cbd5e1; font-size: 12.5px; line-height: 1.5;">
+                        Os controles comerciais de <strong>Markup %</strong>, <strong>Lucro Mínimo (Piso)</strong>, <strong>Índice de Volatilidade (12%)</strong> e o combobox de <strong>Varredura da Sentinela (3h, 4h, 6h, 12h)</strong> foram centralizados diretamente na tela de <strong>Catálogo &amp; Mineração</strong> para operação rápida do dropshipper.
+                    </p>
                 </div>
-                <span style="font-size: 11px; color: var(--text-muted, #94a3b8); display: block; margin-top: 4px;">
-                    Margem mínima de segurança para cobrir taxas de gateway e tráfego pago.
-                </span>
             </div>
+            <a href="<?= $baseUrl ?>/admin/dropship" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #fff; text-decoration: none; padding: 11px 20px; border-radius: 6px; font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25); transition: all 0.2s ease;">
+                <i class="fas fa-calculator"></i> Ajustar Margens no Catálogo &rarr;
+            </a>
         </div>
 
         <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 18px;">
@@ -230,7 +389,7 @@
                     resultBox.style.background = 'rgba(40,167,69,0.12)';
                     resultBox.style.border = '1px solid #28a745';
                     resultBox.style.color = '#5cd67d';
-                    resultBox.innerHTML = '<div style="font-weight: 700; margin-bottom: 4px; font-size: 14px;">✔️ Sucesso: Sincronização Estabelecida!</div>' + data.message;
+                    resultBox.innerHTML = '<div style="font-weight: 700; margin-bottom: 4px; font-size: 14px;">✔️ Sucesso: Sincronização Estabelecida!</div>' + ddEscHtml(data.message);
                 } else if (data.status === 'warning') {
                     // ⚠️ Modo Test / Access Token
                     badge.textContent = '⚠️ Modo Test / Requer Token';
@@ -247,7 +406,7 @@
                     resultBox.style.border = '1px solid #eab308';
                     resultBox.style.color = '#fef08a';
                     resultBox.innerHTML = '<div style="font-weight: 700; margin-bottom: 4px; font-size: 14px;">⚠️ Servidor Alcançado — Ação Requerida</div>' + 
-                        data.message + 
+                        ddEscHtml(data.message) + 
                         '<div style="margin-top: 10px; font-size: 12px; background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 4px; border-left: 3px solid #eab308;">' +
                         '<strong>Dica:</strong> Se sua aplicação já foi aprovada em <em>Apply Online</em>, gere o <em>Access Token</em> permanente no console do AliExpress e cole-o no campo de token abaixo antes de salvar.' +
                         '</div>';
@@ -267,7 +426,7 @@
                     resultBox.style.border = '1px solid #dc3232';
                     resultBox.style.color = '#fca5a5';
                     resultBox.innerHTML = '<div style="font-weight: 700; margin-bottom: 4px; font-size: 14px;">❌ Erro de Ligação com o Servidor</div>' + 
-                        (data.message || 'Falha ao validar credenciais com o servidor do AliExpress.') +
+                        ddEscHtml(data.message || 'Falha ao validar credenciais com o servidor do AliExpress.') +
                         '<div style="margin-top: 10px; font-size: 12px; background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 4px; border-left: 3px solid #dc3232;">' +
                         '<strong>Solução:</strong> Verifique se digitou o <em>AppKey</em> e o <em>App Secret</em> corretamente sem espaços ou acesse seu painel em <strong>openservice.aliexpress.com</strong> para redefinir as credenciais.' +
                         '</div>';
@@ -285,10 +444,25 @@
                 resultBox.style.background = 'rgba(220,50,50,0.12)';
                 resultBox.style.border = '1px solid #dc3232';
                 resultBox.style.color = '#fca5a5';
-                resultBox.innerHTML = '❌ Falha de comunicação de rede: ' + err.message;
+                resultBox.innerHTML = '❌ Falha de comunicação de rede: ' + ddEscHtml(err && err.message ? err.message : 'Erro desconhecido');
             });
         });
     });
+
+    function ddEscHtml(str) {
+        var div = document.createElement('div');
+        div.textContent = String(str || '');
+        return div.innerHTML;
+    }
+
+    function ddToggleSecret(id, btn) {
+        var input = document.getElementById(id);
+        if (!input) return;
+        var show = input.type === 'password';
+        input.type = show ? 'text' : 'password';
+        btn.textContent = show ? '🙈' : '👁️';
+        btn.style.transform = show ? 'scale(1.15)' : 'scale(1)';
+    }
     </script>
 
 </div>

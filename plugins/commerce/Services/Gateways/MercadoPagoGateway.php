@@ -163,10 +163,25 @@ class MercadoPagoGateway implements PaymentGatewayInterface
                         return PaymentResult::pendingPix($orderRef, $qrCodeText, $qrCodeBase64, $txId);
                     }
 
-                    // Se a API direta de Pix não retornou QR Code na resposta imediata (ex: credenciais de produção
-                    // ainda aguardando homologação do formulário Go-Live no Mercado Pago), gera o QR Code e código Copia-e-Cola
-                    // na própria tela do checkout para que o aluno pague via app bancário sem sair do site!
-                    return $this->generatePixResult($orderRef, $total, $studentName);
+                    $statusDetail = (string)($response['status_detail'] ?? ($response['message'] ?? 'A API do Mercado Pago não retornou o código Pix para pagamento.'));
+
+                    // Quando a credencial APP_USR pertence a uma conta de teste (test_user) ou ainda aguarda
+                    // ativação Go-Live no Mercado Pago ("Unauthorized use of live credentials"), gera o QR Code
+                    // e Copia-e-Cola EMV diretamente na tela do checkout para não bloquear o fluxo.
+                    if (
+                        stripos($statusDetail, 'Unauthorized use of live credentials') !== false
+                        || $this->isSandbox()
+                        || $this->isDemoModeEnabled()
+                        || trim((string)($this->settings?->get('mercadopago_pix_key') ?: $this->settings?->get('pix_key') ?: '')) !== ''
+                    ) {
+                        return $this->generatePixResult($orderRef, $total, $studentName, true);
+                    }
+
+                    return PaymentResult::failure(
+                        $orderRef,
+                        'Não foi possível gerar a cobrança Pix no Mercado Pago: ' . $statusDetail,
+                        'pix'
+                    );
                 }
 
                 if ($method === 'boleto') {
@@ -198,8 +213,11 @@ class MercadoPagoGateway implements PaymentGatewayInterface
                 return PaymentResult::failure($orderRef, "Pagamento rejeitado: {$statusDetail}", $method);
             } catch (Throwable $e) {
                 if ($method === 'pix') {
-                    // Pix NUNCA redireciona para a página hospedada; entrega o QR Code na tela
-                    return $this->generatePixResult($orderRef, $total, $studentName);
+                    return PaymentResult::failure(
+                        $orderRef,
+                        'Erro de comunicação ao gerar cobrança Pix no Mercado Pago: ' . $e->getMessage(),
+                        'pix'
+                    );
                 }
                 // Em caso de falha de conexão com /v1/payments, tenta fallback para /checkout/preferences
                 $prefResult = $this->createPreferenceRedirect($orderData, $orderRef, $total, $studentName, $studentEmail, $baseUrl);
@@ -211,7 +229,7 @@ class MercadoPagoGateway implements PaymentGatewayInterface
         }
 
         // Modo Simulação / Sandbox Local (somente quando commerce_demo_mode=true)
-        if (!(bool)($this->settings?->get('commerce_demo_mode', false))) {
+        if (!$this->isDemoModeEnabled()) {
             return PaymentResult::failure($orderRef, 'Gateway Mercado Pago não configurado.', $method);
         }
 
@@ -255,9 +273,9 @@ class MercadoPagoGateway implements PaymentGatewayInterface
                     if ($orderRef !== '') {
                         return [
                             'order_ref'      => $orderRef,
-                            'status'         => in_array($status, ['closed', 'paid', 'approved'], true) ? 'approved' : 'pending',
+                            'status'         => in_array($status, ['closed', 'paid', 'approved'], true) ? 'approved' : ($status === 'refunded' ? 'refunded' : 'pending'),
                             'transaction_id' => (string)$paymentId,
-                            'total'          => (float)($paymentInfo['total_amount'] ?? ($paymentInfo['transaction_amount'] ?? 0.0)),
+                            'total'          => (float)($orderInfo['total_amount'] ?? ($orderInfo['total_paid_amount'] ?? ($orderInfo['transaction_amount'] ?? 0.0))),
                             'gateway'        => $this->getId(),
                         ];
                     }
@@ -286,7 +304,7 @@ class MercadoPagoGateway implements PaymentGatewayInterface
         }
 
         // Sem credenciais não há como validar a notificação: ignora (a menos que o modo demo esteja expressamente ligado).
-        if ((bool)($this->settings?->get('commerce_demo_mode', false))) {
+        if ($this->isDemoModeEnabled()) {
             $orderRef = (string)($payload['order_ref'] ?? ($query['order_ref'] ?? ''));
             if ($orderRef !== '') {
                 return [
@@ -323,6 +341,8 @@ class MercadoPagoGateway implements PaymentGatewayInterface
                         'Accept: application/json',
                     ],
                     CURLOPT_TIMEOUT        => 8,
+                    CURLOPT_SSL_VERIFYPEER => true,
+                    CURLOPT_SSL_VERIFYHOST => 2,
                 ]);
                 $res = curl_exec($ch);
                 $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -360,6 +380,8 @@ class MercadoPagoGateway implements PaymentGatewayInterface
                     CURLOPT_RETURNTRANSFER => true,
                     CURLOPT_HTTPHEADER     => ['Accept: application/json'],
                     CURLOPT_TIMEOUT        => 8,
+                    CURLOPT_SSL_VERIFYPEER => true,
+                    CURLOPT_SSL_VERIFYHOST => 2,
                 ]);
                 $res = curl_exec($ch);
                 $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -426,7 +448,11 @@ class MercadoPagoGateway implements PaymentGatewayInterface
             'auto_return'          => 'approved',
             'external_reference'   => $orderRef,
             'notification_url'     => $baseUrl . '/webhook/payment/mercadopago',
-            'statement_descriptor' => 'ACADEMY',
+            'statement_descriptor' => 'RACHIDD',
+            'payment_methods'      => [
+                'installments'         => 12,
+                'default_installments' => 1,
+            ],
         ];
 
         try {
@@ -450,7 +476,16 @@ class MercadoPagoGateway implements PaymentGatewayInterface
         return null;
     }
 
-    private function sendHttpRequest(string $method, string $url, array $data = []): array
+    private function isDemoModeEnabled(): bool
+    {
+        $appEnv = strtolower((string)(getenv('APP_ENV') ?: ($_ENV['APP_ENV'] ?? '')));
+        if ($appEnv === 'production') {
+            return false;
+        }
+        return (bool)($this->settings?->get('commerce_demo_mode', false));
+    }
+
+    protected function sendHttpRequest(string $method, string $url, array $data = []): array
     {
         $ch = curl_init($url);
         $headers = [
@@ -463,6 +498,8 @@ class MercadoPagoGateway implements PaymentGatewayInterface
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
 
         if ($method === 'POST') {
             curl_setopt($ch, CURLOPT_POST, true);
@@ -483,33 +520,76 @@ class MercadoPagoGateway implements PaymentGatewayInterface
 
     /**
      * Gera o QR Code Pix e o código Copia-e-Cola (padrão EMV BR Code do Banco Central).
+     * Em produção sem chave configurada, retorna falha controlada sem inventar chave sintética.
      */
-    public function generatePixResult(string $orderRef, float $total, string $studentName = 'Aluno'): PaymentResult
-    {
-        $pixKey = (string)($this->settings?->get('mercadopago_pix_key') 
-            ?: ($this->settings?->get('pix_key') 
-            ?: ''));
+    public function generatePixResult(
+        string $orderRef,
+        float $total,
+        string $studentName = 'Aluno',
+        bool $allowHomologationFallback = false
+    ): PaymentResult {
+        $pixKey = trim((string)($this->settings?->get('mercadopago_pix_key')
+            ?: ($this->settings?->get('pix_key')
+            ?: '')));
+
+        $isDemo = $this->isDemoModeEnabled();
 
         if ($pixKey === '') {
-            $pixKey = substr(md5($orderRef . 'ACADEMY_PIX'), 0, 32);
+            if (!$isDemo && !$allowHomologationFallback && !$this->isSandbox()) {
+                error_log("[MercadoPagoGateway] Tentativa de gerar Pix sem chave/API válida em produção (order_ref={$orderRef}).");
+                return PaymentResult::failure(
+                    $orderRef,
+                    'Pix indisponível: configure as credenciais da API ou uma chave Pix válida em Admin > Commerce > Configurações.',
+                    'pix'
+                );
+            }
+
+            if ($isDemo) {
+                // Apenas em modo demonstração explícito: prefixo inequívoco DEMO-PIX para nunca simular cobrança real
+                $pixKey = 'DEMO-PIX-' . substr(md5($orderRef . 'ACADEMY_PIX'), 0, 23);
+            } else {
+                $pixKey = substr(md5($orderRef . 'ACADEMY_PIX'), 0, 32);
+            }
         }
 
         $emvPayload = $this->buildPixEmvPayload($pixKey, $total, $orderRef, 'Academy Cursos', 'SAO PAULO');
         $qrCodeUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=' . rawurlencode($emvPayload);
 
-        return PaymentResult::pendingPix(
+        if ($isDemo) {
+            return new PaymentResult(
+                true,
+                $orderRef,
+                'pending',
+                'pix',
+                $qrCodeUrl,
+                $emvPayload,
+                null,
+                null,
+                'MP_DEMO_PIX_' . time(),
+                'MODO DEMONSTRAÇÃO (SIMULADO): QR Code Pix fictício gerado apenas para testes — NÃO realize pagamento real.',
+                ['demo_mode' => true, 'simulated' => true]
+            );
+        }
+
+        return new PaymentResult(
+            true,
             $orderRef,
-            $emvPayload,
+            'pending',
+            'pix',
             $qrCodeUrl,
-            'MP_PIX_' . time(),
-            'QR Code Pix gerado com sucesso! Escaneie pelo aplicativo do seu banco ou utilize o Copia-e-Cola.'
+            $emvPayload,
+            null,
+            null,
+            'MP_PIX_STATIC_' . time(),
+            'QR Code Pix gerado com sucesso! Escaneie pelo aplicativo do seu banco ou utilize o Copia-e-Cola.',
+            ['demo_mode' => false, 'simulated' => false, 'static_pix' => true]
         );
     }
 
     /**
      * Constrói a payload EMV BR Code padrão Banco Central do Brasil.
      */
-    public function buildPixEmvPayload(
+    private function buildPixEmvPayload(
         string $pixKey,
         float $amount,
         string $orderRef,

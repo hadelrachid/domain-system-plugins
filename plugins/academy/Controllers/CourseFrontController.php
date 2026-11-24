@@ -119,17 +119,6 @@ class CourseFrontController
                 }
             }
 
-            $candidateThemeFile = 'pages/' . ltrim($courseSlug, '/\\') . '.php';
-            if ($this->themeFileExists($candidateThemeFile)) {
-                $renderedFile = $this->renderThemeFile($candidateThemeFile, [
-                    'course'   => ['title' => 'Academy', 'slug' => 'cursos'],
-                    'lesson'   => ['title' => ucwords(str_replace('-', ' ', $courseSlug)), 'slug' => $courseSlug],
-                    'adjacent' => ['prev' => null, 'next' => null],
-                    'navHtml'  => '',
-                ]);
-                return new Response($renderedFile);
-            }
-
             return new Response("<h1>404 - Curso não encontrado</h1><p>Não encontramos o curso solicitado: [" . htmlspecialchars($courseSlug, ENT_QUOTES, 'UTF-8') . "]</p>", 404);
         }
 
@@ -164,14 +153,27 @@ class CourseFrontController
         $externalCheckout = trim((string)($course['external_checkout_url'] ?? ''));
         $externalLink = trim((string)($course['link'] ?? ''));
 
+        $isStudentLoggedOut = $this->session !== null && (bool)$this->session->get('academy_logged_out', false);
+        $studentId = (!$isStudentLoggedOut && $this->session !== null) ? (int)$this->session->get('academy_student_id', 0) : 0;
+        $isEnrolled = ($studentId > 0 && $this->enrollment !== null && isset($course['id']))
+            ? $this->enrollment->hasActiveEnrollment($studentId, (int)$course['id'])
+            : false;
+
         $ctaButton = '';
-        if ($isFree || $price <= 0.0) {
+        if ($isEnrolled) {
+            $studyUrl = htmlspecialchars($firstLessonUrl ?: ($baseUrl . '/aluno/painel'), ENT_QUOTES, 'UTF-8');
+            $panelUrl = htmlspecialchars($baseUrl . '/aluno/painel', ENT_QUOTES, 'UTF-8');
+            $ctaButton = "<div style='display:flex; gap:12px; flex-wrap:wrap; margin-top:20px;'>
+                <a href='{$studyUrl}' class='btn btn-primary' style='display:inline-block; padding:12px 24px; border-radius:6px; background:#45f3ff; color:#0b0c10; font-weight:800; text-decoration:none;'>🎓 Ir para a Sala de Aula &rarr;</a>
+                <a href='{$panelUrl}' style='display:inline-block; padding:12px 20px; border-radius:6px; background:rgba(255,255,255,0.06); border:1px solid rgba(69,243,255,0.3); color:#45f3ff; font-weight:700; text-decoration:none;'>📚 Minha Área de Estudos</a>
+            </div>";
+        } elseif ($isFree || $price <= 0.0) {
             if ($firstLessonUrl) {
                 $ctaButton = "<a href='{$firstLessonUrl}' class='btn btn-primary' style='display:inline-block; margin-top:20px; padding:12px 24px; border-radius:6px; background:#45f3ff; color:#0b0c10; font-weight:700; text-decoration:none;'>🚀 Começar Agora &rarr;</a>";
             }
         } else {
-            // Curso pago: direciona para checkout externo ou DomainCommerce interno
-            if ($externalCheckout !== '') {
+            // Curso pago: direciona para checkout externo ou DomainCommerce interno (/checkout/curso/{id} verifica se o aluno está logado; se não estiver, abre Login/Cadastro lado a lado e redireciona de volta para a venda)
+            if ($externalCheckout !== '' && (str_starts_with($externalCheckout, 'http://') || str_starts_with($externalCheckout, 'https://'))) {
                 $checkoutUrl = htmlspecialchars($externalCheckout, ENT_QUOTES, 'UTF-8');
                 $ctaButton = "<a href='{$checkoutUrl}' target='_blank' class='btn btn-primary' style='display:inline-block; margin-top:20px; padding:12px 24px; border-radius:6px; background:#00d284; color:#0b0c10; font-weight:700; text-decoration:none;'>🛒 Comprar / Matricular-se &rarr;</a>";
             } elseif ($externalLink !== '' && (str_starts_with($externalLink, 'http://') || str_starts_with($externalLink, 'https://'))) {
@@ -236,7 +238,7 @@ class CourseFrontController
         $adjacent = $this->navService->getAdjacentLessons($courseSlug, $lessonSlug);
 
         $studentId = 0;
-        if ($this->session !== null) {
+        if ($this->session !== null && !(bool)$this->session->get('academy_logged_out', false)) {
             $studentId = (int)$this->session->get('academy_student_id', 0);
             if ($studentId <= 0) {
                 $studentId = (int)$this->session->get('user_id', 0);
@@ -257,7 +259,9 @@ class CourseFrontController
         $isLessonFreePreview = !empty($lesson['is_free']) || !empty($lesson['is_preview']);
 
         if ($this->enrollment !== null && $isCoursePaid && !$isLessonFreePreview) {
-            $userRole = $this->session !== null ? (string)$this->session->get('user_role', '') : '';
+            $userRole = $this->session !== null
+                ? (string)($this->session->get('academy_student_role') ?: $this->session->get('user_role', ''))
+                : '';
             $isAdmin = in_array($userRole, ['admin', 'manager', 'instructor'], true);
 
             if (!$isAdmin && !$this->enrollment->hasActiveEnrollment($studentId, (int)$course['id'])) {
@@ -335,7 +339,7 @@ class CourseFrontController
         $mobileProfile = (string)($lesson['mobile_profile'] ?? 'drawer');
 
         $studentId = 0;
-        if ($this->session !== null) {
+        if ($this->session !== null && !(bool)$this->session->get('academy_logged_out', false)) {
             $studentId = (int)$this->session->get('academy_student_id', 0);
             if ($studentId <= 0) {
                 $studentId = (int)$this->session->get('user_id', 0);
@@ -406,13 +410,13 @@ class CourseFrontController
         if ($themePath === '') {
             return false;
         }
-        $target = $themePath . '/' . ltrim($themeFile, '/\\');
+        $target = $themePath . '/pages/' . ltrim(preg_replace('/^pages[\/\\\\]/i', '', ltrim($themeFile, '/\\')), '/\\');
         $realTarget = realpath($target);
-        $realTheme = realpath($themePath);
-        if ($realTarget === false || $realTheme === false) {
+        $realPages = realpath($themePath . '/pages');
+        if ($realTarget === false || $realPages === false) {
             return false;
         }
-        $prefix = rtrim($realTheme, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        $prefix = rtrim($realPages, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
         return str_starts_with($realTarget, $prefix) && is_file($realTarget);
     }
 
@@ -423,12 +427,12 @@ class CourseFrontController
             return "<div class='alert alert-warning' style='padding:20px; color:#ffb703; background:rgba(255, 183, 3, 0.1); border-radius:8px;'>Arquivo do tema não encontrado ou inacessível: " . htmlspecialchars($themeFile, ENT_QUOTES, 'UTF-8') . "</div>";
         }
 
-        $target = $themePath . '/' . ltrim($themeFile, '/\\');
+        $target = $themePath . '/pages/' . ltrim(preg_replace('/^pages[\/\\\\]/i', '', ltrim($themeFile, '/\\')), '/\\');
         $realTarget = realpath($target);
-        $realTheme = realpath($themePath);
-        $realThemePrefix = $realTheme !== false ? rtrim($realTheme, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR : '';
+        $realPages = realpath($themePath . '/pages');
+        $realPagesPrefix = $realPages !== false ? rtrim($realPages, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR : '';
 
-        if ($realTarget === false || $realTheme === false || !str_starts_with($realTarget, $realThemePrefix) || !is_file($realTarget)) {
+        if ($realTarget === false || $realPages === false || !str_starts_with($realTarget, $realPagesPrefix) || !is_file($realTarget)) {
             return "<div class='alert alert-warning' style='padding:20px; color:#ffb703; background:rgba(255, 183, 3, 0.1); border-radius:8px;'>Arquivo do tema não encontrado ou inacessível: " . htmlspecialchars($themeFile, ENT_QUOTES, 'UTF-8') . "</div>";
         }
 

@@ -117,13 +117,19 @@ class CoursePackageService implements CoursePackageServiceInterface
             'generator'      => 'DomainSystem Academy LMS',
             'exported_at'    => date('c'),
             'course'         => [
-                'title'       => (string)$course['title'],
-                'slug'        => (string)$course['slug'],
-                'description' => (string)($course['description'] ?? ''),
-                'price'       => (float)($course['price'] ?? 0.00),
-                'access_type' => (string)($course['access_type'] ?? 'free'),
-                'category'    => (string)($course['category'] ?? ''),
-                'status'      => (string)($course['status'] ?? 'published'),
+                'title'                 => (string)$course['title'],
+                'slug'                  => (string)$course['slug'],
+                'description'           => (string)($course['description'] ?? ''),
+                'price'                 => (float)($course['price'] ?? 0.00),
+                'is_free'               => !empty($course['is_free']) ? 1 : 0,
+                'max_installments'      => (int)($course['max_installments'] ?? 12),
+                'link'                  => (string)($course['link'] ?? ''),
+                'external_platform'     => (string)($course['external_platform'] ?? ''),
+                'external_product_id'   => (string)($course['external_product_id'] ?? ''),
+                'external_checkout_url' => (string)($course['external_checkout_url'] ?? ''),
+                'access_type'           => (string)($course['access_type'] ?? 'free'),
+                'category'              => (string)($course['category'] ?? ''),
+                'status'                => (string)($course['status'] ?? 'published'),
             ],
             'structure'      => $structure,
         ];
@@ -170,14 +176,22 @@ class CoursePackageService implements CoursePackageServiceInterface
                 continue;
             }
 
-            // Converte "pages/solid/aula.php" para o arquivo físico no tema
+            // Converte "pages/solid/aula.php" para o arquivo físico no tema e valida estritamente dentro de pages/
             $cleanSource = ltrim(str_replace('\\', '/', $source), '/');
+            if (str_contains($cleanSource, '..')) {
+                continue;
+            }
+            $realPagesRoot = realpath($themePath . '/pages');
             $fullPath = $themePath . '/' . $cleanSource;
+            $realFullPath = realpath($fullPath);
 
-            if (is_file($fullPath)) {
+            if ($realPagesRoot !== false && $realFullPath !== false
+                && str_starts_with($realFullPath, rtrim($realPagesRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR)
+                && is_file($realFullPath)
+            ) {
                 $zipEntryName = $cleanSource;
                 if (!isset($filesAdded[$zipEntryName])) {
-                    $zip->addFile($fullPath, $zipEntryName);
+                    $zip->addFile($realFullPath, $zipEntryName);
                     $filesAdded[$zipEntryName] = true;
                 }
             }
@@ -236,9 +250,24 @@ class CoursePackageService implements CoursePackageServiceInterface
             throw new RuntimeException("Falha ao resolver caminho real de pages do tema ativo.");
         }
 
-        // Extrai arquivos de forma segura com proteção Anti-ZipSlip
+        // Extrai arquivos de forma segura com proteção Anti-ZipSlip e anti-ZIP bomb
+        if ($zip->numFiles > 500) {
+            $zip->close();
+            throw new RuntimeException("O pacote ZIP excede o limite máximo de 500 arquivos.");
+        }
+        $totalUncompressed = 0;
+        $maxTotalBytes = 50 * 1024 * 1024;
+        $realTargetPagesPrefix = rtrim($realTargetPagesDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+
         $extractedFiles = [];
         for ($i = 0; $i < $zip->numFiles; $i++) {
+            $stat = $zip->statIndex($i);
+            $entrySize = is_array($stat) ? (int)($stat['size'] ?? 0) : 0;
+            $totalUncompressed += max(0, $entrySize);
+            if ($totalUncompressed > $maxTotalBytes) {
+                $zip->close();
+                throw new RuntimeException("O pacote ZIP excede o limite máximo de 50MB descompactados.");
+            }
             $entryName = (string)$zip->getNameIndex($i);
 
             // Ignora arquivos do sistema operacional e o próprio manifesto
@@ -271,9 +300,9 @@ class CoursePackageService implements CoursePackageServiceInterface
                 @mkdir($destDir, 0755, true);
             }
 
-            // Valida se o destino final permanece estritamente dentro de $realTargetPagesDir
+            // Valida se o destino final permanece estritamente dentro de $realTargetPagesDir (com separador de diretório)
             $realDestDir = realpath($destDir);
-            if ($realDestDir === false || !str_starts_with($realDestDir, $realTargetPagesDir)) {
+            if ($realDestDir === false || ($realDestDir !== $realTargetPagesDir && !str_starts_with($realDestDir, $realTargetPagesPrefix))) {
                 continue; // Violação de escopo ignorada com segurança
             }
 
@@ -296,13 +325,19 @@ class CoursePackageService implements CoursePackageServiceInterface
 
         // Cria o curso no banco/repositório
         $newCourseId = $this->courseRepo->create([
-            'title'       => $courseTitle,
-            'slug'        => $uniqueSlug,
-            'description' => (string)($courseData['description'] ?? ''),
-            'price'       => (float)($courseData['price'] ?? 0.00),
-            'access_type' => (string)($courseData['access_type'] ?? 'free'),
-            'category'    => (string)($courseData['category'] ?? ''),
-            'status'      => (string)($courseData['status'] ?? 'published'),
+            'title'                 => $courseTitle,
+            'slug'                  => $uniqueSlug,
+            'description'           => (string)($courseData['description'] ?? ''),
+            'price'                 => (float)($courseData['price'] ?? 0.00),
+            'is_free'               => !empty($courseData['is_free']) ? 1 : 0,
+            'max_installments'      => (int)($courseData['max_installments'] ?? 12),
+            'link'                  => (string)($courseData['link'] ?? ''),
+            'external_platform'     => (string)($courseData['external_platform'] ?? ''),
+            'external_product_id'   => (string)($courseData['external_product_id'] ?? ''),
+            'external_checkout_url' => (string)($courseData['external_checkout_url'] ?? ''),
+            'access_type'           => (string)($courseData['access_type'] ?? 'free'),
+            'category'              => (string)($courseData['category'] ?? ''),
+            'status'                => (string)($courseData['status'] ?? 'published'),
         ]);
 
         // Restaura estrutura de módulos e aulas

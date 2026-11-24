@@ -31,6 +31,7 @@
                     <li><a href="<?= $baseUrl ?>/tutoriais" class="nav-link" style="<?= $currentUri === $baseUrl . '/tutoriais' ? 'color: var(--primary);' : '' ?>">Cursos & Tutoriais</a></li>
                     <li><a href="<?= $baseUrl ?>/#livro" class="nav-link" style="color: var(--text-main);">Livro SOLID</a></li>
                     <li><a href="<?= $baseUrl ?>/sobre" class="nav-link" style="<?= $currentUri === $baseUrl . '/sobre' ? 'color: var(--primary);' : '' ?>">Sobre</a></li>
+                    <li><a href="<?= $baseUrl ?>/aluno/painel" class="nav-link" style="color: #45f3ff; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; background: rgba(69, 243, 255, 0.1); border: 1px solid rgba(69, 243, 255, 0.35); padding: 5px 14px; border-radius: 20px; text-decoration: none;">🎓 Área do Aluno</a></li>
                 </ul>
             <?php } ?>
         </nav>

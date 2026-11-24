@@ -73,6 +73,11 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
         $os->requireLink('core.db');
         $os->requireLink('core.storage');
         $os->requireLink('core.session');
+        $os->requireLink('core.theme');
+        $os->requireLink('core.theme.resolver');
+        $os->requireLink('core.site.state');
+        $os->requireLink('core.account.status');
+        $os->requireLink('core.seo');
         $os->listenHook('admin.menu');
         $os->listenHook('router.register');
         $os->listenHook('shortcodes.register');
@@ -110,7 +115,7 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
         });
 
         $runtime->singleton(StudentAuthServiceInterface::class, function () use ($runtime) {
-            return new StudentAuthService($runtime->make(SessionManagerInterface::class));
+            return new StudentAuthService($runtime->getLink('core.session'));
         });
 
         $runtime->singleton(StudentViewRendererInterface::class, function () {
@@ -194,17 +199,16 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
             $themeResolver = null;
             $siteState = null;
             try {
-                if ($runtime->has(ThemeManagerInterface::class)) {
-                    $themeManager = $runtime->make(ThemeManagerInterface::class);
-                }
-                if ($runtime->has(\DomainSystem\Core\Contracts\ThemePathResolverInterface::class)) {
-                    $themeResolver = $runtime->make(\DomainSystem\Core\Contracts\ThemePathResolverInterface::class);
-                }
-                if ($runtime->has(\DomainSystem\Core\Contracts\SiteStateInterface::class)) {
-                    $siteState = $runtime->make(\DomainSystem\Core\Contracts\SiteStateInterface::class);
-                }
+                $themeManager = $runtime->getLink('core.theme');
             } catch (Throwable $e) {
-                // Fallback seguro
+            }
+            try {
+                $themeResolver = $runtime->getLink('core.theme.resolver');
+            } catch (Throwable $e) {
+            }
+            try {
+                $siteState = $runtime->getLink('core.site.state');
+            } catch (Throwable $e) {
             }
             return new ThemePageResolver($themeManager, $themeResolver, $siteState);
         });
@@ -227,29 +231,43 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
         });
 
         $runtime->singleton(CourseFrontController::class, function () use ($runtime) {
-            $seo = $runtime->has(\DomainSystem\Core\Contracts\SeoManagerInterface::class)
-                ? $runtime->make(\DomainSystem\Core\Contracts\SeoManagerInterface::class)
-                : null;
-            $themeManager = $runtime->has(ThemeManagerInterface::class)
-                ? $runtime->make(ThemeManagerInterface::class)
-                : null;
-            $accountStatus = $runtime->has(\DomainSystem\Core\Contracts\AccountStatusProviderInterface::class)
-                ? $runtime->make(\DomainSystem\Core\Contracts\AccountStatusProviderInterface::class)
-                : null;
+            $seo = null;
+            try {
+                $seo = $runtime->getLink('core.seo');
+            } catch (Throwable $e) {
+            }
+
+            $themeManager = null;
+            try {
+                $themeManager = $runtime->getLink('core.theme');
+            } catch (Throwable $e) {
+            }
+
+            $accountStatus = null;
+            try {
+                $accountStatus = $runtime->getLink('core.account.status');
+            } catch (Throwable $e) {
+            }
+
+            $session = null;
+            try {
+                $session = $runtime->getLink('core.session');
+            } catch (Throwable $e) {
+            }
 
             return new CourseFrontController(
                 $runtime->make(CourseRepositoryInterface::class),
                 $runtime->make(CourseStructureRepositoryInterface::class),
                 $runtime->make(CourseNavigationInterface::class),
                 $runtime->make(CourseCatalogRendererInterface::class),
-                $seo,
-                $themeManager,
+                $seo instanceof \DomainSystem\Plugins\seo\Contracts\SeoManagerInterface ? $seo : null,
+                $themeManager instanceof ThemeManagerInterface ? $themeManager : null,
                 $runtime->make(LessonBlockRendererInterface::class),
                 $runtime->make(ThemePageResolverInterface::class),
                 $runtime->make(CourseEnrollmentInterface::class),
-                $runtime->make(SessionManagerInterface::class),
+                $session instanceof SessionManagerInterface ? $session : null,
                 $runtime->make(StudentProgressInterface::class),
-                $accountStatus
+                $accountStatus instanceof \DomainSystem\Core\Contracts\AccountStatusProviderInterface ? $accountStatus : null
             );
         });
 
@@ -340,6 +358,10 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
             if (!is_array($payload)) {
                 return;
             }
+            $itemType = (string)($payload['item_type'] ?? 'course');
+            if (!in_array($itemType, ['', 'course'], true)) {
+                return;
+            }
             $userId = (int)($payload['user_id'] ?? 0);
             $courseId = (int)($payload['course_id'] ?? ($payload['item_id'] ?? 0));
             $orderRef = isset($payload['order_ref']) ? (string)$payload['order_ref'] : null;
@@ -353,7 +375,7 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
                     $enrollmentService = $runtime->make(CourseEnrollmentInterface::class);
                     $enrollmentService->enroll($userId, $courseId, $expiresAt, $orderRef);
                 } catch (Throwable $e) {
-                    // Proteção de isolamento de falhas
+                    error_log('[Academy] Falha ao matricular aluno em payment.approved: ' . $e->getMessage());
                 }
             }
         });
@@ -361,6 +383,10 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
         // 5b. Revogação de Matrícula por Reembolso (T13):
         $runtime->onHook('payment.refunded', function ($payload) use ($runtime) {
             if (!is_array($payload)) {
+                return;
+            }
+            $itemType = (string)($payload['item_type'] ?? 'course');
+            if (!in_array($itemType, ['', 'course'], true)) {
                 return;
             }
             $userId = (int)($payload['user_id'] ?? 0);

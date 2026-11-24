@@ -16,6 +16,7 @@ use DomainSystem\Plugins\commerce\Contracts\CommerceSettingsInterface;
 use DomainSystem\Plugins\commerce\Contracts\OrderRepositoryInterface;
 use DomainSystem\Plugins\commerce\Contracts\PaymentGatewayRegistryInterface;
 use DomainSystem\Plugins\commerce\Contracts\PurchasableItemResolverInterface;
+use DomainSystem\Plugins\commerce\Contracts\SellerAwarePurchasableInterface;
 
 /**
  * Controlador de Checkout e Finalização de Matrículas (SRP / DIP / Sem Superglobais).
@@ -29,6 +30,12 @@ class CheckoutController
     private ?EventDispatcherInterface $dispatcher;
     private ?PurchasableItemResolverInterface $itemResolver;
     private ?CommerceSettingsInterface $settings;
+    /** @var callable|null */
+    private $dropshipOrderFinder;
+    /** @var callable|null */
+    private $dropshipCustomerFinder;
+    /** @var callable|null */
+    private $dropshipCustomerAddressSaver;
 
     public function __construct(
         SessionManagerInterface $session,
@@ -37,7 +44,10 @@ class CheckoutController
         ?CourseRepositoryInterface $courseRepo = null,
         ?EventDispatcherInterface $dispatcher = null,
         ?PurchasableItemResolverInterface $itemResolver = null,
-        ?CommerceSettingsInterface $settings = null
+        ?CommerceSettingsInterface $settings = null,
+        ?callable $dropshipOrderFinder = null,
+        ?callable $dropshipCustomerFinder = null,
+        ?callable $dropshipCustomerAddressSaver = null
     ) {
         $this->session = $session;
         $this->orderRepo = $orderRepo;
@@ -46,24 +56,34 @@ class CheckoutController
         $this->dispatcher = $dispatcher;
         $this->itemResolver = $itemResolver;
         $this->settings = $settings;
+        $this->dropshipOrderFinder = $dropshipOrderFinder;
+        $this->dropshipCustomerFinder = $dropshipCustomerFinder;
+        $this->dropshipCustomerAddressSaver = $dropshipCustomerAddressSaver;
     }
 
     private function isDemoModeEnabled(): bool
     {
+        $appEnv = strtolower((string)(getenv('APP_ENV') ?: ($_ENV['APP_ENV'] ?? '')));
+        if ($appEnv === 'production') {
+            return false;
+        }
         return $this->settings !== null && (bool)$this->settings->get('commerce_demo_mode', false);
     }
 
     /**
      * Tela de Checkout: GET /checkout/curso/{id}
      */
-    public function showCheckout(Request $request, $id): ResponseInterface
+    public function showCheckout(Request $request, $id, ?string $forcedItemType = null): ResponseInterface
     {
         $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
         $courseId = (int)$id;
+        $isProductRoute = ($forcedItemType === 'dropship_product')
+            || str_contains((string)($request->server['REQUEST_URI'] ?? ''), '/checkout/produto/');
 
         $course = null;
         $sellerInfo = null;
-        if ($this->courseRepo !== null) {
+        $resolvedItem = null;
+        if (!$isProductRoute && $this->courseRepo !== null) {
             $c = $this->courseRepo->findById($courseId);
             if ($c && ($c['status'] ?? '') === 'published') {
                 $course = $c;
@@ -71,10 +91,17 @@ class CheckoutController
         }
 
         if ($course === null && $this->itemResolver !== null) {
-            $item = $this->itemResolver->resolve('course', $courseId)
-                 ?? $this->itemResolver->resolve('dropship_product', $courseId)
-                 ?? $this->itemResolver->resolve('product', $courseId);
+            $resolveContext = ['sku' => (string)($request->input('sku') ?? '')];
+            if ($isProductRoute) {
+                $item = $this->itemResolver->resolve('dropship_product', $courseId, $resolveContext)
+                     ?? $this->itemResolver->resolve('product', $courseId, $resolveContext);
+            } else {
+                $item = $this->itemResolver->resolve('course', $courseId, $resolveContext)
+                     ?? $this->itemResolver->resolve('dropship_product', $courseId, $resolveContext)
+                     ?? $this->itemResolver->resolve('product', $courseId, $resolveContext);
+            }
             if ($item && $item->isAvailable()) {
+                $resolvedItem = $item;
                 $course = [
                     'id'          => $item->getId(),
                     'title'       => $item->getTitle(),
@@ -84,7 +111,9 @@ class CheckoutController
                     'image'       => $item->getThumbnailUrl(),
                     'type'        => $item->getItemType(),
                 ];
-                if (method_exists($item, 'getProduct')) {
+                if ($item instanceof SellerAwarePurchasableInterface) {
+                    $sellerInfo = $item->getSellerInfo();
+                } elseif (method_exists($item, 'getProduct')) {
                     $innerProduct = $item->getProduct();
                     if (is_object($innerProduct) && method_exists($innerProduct, 'getSellerInfo')) {
                         $sellerInfo = $innerProduct->getSellerInfo();
@@ -101,15 +130,39 @@ class CheckoutController
             || (($course['type'] ?? '') === 'product')
             || (str_contains($request->server['REQUEST_URI'] ?? '', '/checkout/produto/'));
 
-        $userId = (int)$this->session->get('academy_student_id', 0);
-        if ($userId <= 0) {
-            $userId = (int)$this->session->get('user_id', 0);
-        }
+        $isStudentLoggedOut = (bool)$this->session->get('academy_logged_out', false);
+        $studentId = $isStudentLoggedOut ? 0 : (int)$this->session->get('academy_student_id', 0);
+        $customerId = (int)$this->session->get('customer_id', 0);
 
-        // Cursos digitais exigem login prévio; produtos de loja/dropshipping permitem Guest Checkout
-        if ($userId <= 0 && !$isPhysicalOrDropship) {
-            $checkoutUri = $baseUrl . '/checkout/curso/' . $courseId;
-            return Response::redirect($baseUrl . '/aluno/login?redirect=' . urlencode($checkoutUri));
+        if ($isPhysicalOrDropship) {
+            // Produtos da Loja exigem que o Cliente (ou Aluno) esteja logado; caso contrário, vai para Login/Cadastro (2 cards lado a lado)
+            if ($customerId <= 0 && $studentId <= 0) {
+                $qtyParam = max(1, min(99, (int)$request->input('qty', 1)));
+                $skuParam = trim((string)$request->input('sku', ''));
+                $params = [];
+                if ($qtyParam > 1) {
+                    $params['qty'] = $qtyParam;
+                }
+                if ($skuParam !== '') {
+                    $params['sku'] = $skuParam;
+                }
+                $queryStr = !empty($params) ? '?' . http_build_query($params) : '';
+                $checkoutUri = $baseUrl . '/checkout/produto/' . $courseId . $queryStr;
+                $this->session->setFlash('info', '🛍️ Para finalizar a compra do produto, entre na sua conta ou cadastre-se ao lado. Você será direcionado automaticamente para a página de venda!');
+                return Response::redirect($baseUrl . '/entrar?redirect=' . urlencode($checkoutUri));
+            }
+            $userId = $customerId > 0 ? $customerId : $studentId;
+        } else {
+            // Cursos Academy exigem que o Aluno esteja logado na Área de Estudos; caso contrário, vai para Login/Cadastro (2 cards lado a lado)
+            if ($studentId <= 0) {
+                $checkoutUri = $baseUrl . '/checkout/curso/' . $courseId;
+                $this->session->set('academy_student_flash', [
+                    'type' => 'success',
+                    'msg'  => '🎓 Para adquirir este curso e liberá-lo na sua Área de Estudos, entre na sua conta ou cadastre-se ao lado. Você será direcionado automaticamente para a página de matrícula!',
+                ]);
+                return Response::redirect($baseUrl . '/aluno/login?redirect=' . urlencode($checkoutUri));
+            }
+            $userId = $studentId;
         }
 
         // REGRA DE INJEÇÃO E DISPONIBILIDADE:
@@ -151,9 +204,45 @@ class CheckoutController
             }
         }
         $csrfToken = (string)$this->session->getCsrfToken();
-        $userEmail = (string)$this->session->get('academy_student_email', (string)$this->session->get('user_email', (string)$this->session->get('customer_email', '')));
-        $userName = (string)$this->session->get('academy_student_name', (string)$this->session->get('user_name', (string)$this->session->get('customer_name', $isPhysicalOrDropship ? '' : 'Aluno')));
-        $userCpf = (string)$this->session->get('user_cpf', (string)$this->session->get('academy_student_cpf', (string)$this->session->get('customer_cpf', '')));
+        $userEmail = trim((string)($this->session->get('academy_student_email') ?: $this->session->get('customer_email') ?: $this->session->get('user_email') ?: ''));
+        $userName = trim((string)($this->session->get('academy_student_name') ?: $this->session->get('customer_name') ?: $this->session->get('user_name') ?: ($isPhysicalOrDropship ? '' : 'Aluno')));
+        $userUsername = trim((string)($this->session->get('academy_student_username') ?: ''));
+        $userCpf = trim((string)($this->session->get('academy_student_cpf') ?: $this->session->get('customer_cpf') ?: $this->session->get('user_cpf') ?: ''));
+        $userPhone = trim((string)($this->session->get('customer_phone') ?: ''));
+        $savedCustomerAddress = null;
+
+        if ($this->dropshipCustomerFinder !== null) {
+            $savedCustomer = ($this->dropshipCustomerFinder)($customerId, $userEmail);
+            if (is_array($savedCustomer)) {
+                if ($userName === '' || $userName === 'Aluno') {
+                    if (!empty($savedCustomer['name'])) {
+                        $userName = (string)$savedCustomer['name'];
+                    }
+                }
+                if ($userCpf === '' && !empty($savedCustomer['cpf'])) {
+                    $userCpf = (string)$savedCustomer['cpf'];
+                }
+                if ($userPhone === '' && !empty($savedCustomer['phone'])) {
+                    $userPhone = (string)$savedCustomer['phone'];
+                }
+                $parsed = is_array($savedCustomer['parsed_shipping_address'] ?? null) ? $savedCustomer['parsed_shipping_address'] : [];
+                $zip = (string)($savedCustomer['shipping_zip'] ?? ($parsed['zip'] ?? ''));
+                $street = (string)($savedCustomer['shipping_address'] ?? ($parsed['street'] ?? ''));
+                if ($zip !== '' || $street !== '') {
+                    $savedCustomerAddress = [
+                        'zip'          => $zip,
+                        'street'       => $street,
+                        'number'       => (string)($savedCustomer['shipping_number'] ?? ($parsed['number'] ?? '')),
+                        'complement'   => (string)($savedCustomer['shipping_complement'] ?? ($parsed['complement'] ?? '')),
+                        'neighborhood' => (string)($savedCustomer['shipping_neighborhood'] ?? ($parsed['neighborhood'] ?? '')),
+                        'city'         => (string)($savedCustomer['shipping_city'] ?? ($parsed['city'] ?? '')),
+                        'state'        => (string)($savedCustomer['shipping_state'] ?? ($parsed['state'] ?? '')),
+                        'phone'        => (string)($savedCustomer['phone'] ?? ($parsed['phone'] ?? $userPhone)),
+                        'cpf'          => (string)($savedCustomer['cpf'] ?? ($parsed['cpf'] ?? $userCpf)),
+                    ];
+                }
+            }
+        }
 
         $courseImage = '';
         if (!empty($course['image'])) {
@@ -171,21 +260,41 @@ class CheckoutController
         $quantity = $isPhysicalOrDropship ? max(1, min(99, (int)$request->input('qty', 1))) : 1;
         $total = round($unitPrice * $quantity, 2);
 
+        $productWeightInGrams = 200;
+        $expressShippingBasePrice = 19.90;
+        if ($resolvedItem !== null) {
+            if (method_exists($resolvedItem, 'getWeightInGrams')) {
+                $productWeightInGrams = $resolvedItem->getWeightInGrams();
+                $expressShippingBasePrice = $resolvedItem->getExpressShippingPrice($quantity);
+            } elseif (method_exists($resolvedItem, 'getProduct')) {
+                $innerProduct = $resolvedItem->getProduct();
+                if (is_object($innerProduct) && method_exists($innerProduct, 'getEstimatedWeightInGrams')) {
+                    $productWeightInGrams = $innerProduct->getEstimatedWeightInGrams();
+                    $expressShippingBasePrice = $innerProduct->calculateExpressShippingPrice($quantity);
+                }
+            }
+        }
+
         $html = $this->renderView('front/checkout', [
-            'baseUrl'              => $baseUrl,
-            'course'               => $course,
-            'courseImage'          => $courseImage,
-            'gateways'             => $gateways,
-            'coursePlatform'       => $coursePlatform,
-            'csrfToken'            => $csrfToken,
-            'userEmail'            => $userEmail,
-            'userName'             => $userName,
-            'userCpf'              => $userCpf,
-            'unitPrice'            => $unitPrice,
-            'quantity'             => $quantity,
-            'total'                => $total,
-            'sellerInfo'           => $sellerInfo,
-            'isPhysicalOrDropship' => $isPhysicalOrDropship,
+            'baseUrl'                  => $baseUrl,
+            'course'                   => $course,
+            'courseImage'              => $courseImage,
+            'gateways'                 => $gateways,
+            'coursePlatform'           => $coursePlatform,
+            'csrfToken'                => $csrfToken,
+            'userEmail'                => $userEmail,
+            'userName'                 => $userName,
+            'userUsername'             => $userUsername,
+            'userCpf'                  => $userCpf,
+            'userPhone'                => $userPhone,
+            'savedCustomerAddress'     => $savedCustomerAddress,
+            'unitPrice'                => $unitPrice,
+            'quantity'                 => $quantity,
+            'total'                    => $total,
+            'sellerInfo'               => $sellerInfo,
+            'isPhysicalOrDropship'     => $isPhysicalOrDropship,
+            'productWeightInGrams'     => $productWeightInGrams,
+            'expressShippingBasePrice' => $expressShippingBasePrice,
         ]);
 
         return new ViewResponse($html);
@@ -196,7 +305,7 @@ class CheckoutController
      */
     public function showProductCheckout(Request $request, $id): ResponseInterface
     {
-        return $this->showCheckout($request, $id);
+        return $this->showCheckout($request, $id, 'dropship_product');
     }
 
     /**
@@ -214,13 +323,18 @@ class CheckoutController
         $itemType = (string)($request->input('item_type') ?? '');
         $course = null;
         $sellerInfo = null;
+        $resolvedItem = null;
 
         if ($this->itemResolver !== null) {
-            $resolvedType = $itemType !== '' ? $itemType : 'course';
-            $item = $this->itemResolver->resolve($resolvedType, $courseId)
-                 ?? $this->itemResolver->resolve('dropship_product', $courseId)
-                 ?? $this->itemResolver->resolve('course', $courseId);
+            $resolveContext = ['sku' => (string)($request->input('sku') ?? '')];
+            if ($itemType !== '') {
+                $item = $this->itemResolver->resolve($itemType, $courseId, $resolveContext);
+            } else {
+                $item = $this->itemResolver->resolve('course', $courseId, $resolveContext)
+                     ?? $this->itemResolver->resolve('dropship_product', $courseId, $resolveContext);
+            }
             if ($item && $item->isAvailable()) {
+                $resolvedItem = $item;
                 $course = [
                     'id'    => $item->getId(),
                     'title' => $item->getTitle(),
@@ -228,7 +342,9 @@ class CheckoutController
                     'type'  => $item->getItemType(),
                 ];
                 $itemType = $item->getItemType();
-                if (method_exists($item, 'getProduct')) {
+                if ($item instanceof SellerAwarePurchasableInterface) {
+                    $sellerInfo = $item->getSellerInfo();
+                } elseif (method_exists($item, 'getProduct')) {
                     $innerProduct = $item->getProduct();
                     if (is_object($innerProduct) && method_exists($innerProduct, 'getSellerInfo')) {
                         $sellerInfo = $innerProduct->getSellerInfo();
@@ -239,7 +355,7 @@ class CheckoutController
 
         if ($course === null && $this->courseRepo !== null) {
             $c = $this->courseRepo->findById($courseId);
-            if ($c) {
+            if ($c && ($c['status'] ?? 'published') === 'published') {
                 $course = $c;
                 $itemType = 'course';
             }
@@ -255,35 +371,81 @@ class CheckoutController
 
         $isPhysicalOrDropship = in_array($itemType, ['dropship_product', 'dropship', 'product'], true);
 
-        $userId = (int)$this->session->get('academy_student_id', 0);
-        if ($userId <= 0) {
-            $userId = (int)$this->session->get('user_id', 0);
+        if ($isPhysicalOrDropship) {
+            $userId = (int)$this->session->get('customer_id', 0);
+            if ($userId <= 0) {
+                $userId = (int)$this->session->get('academy_student_id', 0);
+            }
+            if ($userId <= 0) {
+                $userId = (int)$this->session->get('user_id', 0);
+            }
+        } else {
+            $userId = (int)$this->session->get('academy_student_id', 0);
+            if ($userId <= 0) {
+                $userId = (int)$this->session->get('user_id', 0);
+            }
         }
 
-        if ($userId <= 0 && !$isPhysicalOrDropship) {
+        if ($userId <= 0) {
             return new JsonResponse(['success' => false, 'message' => 'Faça login para concluir o pagamento.'], 401);
         }
 
         $unitPrice = (float)($course['price'] ?? 0.0);
         $quantity = $isPhysicalOrDropship ? max(1, min(99, (int)$request->input('quantity', 1))) : 1;
-        $total = round($unitPrice * $quantity, 2);
-        $gatewayId = (string)($request->input('gateway') ?? 'mercadopago');
+        $shippingMethod = trim((string)$request->input('shipping_method', 'standard'));
+        $shippingPrice = 0.0;
+        if ($isPhysicalOrDropship && $shippingMethod === 'express') {
+            if ($resolvedItem !== null && method_exists($resolvedItem, 'getExpressShippingPrice')) {
+                $shippingPrice = $resolvedItem->getExpressShippingPrice($quantity);
+            } elseif ($resolvedItem !== null && method_exists($resolvedItem, 'getProduct') && method_exists($resolvedItem->getProduct(), 'calculateExpressShippingPrice')) {
+                $shippingPrice = $resolvedItem->getProduct()->calculateExpressShippingPrice($quantity);
+            } else {
+                $shippingPrice = 19.90;
+            }
+        }
+        $total = round(($unitPrice * $quantity) + $shippingPrice, 2);
+        $gatewayId = strtolower(trim((string)($request->input('gateway') ?? 'mercadopago')));
         $paymentMethod = (string)($request->input('payment_method') ?? 'pix');
-        $payerCpf = preg_replace('/\D/', '', (string)($request->input('payer_cpf') ?? $this->session->get('user_cpf', '')));
+        $payerCpf = preg_replace('/\D/', '', (string)(
+            $request->input('payer_cpf')
+            ?? ($this->session->get('customer_cpf')
+                ?: $this->session->get('user_cpf')
+                ?: $this->session->get('academy_student_cpf')
+                ?: '')
+        ));
 
         if ($payerCpf !== '') {
+            $this->session->set('customer_cpf', $payerCpf);
             $this->session->set('user_cpf', $payerCpf);
             $this->session->set('academy_student_cpf', $payerCpf);
         }
 
+        $payerPhone = trim((string)(
+            $request->input('payer_phone')
+            ?: $request->input('customer_phone')
+            ?: $this->session->get('customer_phone')
+            ?: ''
+        ));
+        if ($payerPhone !== '') {
+            $this->session->set('customer_phone', $payerPhone);
+        }
+
         $gateway = $this->gatewayRegistry->get($gatewayId);
-        if (!$gateway) {
+        if (!$gateway || in_array($gateway->getId(), ['hotmart', 'eduzz', 'monetizze', 'clickbank'], true)) {
             return new JsonResponse(['success' => false, 'message' => 'Meio de pagamento inválido.'], 422);
         }
 
         // Só cobra por gateway com credenciais reais. Modo demonstração exige flag explícita.
         if (!$gateway->isConfigured() && !$this->isDemoModeEnabled()) {
             return new JsonResponse(['success' => false, 'message' => 'Este meio de pagamento não está disponível no momento.'], 409);
+        }
+
+        if ($this->settings !== null) {
+            $allSettings = $this->settings->all();
+            $enabledKey = $gateway->getId() . '_enabled';
+            if (is_array($allSettings) && array_key_exists($enabledKey, $allSettings) && !$allSettings[$enabledKey]) {
+                return new JsonResponse(['success' => false, 'message' => 'Este gateway de pagamento está desativado.'], 409);
+            }
         }
 
         // Para Pix e Boleto em ambiente real do Mercado Pago, CPF com 11 dígitos é obrigatório
@@ -308,12 +470,77 @@ class CheckoutController
             'order_ref'      => $orderRef,
         ]);
 
-        $studentName = trim((string)($request->input('customer_name') ?? $request->input('payer_name') ?? $this->session->get('academy_student_name', (string)$this->session->get('user_name', $isPhysicalOrDropship ? 'Cliente' : 'Aluno'))));
-        $studentEmail = trim((string)($request->input('customer_email') ?? $request->input('payer_email') ?? $this->session->get('academy_student_email', (string)$this->session->get('user_email', 'cliente@exemplo.com'))));
+        // Registra o order_ref como pertencente à sessão atual (permite acompanhamento seguro para guest checkout)
+        $ownedRefs = $this->session->get('checkout_owned_order_refs', []);
+        if (!is_array($ownedRefs)) {
+            $ownedRefs = [];
+        }
+        $ownedRefs[] = $orderRef;
+        $this->session->set('checkout_owned_order_refs', array_slice(array_values(array_unique($ownedRefs)), -20));
+
+        $studentName = trim((string)(
+            $request->input('customer_name')
+            ?: $request->input('payer_name')
+            ?: ($isPhysicalOrDropship
+                ? ($this->session->get('customer_name') ?: $this->session->get('academy_student_name') ?: $this->session->get('user_name') ?: 'Cliente')
+                : ($this->session->get('academy_student_name') ?: $this->session->get('customer_name') ?: $this->session->get('user_name') ?: 'Aluno'))
+        ));
+        $studentEmail = trim((string)(
+            $request->input('customer_email')
+            ?: $request->input('payer_email')
+            ?: ($isPhysicalOrDropship
+                ? ($this->session->get('customer_email') ?: $this->session->get('academy_student_email') ?: $this->session->get('user_email') ?: 'cliente@exemplo.com')
+                : ($this->session->get('academy_student_email') ?: $this->session->get('customer_email') ?: $this->session->get('user_email') ?: 'aluno@exemplo.com'))
+        ));
+
+        // Dispara evento reativo de criação do pedido para inteligência de demanda e telemetria de dropship/físico
+        if ($isPhysicalOrDropship && $this->dispatcher !== null) {
+            $this->dispatcher->dispatch('dropship.order_created', [
+                'order_id'          => $orderId,
+                'order_ref'         => $orderRef,
+                'user_id'           => $userId,
+                'item_id'           => $courseId,
+                'item_type'         => $itemType,
+                'total'             => $total,
+                'customer_name'     => $studentName,
+                'customer_email'    => $studentEmail,
+                'customer_phone'    => $payerPhone,
+                'customer_document' => $payerCpf,
+                'gateway'           => $gateway->getId(),
+                'payment_method'    => $paymentMethod,
+                'status'            => 'pending',
+                'seller_info'       => $sellerInfo,
+                'shipping_method'   => $shippingMethod,
+                'shipping_price'    => $shippingPrice,
+            ]);
+        }
+
+        // Salva endereço e contato apenas para cliente autenticado (evita sobrescrita por e-mail de terceiros)
+        $saveAddressToAccount = (bool)$request->input('save_address_to_account', true);
+        $customerIdToSave = (int)$this->session->get('customer_id', 0);
+        if ($isPhysicalOrDropship && $saveAddressToAccount && $customerIdToSave > 0 && $this->dropshipCustomerAddressSaver !== null) {
+            $shipZipVal = trim((string)$request->input('shipping_zip', ''));
+            $shipStreetVal = trim((string)($request->input('shipping_street') ?? $request->input('shipping_address') ?? ''));
+            if ($shipZipVal !== '' && $shipStreetVal !== '') {
+                ($this->dropshipCustomerAddressSaver)($customerIdToSave, $studentEmail, [
+                    'shipping_zip'          => $shipZipVal,
+                    'shipping_address'      => $shipStreetVal,
+                    'shipping_number'       => trim((string)$request->input('shipping_number', '')),
+                    'shipping_complement'   => trim((string)$request->input('shipping_complement', '')),
+                    'shipping_neighborhood' => trim((string)$request->input('shipping_neighborhood', '')),
+                    'shipping_city'         => trim((string)$request->input('shipping_city', '')),
+                    'shipping_state'        => strtoupper(trim((string)$request->input('shipping_state', ''))),
+                    'phone'                 => $payerPhone,
+                    'cpf'                   => $payerCpf,
+                ]);
+            }
+        }
 
         $qtySuffix = ($isPhysicalOrDropship && $quantity > 1) ? " ({$quantity}x)" : '';
         $orderData = [
             'order_ref'     => $orderRef,
+            'item_id'       => $courseId,
+            'item_type'     => $itemType,
             'total'         => $total,
             'description'   => $isPhysicalOrDropship ? ("Compra{$qtySuffix}: " . $course['title']) : ("Matrícula no Curso: " . $course['title']),
             'student_name'  => $studentName,
@@ -348,15 +575,19 @@ class CheckoutController
                     'seller_info'       => $sellerInfo,
                     'customer_name'     => $studentName,
                     'customer_email'    => $studentEmail,
+                    'customer_phone'    => $payerPhone,
                     'customer_document' => $payerCpf,
                     'shipping_address'  => [
-                        'zip'          => $request->input('shipping_zip'),
-                        'street'       => $request->input('shipping_street') ?? $request->input('shipping_address'),
-                        'number'       => $request->input('shipping_number'),
-                        'complement'   => $request->input('shipping_complement'),
-                        'neighborhood' => $request->input('shipping_neighborhood'),
-                        'city'         => $request->input('shipping_city'),
-                        'state'        => $request->input('shipping_state'),
+                        'zip'             => $request->input('shipping_zip'),
+                        'street'          => $request->input('shipping_street') ?? $request->input('shipping_address'),
+                        'number'          => $request->input('shipping_number'),
+                        'complement'      => $request->input('shipping_complement'),
+                        'neighborhood'    => $request->input('shipping_neighborhood'),
+                        'city'            => $request->input('shipping_city'),
+                        'state'           => $request->input('shipping_state'),
+                        'phone'           => $payerPhone,
+                        'shipping_method' => $shippingMethod,
+                        'shipping_price'  => $shippingPrice,
                     ],
                 ]);
             }
@@ -375,7 +606,7 @@ class CheckoutController
         }
 
         if ($paymentResult->status === 'pending') {
-            return new JsonResponse([
+            $payload = [
                 'success'           => true,
                 'status'            => 'pending',
                 'order_ref'         => $orderRef,
@@ -385,7 +616,15 @@ class CheckoutController
                 'boleto_url'        => $paymentResult->boletoUrl,
                 'redirect_url'      => $paymentResult->redirectUrl,
                 'message'           => $paymentResult->message,
-            ]);
+            ];
+
+            if (!empty($paymentResult->rawPayload['demo_mode']) || !empty($paymentResult->rawPayload['simulated'])) {
+                $payload['demo_mode'] = true;
+                $payload['simulated'] = true;
+                $payload['warning'] = 'MODO DEMONSTRAÇÃO: Nenhum pagamento real foi processado.';
+            }
+
+            return new JsonResponse($payload);
         }
 
         return new JsonResponse([
@@ -403,6 +642,10 @@ class CheckoutController
         $order = $this->orderRepo->findByOrderRef($orderRef);
         if (!$order) {
             return new JsonResponse(['success' => false, 'paid' => false, 'message' => 'Pedido não encontrado.'], 404);
+        }
+
+        if (!$this->canAccessOrder($order)) {
+            return new JsonResponse(['success' => false, 'paid' => false, 'message' => 'Acesso negado ao pedido.'], 403);
         }
 
         $status = (string)($order['status'] ?? 'pending');
@@ -435,10 +678,35 @@ class CheckoutController
             return Response::redirect($baseUrl . '/aluno/painel?payment_status=error&message=' . urlencode('Pedido não localizado.'));
         }
 
+        $isPhysical = in_array((string)($order['item_type'] ?? ''), ['dropship_product', 'dropship', 'product'], true);
+        $approvedRedirect = $isPhysical
+            ? ($baseUrl . '/checkout/sucesso/' . urlencode($orderRef) . '?payment_status=approved&gateway=stripe')
+            : ($baseUrl . '/aluno/painel?payment_status=approved&gateway=stripe&order_ref=' . urlencode($orderRef));
+
+        if (($order['status'] ?? '') === 'paid') {
+            return Response::redirect($approvedRedirect);
+        }
+
         $gateway = $this->gatewayRegistry->get('stripe');
-        if ($gateway instanceof \DomainSystem\Plugins\commerce\Services\Gateways\StripeGateway && !empty($sessionId)) {
+        if ($gateway instanceof \DomainSystem\Plugins\commerce\Services\Gateways\StripeGateway && !empty($sessionId) && $gateway->isConfigured()) {
             $verified = $gateway->verifySession($sessionId);
             if ($verified && ($verified['status'] ?? '') === 'approved') {
+                if (!empty($verified['order_ref']) && (string)$verified['order_ref'] !== $orderRef) {
+                    return Response::redirect($baseUrl . '/aluno/painel?payment_status=error&message=' . urlencode('Sessão de pagamento não pertence a este pedido.'));
+                }
+
+                $expectedTotal = (float)($order['total'] ?? 0.0);
+                $paidTotal = (float)($verified['total'] ?? 0.0);
+                if ($expectedTotal > 0.0 && abs($paidTotal - $expectedTotal) > 0.01) {
+                    error_log(sprintf(
+                        '[commerce] Valor divergente no Stripe order=%s pago=%.2f esperado=%.2f',
+                        $orderRef,
+                        $paidTotal,
+                        $expectedTotal
+                    ));
+                    return Response::redirect($baseUrl . '/aluno/painel?payment_status=error&message=' . urlencode('Valor do pagamento divergente do pedido.'));
+                }
+
                 $this->orderRepo->updateStatus((int)$order['id'], 'paid', (string)($verified['transaction_id'] ?? $sessionId));
 
                 if ($this->dispatcher !== null) {
@@ -448,14 +716,15 @@ class CheckoutController
                         'item_id'   => (int)$order['item_id'],
                         'item_type' => (string)($order['item_type'] ?? 'course'),
                         'order_ref' => $orderRef,
+                        'total'     => $expectedTotal,
                     ]);
                 }
 
-                return Response::redirect($baseUrl . '/aluno/painel?payment_status=approved&gateway=stripe&order_ref=' . urlencode($orderRef));
+                return Response::redirect($approvedRedirect);
             }
         }
 
-        if ($this->isDemoModeEnabled()) {
+        if ((!$gateway || !$gateway->isConfigured()) && !empty($sessionId) && $this->isDemoModeEnabled()) {
             $this->orderRepo->updateStatus((int)$order['id'], 'paid', 'STRIPE_DEMO_' . time());
             if ($this->dispatcher !== null) {
                 $this->dispatcher->dispatch('payment.approved', [
@@ -464,9 +733,10 @@ class CheckoutController
                     'item_id'   => (int)$order['item_id'],
                     'item_type' => (string)($order['item_type'] ?? 'course'),
                     'order_ref' => $orderRef,
+                    'total'     => (float)($order['total'] ?? 0.0),
                 ]);
             }
-            return Response::redirect($baseUrl . '/aluno/painel?payment_status=approved&gateway=stripe&order_ref=' . urlencode($orderRef));
+            return Response::redirect($approvedRedirect);
         }
 
         return Response::redirect($baseUrl . '/aluno/painel?payment_status=pending&gateway=stripe&order_ref=' . urlencode($orderRef));
@@ -486,10 +756,35 @@ class CheckoutController
             return Response::redirect($baseUrl . '/aluno/painel?payment_status=error&message=' . urlencode('Pedido não localizado.'));
         }
 
+        $isPhysical = in_array((string)($order['item_type'] ?? ''), ['dropship_product', 'dropship', 'product'], true);
+        $approvedRedirect = $isPhysical
+            ? ($baseUrl . '/checkout/sucesso/' . urlencode($orderRef) . '?payment_status=approved&gateway=paypal')
+            : ($baseUrl . '/aluno/painel?payment_status=approved&gateway=paypal&order_ref=' . urlencode($orderRef));
+
+        if (($order['status'] ?? '') === 'paid') {
+            return Response::redirect($approvedRedirect);
+        }
+
         $gateway = $this->gatewayRegistry->get('paypal');
-        if ($gateway instanceof \DomainSystem\Plugins\commerce\Services\Gateways\PayPalGateway && !empty($token)) {
+        if ($gateway instanceof \DomainSystem\Plugins\commerce\Services\Gateways\PayPalGateway && !empty($token) && $gateway->isConfigured()) {
             $captured = $gateway->captureOrder($token);
             if ($captured && ($captured['status'] ?? '') === 'approved') {
+                if (!empty($captured['order_ref']) && (string)$captured['order_ref'] !== $orderRef) {
+                    return Response::redirect($baseUrl . '/aluno/painel?payment_status=error&message=' . urlencode('Transação PayPal não pertence a este pedido.'));
+                }
+
+                $expectedTotal = (float)($order['total'] ?? 0.0);
+                $paidTotal = (float)($captured['total'] ?? 0.0);
+                if ($expectedTotal > 0.0 && abs($paidTotal - $expectedTotal) > 0.01) {
+                    error_log(sprintf(
+                        '[commerce] Valor divergente no PayPal order=%s pago=%.2f esperado=%.2f',
+                        $orderRef,
+                        $paidTotal,
+                        $expectedTotal
+                    ));
+                    return Response::redirect($baseUrl . '/aluno/painel?payment_status=error&message=' . urlencode('Valor do pagamento divergente do pedido.'));
+                }
+
                 $this->orderRepo->updateStatus((int)$order['id'], 'paid', (string)($captured['transaction_id'] ?? $token));
 
                 if ($this->dispatcher !== null) {
@@ -499,14 +794,15 @@ class CheckoutController
                         'item_id'   => (int)$order['item_id'],
                         'item_type' => (string)($order['item_type'] ?? 'course'),
                         'order_ref' => $orderRef,
+                        'total'     => $expectedTotal,
                     ]);
                 }
 
-                return Response::redirect($baseUrl . '/aluno/painel?payment_status=approved&gateway=paypal&order_ref=' . urlencode($orderRef));
+                return Response::redirect($approvedRedirect);
             }
         }
 
-        if ($this->isDemoModeEnabled()) {
+        if ((!$gateway || !$gateway->isConfigured()) && !empty($token) && $this->isDemoModeEnabled()) {
             $this->orderRepo->updateStatus((int)$order['id'], 'paid', 'PAYPAL_DEMO_' . time());
             if ($this->dispatcher !== null) {
                 $this->dispatcher->dispatch('payment.approved', [
@@ -515,12 +811,52 @@ class CheckoutController
                     'item_id'   => (int)$order['item_id'],
                     'item_type' => (string)($order['item_type'] ?? 'course'),
                     'order_ref' => $orderRef,
+                    'total'     => (float)($order['total'] ?? 0.0),
                 ]);
             }
-            return Response::redirect($baseUrl . '/aluno/painel?payment_status=approved&gateway=paypal&order_ref=' . urlencode($orderRef));
+            return Response::redirect($approvedRedirect);
         }
 
         return Response::redirect($baseUrl . '/aluno/painel?payment_status=pending&gateway=paypal&order_ref=' . urlencode($orderRef));
+    }
+
+    private function canAccessOrder(array $order): bool
+    {
+        $role = (string)$this->session->get('user_role', '');
+        if (in_array($role, ['admin', 'manager'], true)) {
+            return true;
+        }
+
+        $orderRef = (string)($order['order_ref'] ?? '');
+        $ownedRefs = $this->session->get('checkout_owned_order_refs', []);
+        if ($orderRef !== '' && is_array($ownedRefs) && in_array($orderRef, $ownedRefs, true)) {
+            return true;
+        }
+
+        $orderUserId = (int)($order['user_id'] ?? 0);
+        if ($orderUserId <= 0) {
+            return false;
+        }
+
+        $academyStudentId = $this->session->get('academy_logged_out')
+            ? 0
+            : (int)$this->session->get('academy_student_id', 0);
+
+        $isPhysical = in_array((string)($order['item_type'] ?? ''), ['dropship_product', 'dropship', 'product'], true);
+        $scopedIds = $isPhysical
+            ? array_filter([
+                (int)$this->session->get('customer_id', 0),
+                $academyStudentId,
+                (int)$this->session->get('user_id', 0),
+            ])
+            : array_filter([
+                $academyStudentId,
+                (int)$this->session->get('user_id', 0),
+            ]);
+        if (empty($scopedIds)) {
+            return false;
+        }
+        return in_array($orderUserId, $scopedIds, true);
     }
 
     /**
@@ -531,7 +867,7 @@ class CheckoutController
         $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
         $order = $this->orderRepo->findByOrderRef($orderRef);
 
-        if (!$order) {
+        if (!$order || !$this->canAccessOrder($order)) {
             return Response::redirect($baseUrl . '/');
         }
 
@@ -563,13 +899,11 @@ class CheckoutController
             }
         }
 
-        // Tenta obter os dados do pedido de dropshipping se houver
+        // Obtém os dados do pedido de dropshipping via callback desacoplado injetado pelo container (DIP)
         $dropshipOrder = null;
         try {
-            $connection = \DomainSystem\Core\Database\Connection::getInstance();
-            if ($connection) {
-                $dropRepo = new \DomainSystem\Plugins\domain_drop\Repositories\PdoDropshipOrderRepository($connection);
-                $dropshipOrder = $dropRepo->findByOrderRef($orderRef);
+            if ($this->dropshipOrderFinder !== null) {
+                $dropshipOrder = ($this->dropshipOrderFinder)($orderRef);
             }
         } catch (\Throwable $e) {
             // Silencioso

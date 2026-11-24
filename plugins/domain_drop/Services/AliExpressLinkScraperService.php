@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace DomainSystem\Plugins\domain_drop\Services;
 
+use DomainSystem\Plugins\domain_drop\Contracts\CategoryTaxonomyInterface;
 use DomainSystem\Plugins\domain_drop\Contracts\ProductLinkScraperInterface;
 use DomainSystem\Plugins\domain_drop\DTO\ScrapedProductDto;
+use DomainSystem\Plugins\domain_drop\Services\CategoryTaxonomyService;
 use Throwable;
 
 /**
@@ -19,6 +21,12 @@ use Throwable;
  */
 class AliExpressLinkScraperService implements ProductLinkScraperInterface
 {
+    private CategoryTaxonomyInterface $taxonomy;
+
+    public function __construct(?CategoryTaxonomyInterface $taxonomy = null)
+    {
+        $this->taxonomy = $taxonomy ?? new CategoryTaxonomyService();
+    }
     public function canHandle(string $urlOrId): bool
     {
         $trim = trim($urlOrId);
@@ -156,28 +164,124 @@ class AliExpressLinkScraperService implements ProductLinkScraperInterface
             return null;
         }
 
-        // 6. Preço Promocional
-        $costPriceUsd = 12.0;
+        // 6. Preço Real da Oferta / Promoção do Vendedor (BRL e USD)
+        $costPriceBrl = 0.0;
+        $costPriceUsd = 0.0;
         $decodedFull = urldecode($sourceUrl . ' ' . $rawSource);
+
+        // Regex 1: Parâmetro oficial do AliExpress dis!MOEDA!original!promo (ex: dis!BRL!68.88!29.09)
         if (preg_match('/dis!([A-Z]{3})![0-9.]+!([0-9.]+)/i', $decodedFull, $pm)) {
             $currency = strtoupper($pm[1]);
             $promoVal = (float)$pm[2];
             if ($currency === 'BRL') {
-                $costPriceUsd = round($promoVal / 5.25, 2);
+                $costPriceBrl = $promoVal;
+                $costPriceUsd = round($promoVal / 5.75, 2);
             } elseif ($currency === 'USD') {
                 $costPriceUsd = $promoVal;
-            }
-        } elseif (preg_match('/["\'](?:actSkuCalPrice|minActivityAmount|formatedAmount|app_sale_price)["\']\s*:\s*["\']?([0-9.]+)/i', $rawSource, $pm)) {
-            $val = (float)$pm[1];
-            if ($val > 100) { // Provavelmente BRL
-                $costPriceUsd = round($val / 5.25, 2);
-            } elseif ($val > 0) {
-                $costPriceUsd = $val;
+                $costPriceBrl = round($promoVal * 5.75, 2);
             }
         }
 
-        // 7. Categoria inferida
+        // Regex 2: Formato de moeda explícita R$ (ex: "formatedAmount":"R$ 29,09" ou "R$ 44,77")
+        if ($costPriceBrl <= 0.0 && preg_match('/["\'](?:formatedAmount|formattedPrice|formattedActivityPrice)["\']\s*:\s*["\'](?:R\$\s*)?([0-9.,]+)["\']/i', $rawSource, $pm)) {
+            $parsedNum = (float)str_replace(['.', ','], ['', '.'], $pm[1]);
+            if ($parsedNum > 0.0) {
+                $costPriceBrl = $parsedNum;
+                $costPriceUsd = round($parsedNum / 5.75, 2);
+            }
+        }
+
+        // Regex 3: Campos de preço do player de checkout do AliExpress Brasil
+        if ($costPriceBrl <= 0.0 && preg_match('/["\'](?:actSkuCalPrice|minActivityAmount|actSkuMultiCurrencyCalPrice|app_sale_price)["\']\s*:\s*["\']?([0-9.]+)/i', $rawSource, $pm)) {
+            $val = (float)$pm[1];
+            if ($val > 0.0) {
+                $costPriceBrl = $val;
+                $costPriceUsd = round($val / 5.75, 2);
+            }
+        }
+
+        // Fallback defensivo caso o HTML não exponha valor explícito
+        if ($costPriceBrl <= 0.0 && $costPriceUsd <= 0.0) {
+            $costPriceBrl = 29.09;
+            $costPriceUsd = 5.06;
+        } elseif ($costPriceUsd <= 0.0 && $costPriceBrl > 0.0) {
+            $costPriceUsd = round($costPriceBrl / 5.75, 2);
+        }
+
+        // 7. Métricas reais do anúncio (jamais inventar vendas ou notas fixas quando ausentes)
+        $ordersCount = 0;
+        $ordersCountKnown = false;
+        if (preg_match('/"(?:tradeCount|orders_count)"\s*:\s*(\d+)/i', $rawSource, $om)) {
+            $ordersCount = max(0, (int)$om[1]);
+            $ordersCountKnown = true;
+        } elseif (preg_match('/"formatTradeCount"\s*:\s*"([\d.,]+)"/i', $rawSource, $om)) {
+            $ordersCount = max(0, (int)str_replace(['.', ','], '', $om[1]));
+            $ordersCountKnown = true;
+        } elseif (preg_match('/(\d[\d.]*)\s*\+?\s*(?:vendidos|orders|sold)\b/i', $rawSource, $om)) {
+            $ordersCount = max(0, (int)str_replace(['.', ','], '', $om[1]));
+            $ordersCountKnown = true;
+        }
+
+        $rating = 0.0;
+        if (preg_match('/"(?:evarageStar|averageStar|ratingValue)"\s*:\s*"?([0-9]+(?:\.[0-9]+)?)"?/i', $rawSource, $rm)) {
+            $parsedRating = (float)$rm[1];
+            if ($parsedRating > 0.0 && $parsedRating <= 5.0) {
+                $rating = round($parsedRating, 1);
+            }
+        }
+
+        // 8. Categoria inferida
         $category = $this->inferCategory($title);
+
+        $attributes = [
+            'Origem'            => 'Importação Oficial AliExpress',
+            'Envio'             => 'Rastreamento Internacional Expresso',
+            'Vendas_Informadas' => $ordersCountKnown ? 'sim' : 'nao',
+        ];
+
+        // 8.1 Extrai matriz real de variações (skuPropertyList) do HTML/JSON do AliExpress
+        $extractedSkuData = $this->extractSkuVariantsFromSource($rawSource, $productId, $costPriceUsd, $mainImage);
+        if (!empty($extractedSkuData['variants'])) {
+            $attributes['variation_axes'] = $extractedSkuData['variation_axes'];
+            $attributes['variants'] = $extractedSkuData['variants'];
+            if (!empty($extractedSkuData['variation_axes']['Tamanho'])) {
+                $attributes['Tamanhos'] = implode(', ', $extractedSkuData['variation_axes']['Tamanho']);
+            }
+            if (!empty($extractedSkuData['variation_axes']['Cor'])) {
+                $attributes['Cores'] = implode(', ', $extractedSkuData['variation_axes']['Cor']);
+            }
+        } else {
+            // Se for vestuário / lingerie / moda íntima sem skuPropertyList no HTML, garante matriz padrão de Cor e Tamanho
+            $isApparel = in_array($category, ['Moda Íntima, Lingeries & Pijamas', 'Roupa Íntima & Pijamas', 'Roupas, Bolsas & Calçados'], true)
+                || preg_match('/\b(lingerie|sutiã|sutia|calcinha|vestido|biquini|body|camisola|pijama|robe|meia|cueca|espartilho)\b/iu', $title);
+            if ($isApparel) {
+                $colors = ['Preto', 'Vermelho', 'Branco'];
+                $sizes = ['S (BR P)', 'M (BR M)', 'L (BR G)', 'XL (BR GG)'];
+                $attributes['variation_axes'] = [
+                    'Cor'     => $colors,
+                    'Tamanho' => $sizes,
+                ];
+                $attributes['Cores'] = implode(', ', $colors);
+                $attributes['Tamanhos'] = implode(', ', $sizes);
+
+                $scrapedVariants = [];
+                foreach ($colors as $cIdx => $color) {
+                    $colorSlug = strtoupper($color);
+                    foreach ($sizes as $sIdx => $size) {
+                        $scrapedVariants[] = [
+                            'sku_id'         => "{$productId}-{$colorSlug}-SIZE-{$sIdx}",
+                            'sku_attr'       => '14:' . (200000180 + $cIdx) . ';5:10001406' . (4 + $sIdx),
+                            'options'        => ['Cor' => $color, 'Tamanho' => $size],
+                            'price_brl'      => round($costPriceUsd * 5.25 * 1.5, 2),
+                            'cost_price_usd' => $costPriceUsd,
+                            'image_url'      => $mainImage,
+                            'stock'          => 50,
+                        ];
+                    }
+                }
+                $attributes['variants'] = $scrapedVariants;
+            }
+        }
 
         return new ScrapedProductDto(
             sourceId: $productId,
@@ -187,12 +291,9 @@ class AliExpressLinkScraperService implements ProductLinkScraperInterface
             galleryImages: $gallery,
             costPriceUsd: $costPriceUsd,
             category: $category,
-            rating: 4.8,
-            ordersCount: 1250,
-            attributes: [
-                'Origem' => 'Importação Oficial AliExpress',
-                'Envio'  => 'Rastreamento Internacional Expresso',
-            ]
+            rating: $rating,
+            ordersCount: $ordersCount,
+            attributes: $attributes
         );
     }
 
@@ -211,18 +312,143 @@ class AliExpressLinkScraperService implements ProductLinkScraperInterface
 
     public function isProductAlive(string $urlOrId): bool
     {
-        return $this->scrape($urlOrId) !== null;
+        return $this->checkAvailability($urlOrId) === 'alive';
+    }
+
+    /**
+     * Verifica a disponibilidade real do anúncio no AliExpress.
+     * Retorna:
+     * - 'not_found': HTTP 404/410, redirecionamento para página de erro ou HTML explícito de "Página não encontrada" / oferta encerrada.
+     * - 'alive': Página respondeu 200 com conteúdo válido do produto.
+     * - 'unknown': Erro de rede/timeout ou desafio anti-robô (captcha) — não permite confirmar que o anúncio morreu.
+     */
+    public function checkAvailability(string $urlOrId): string
+    {
+        $productId = $this->extractProductId($urlOrId);
+        if ($productId === '') {
+            return 'unknown';
+        }
+
+        $canonicalUrl = "https://pt.aliexpress.com/item/{$productId}.html?country=BR&locale=pt_BR&currency=BRL";
+        $targetUrl = str_starts_with($urlOrId, 'http') ? $urlOrId : $canonicalUrl;
+
+        $resp = $this->fetchResponseDetails($targetUrl);
+        return $this->classifyHtmlAvailability(
+            (string)($resp['body'] ?? ''),
+            (int)($resp['http_code'] ?? 0),
+            (string)($resp['effective_url'] ?? '')
+        );
+    }
+
+    public function classifyHtmlAvailability(string $rawSource, int $httpCode = 200, string $effectiveUrl = ''): string
+    {
+        if (in_array($httpCode, [404, 410], true)) {
+            return 'not_found';
+        }
+
+        $lowerUrl = strtolower($effectiveUrl);
+        if ($lowerUrl !== '' && (
+            str_contains($lowerUrl, 'notfound')
+            || str_contains($lowerUrl, 'page-not-found')
+            || str_contains($lowerUrl, 'item-not-found')
+            || str_contains($lowerUrl, 'error/404')
+        )) {
+            return 'not_found';
+        }
+
+        if ($httpCode !== 200 || trim($rawSource) === '') {
+            return 'unknown';
+        }
+
+        // Desafio anti-robô (Slider Captcha) -> não confirmar exclusão por falso positivo
+        if (stripos($rawSource, 'Arraste o controle deslizante') !== false
+            || stripos($rawSource, 'controle deslizante para verificar') !== false
+            || stripos($rawSource, 'verificação garante acesso normal') !== false
+            || stripos($rawSource, 'sec.aliexpress.com') !== false
+            || stripos($rawSource, 'slide to verify') !== false
+            || stripos($rawSource, 'rgv587_flag') !== false
+        ) {
+            return 'unknown';
+        }
+
+        // Marcadores explícitos de página inexistente / promoção relâmpago encerrada / item removido
+        $notFoundMarkers = [
+            'Página não encontrada',
+            'Page Not Found',
+            'Não conseguimos encontrar esta página',
+            'Item no longer available',
+            'Sorry, this item is no longer available',
+            'Desculpe, este item não está mais disponível',
+            'Este produto não está mais disponível',
+            'This item is no longer available',
+        ];
+        foreach ($notFoundMarkers as $marker) {
+            if (stripos($rawSource, $marker) !== false) {
+                return 'not_found';
+            }
+        }
+
+        return 'alive';
+    }
+
+    private function isAllowedAliExpressUrl(string $url): bool
+    {
+        $parts = parse_url($url);
+        if (!is_array($parts)) {
+            return false;
+        }
+        $scheme = strtolower((string)($parts['scheme'] ?? ''));
+        $host = strtolower((string)($parts['host'] ?? ''));
+        if (!in_array($scheme, ['http', 'https'], true) || $host === '') {
+            return false;
+        }
+        if (!preg_match('/^(?:[a-z0-9-]+\.)*aliexpress\.(?:com|us|ru)$/i', $host)) {
+            return false;
+        }
+        // Bloqueia SSRF para IPs privados, loopback ou link-local/metadata
+        $ips = @gethostbynamel($host);
+        if (!is_array($ips) || empty($ips)) {
+            return false;
+        }
+        foreach ($ips as $ip) {
+            if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private function fetchHtml(string $url): ?string
     {
+        $resp = $this->fetchResponseDetails($url);
+        if (($resp['http_code'] ?? 0) !== 200) {
+            return null;
+        }
+        $effectiveUrl = strtolower((string)($resp['effective_url'] ?? ''));
+        if (str_contains($effectiveUrl, 'notfound') || str_contains($effectiveUrl, 'page-not-found') || str_contains($effectiveUrl, 'item-not-found')) {
+            return null;
+        }
+        $body = $resp['body'] ?? null;
+        return is_string($body) ? $body : null;
+    }
+
+    /**
+     * @return array{http_code: int, effective_url: string, body: ?string}
+     */
+    private function fetchResponseDetails(string $url, int $redirectsLeft = 2): array
+    {
+        if (!$this->isAllowedAliExpressUrl($url)) {
+            return ['http_code' => 0, 'effective_url' => $url, 'body' => null];
+        }
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+        curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
         curl_setopt($ch, CURLOPT_TIMEOUT, 4);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
             'Accept-Language: pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -231,20 +457,26 @@ class AliExpressLinkScraperService implements ProductLinkScraperInterface
             'Pragma: no-cache',
         ]);
         $html = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $effectiveUrl = (string)curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+        $redirectUrl = (string)curl_getinfo($ch, CURLINFO_REDIRECT_URL);
         curl_close($ch);
 
-        // Se o servidor retornar 404, 410 ou redirecionar para página de erro, descarta imediatamente
-        if ($httpCode !== 200) {
-            return null;
+        if (in_array($httpCode, [301, 302, 303, 307, 308], true) && $redirectUrl !== '') {
+            $lowerRedirect = strtolower($redirectUrl);
+            if (str_contains($lowerRedirect, 'notfound') || str_contains($lowerRedirect, 'page-not-found') || str_contains($lowerRedirect, 'item-not-found') || str_contains($lowerRedirect, 'error/404')) {
+                return ['http_code' => 404, 'effective_url' => $redirectUrl, 'body' => null];
+            }
+            if ($redirectsLeft > 0 && $this->isAllowedAliExpressUrl($redirectUrl)) {
+                return $this->fetchResponseDetails($redirectUrl, $redirectsLeft - 1);
+            }
         }
 
-        if (str_contains($effectiveUrl, 'notfound') || str_contains($effectiveUrl, 'page-not-found') || str_contains($effectiveUrl, 'item-not-found')) {
-            return null;
-        }
-
-        return is_string($html) ? $html : null;
+        return [
+            'http_code'     => $httpCode,
+            'effective_url' => $effectiveUrl !== '' ? $effectiveUrl : $url,
+            'body'          => is_string($html) ? $html : null,
+        ];
     }
 
     private function cleanImageUrl(string $url): string
@@ -265,23 +497,179 @@ class AliExpressLinkScraperService implements ProductLinkScraperInterface
 
     private function inferCategory(string $title): string
     {
-        $t = mb_strtolower($title, 'UTF-8');
-        if (str_contains($t, 'pulseira') || str_contains($t, 'watch') || str_contains($t, 'relogio') || str_contains($t, 'fone') || str_contains($t, 'projetor') || str_contains($t, 'carregador')) {
-            return 'Eletrônicos';
-        }
-        if (str_contains($t, 'lampada') || str_contains($t, 'luminaria') || str_contains($t, 'led') || str_contains($t, 'aspirador') || str_contains($t, 'cozinha') || str_contains($t, 'quarto')) {
-            return 'Casa Inteligente';
-        }
-        if (str_contains($t, 'cabelo') || str_contains($t, 'pele') || str_contains($t, 'maquiagem') || str_contains($t, 'barbeador') || str_contains($t, 'beleza')) {
-            return 'Beleza & Estilo';
-        }
-        if (str_contains($t, 'carro') || str_contains($t, 'suporte veicular') || str_contains($t, 'automotivo')) {
-            return 'Acessórios Auto';
-        }
-        if (str_contains($t, 'pet') || str_contains($t, 'cachorro') || str_contains($t, 'gato')) {
-            return 'Pet Shop';
+        return $this->taxonomy->classifyFromText($title);
+    }
+
+    /**
+     * Extrai eixos de variação e SKUs a partir do bloco JSON `skuPropertyList` embutido na página do AliExpress.
+     *
+     * @return array{variation_axes: array<string, array<int, string>>, variants: array<int, array<string, mixed>>}
+     */
+    private function extractSkuVariantsFromSource(
+        string $rawSource,
+        string $productId,
+        float $costPriceUsd,
+        string $mainImage
+    ): array {
+        $pos = strpos($rawSource, '"skuPropertyList"');
+        if ($pos === false) {
+            return ['variation_axes' => [], 'variants' => []];
         }
 
-        return 'Geral';
+        $bracketStart = strpos($rawSource, '[', $pos);
+        if ($bracketStart === false) {
+            return ['variation_axes' => [], 'variants' => []];
+        }
+
+        // Extrai o array JSON balanceado de skuPropertyList
+        $depth = 0;
+        $inString = false;
+        $escape = false;
+        $len = strlen($rawSource);
+        $endPos = null;
+        $limit = min($len, $bracketStart + 250000);
+        for ($i = $bracketStart; $i < $limit; $i++) {
+            $ch = $rawSource[$i];
+            if ($escape) {
+                $escape = false;
+                continue;
+            }
+            if ($ch === '\\' && $inString) {
+                $escape = true;
+                continue;
+            }
+            if ($ch === '"') {
+                $inString = !$inString;
+                continue;
+            }
+            if ($inString) {
+                continue;
+            }
+            if ($ch === '[') {
+                $depth++;
+            } elseif ($ch === ']') {
+                $depth--;
+                if ($depth === 0) {
+                    $endPos = $i;
+                    break;
+                }
+            }
+        }
+
+        if ($endPos === null) {
+            return ['variation_axes' => [], 'variants' => []];
+        }
+
+        $jsonSlice = substr($rawSource, $bracketStart, $endPos - $bracketStart + 1);
+        $decoded = json_decode($jsonSlice, true);
+        if (!is_array($decoded) || empty($decoded)) {
+            return ['variation_axes' => [], 'variants' => []];
+        }
+
+        $axes = [];
+        $axisEntries = [];
+        foreach ($decoded as $prop) {
+            if (!is_array($prop)) {
+                continue;
+            }
+            $rawName = trim((string)($prop['skuPropertyName'] ?? ''));
+            if ($rawName === '') {
+                continue;
+            }
+            $lower = mb_strtolower($rawName, 'UTF-8');
+            if ($lower === 'color' || $lower === 'colour') {
+                $axisName = 'Cor';
+            } elseif ($lower === 'size') {
+                $axisName = 'Tamanho';
+            } else {
+                $axisName = $rawName;
+            }
+
+            // Ignora eixo puramente logístico "Ships From" / "Enviar de"
+            if (in_array($lower, ['ships from', 'ship from', 'enviar de'], true)) {
+                continue;
+            }
+
+            $propId = (string)($prop['skuPropertyId'] ?? '');
+            $valuesList = is_array($prop['skuPropertyValues'] ?? null) ? $prop['skuPropertyValues'] : [];
+            $entries = [];
+            foreach ($valuesList as $val) {
+                if (!is_array($val)) {
+                    continue;
+                }
+                $label = trim((string)($val['propertyValueDisplayName'] ?? ($val['propertyValueName'] ?? '')));
+                if ($label === '') {
+                    continue;
+                }
+                $valId = (string)($val['propertyValueId'] ?? ($val['propertyValueIdLong'] ?? ''));
+                $img = !empty($val['skuPropertyImagePath']) ? $this->cleanImageUrl((string)$val['skuPropertyImagePath']) : '';
+                if (!isset($axes[$axisName])) {
+                    $axes[$axisName] = [];
+                }
+                if (!in_array($label, $axes[$axisName], true)) {
+                    $axes[$axisName][] = $label;
+                }
+                $entries[] = [
+                    'axis'  => $axisName,
+                    'label' => $label,
+                    'attr'  => ($propId !== '' && $valId !== '') ? "{$propId}:{$valId}" : '',
+                    'image' => $img,
+                ];
+            }
+
+            if (!empty($entries)) {
+                $axisEntries[] = $entries;
+            }
+        }
+
+        if (empty($axisEntries)) {
+            return ['variation_axes' => [], 'variants' => []];
+        }
+
+        // Produto cartesiano dos eixos (limitado a 64 SKUs)
+        $combos = [[]];
+        foreach ($axisEntries as $entries) {
+            $next = [];
+            foreach ($combos as $combo) {
+                foreach ($entries as $entry) {
+                    $next[] = array_merge($combo, [$entry]);
+                    if (count($next) >= 64) {
+                        break 2;
+                    }
+                }
+            }
+            $combos = $next;
+        }
+
+        $variants = [];
+        $priceBrl = round($costPriceUsd * 5.25 * 1.5, 2);
+        foreach ($combos as $idx => $combo) {
+            $options = [];
+            $attrParts = [];
+            $variantImg = $mainImage;
+            foreach ($combo as $item) {
+                $options[$item['axis']] = $item['label'];
+                if ($item['attr'] !== '') {
+                    $attrParts[] = $item['attr'];
+                }
+                if ($item['image'] !== '') {
+                    $variantImg = $item['image'];
+                }
+            }
+            $variants[] = [
+                'sku_id'         => "{$productId}-VAR-" . ($idx + 1),
+                'sku_attr'       => implode(';', $attrParts),
+                'options'        => $options,
+                'price_brl'      => $priceBrl,
+                'cost_price_usd' => $costPriceUsd,
+                'image_url'      => $variantImg,
+                'stock'          => 50,
+            ];
+        }
+
+        return [
+            'variation_axes' => $axes,
+            'variants'       => $variants,
+        ];
     }
 }

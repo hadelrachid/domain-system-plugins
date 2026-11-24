@@ -9,11 +9,59 @@
 $refPrice = $product->salePriceBrl * 1.35;
 $sellerInfo = $product->getSellerInfo();
 $allImages = !empty($product->images) ? array_values(array_filter($product->images)) : [];
+if ($product->hasVariants()) {
+    foreach ($product->getVariants() as $v) {
+        if ($v->isAvailable() && !empty($v->imageUrl) && !in_array($v->imageUrl, $allImages, true)) {
+            $allImages[] = $v->imageUrl;
+        }
+    }
+}
 if (empty($allImages) && !empty($product->mainImageUrl)) {
     $allImages = [$product->mainImageUrl];
 }
 $isAdult = str_contains($product->category, '+18') || stripos($product->category, 'sex shop') !== false;
+$productWeightGrams = method_exists($product, 'getEstimatedWeightInGrams') ? $product->getEstimatedWeightInGrams() : 200;
+$productExpressPrice = method_exists($product, 'calculateExpressShippingPrice') ? $product->calculateExpressShippingPrice(1) : 19.90;
+$productFormattedWeight = method_exists($product, 'getFormattedWeight') ? $product->getFormattedWeight(1) : '200g';
+$eanCode = method_exists($product, 'getEanCode') ? $product->getEanCode() : '';
+
+$schemaOffers = [
+    '@type'           => 'Offer',
+    'url'             => (str_starts_with($baseUrl, 'http') ? $baseUrl : 'https://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $baseUrl) . '/produto/' . $product->slug,
+    'priceCurrency'   => 'BRL',
+    'price'           => number_format($product->salePriceBrl, 2, '.', ''),
+    'priceValidUntil' => date('Y-12-31', strtotime('+1 year')),
+    'itemCondition'   => 'https://schema.org/NewCondition',
+    'availability'    => $product->status === 'published' ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+    'seller'          => [
+        '@type' => 'Organization',
+        'name'  => $sellerInfo['store_name'] ?? 'Loja Oficial',
+    ],
+];
+
+$schemaData = [
+    '@context'    => 'https://schema.org/',
+    '@type'       => 'Product',
+    'name'        => $product->title,
+    'image'       => $allImages,
+    'description' => strip_tags(method_exists($product, 'getEnrichedDescription') ? ($product->getEnrichedDescription() ?: $product->description) : $product->description),
+    'sku'         => (string)($product->id ?? $product->aliexpressId),
+    'brand'       => [
+        '@type' => 'Brand',
+        'name'  => $product->attributes['brand'] ?? ($sellerInfo['store_name'] ?? 'Marca Original'),
+    ],
+    'offers'      => $schemaOffers,
+];
+
+if ($eanCode !== '') {
+    $schemaData['gtin13'] = $eanCode;
+}
 ?>
+<!-- Dados Estruturados Schema.org / Google Shopping & Rich Snippets -->
+<script type="application/ld+json">
+<?= json_encode($schemaData, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) ?>
+</script>
+
 <div class="domain-drop-product-page" style="max-width: 1200px; margin: 0 auto; padding: 24px 15px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #cbd5e1; box-sizing: border-box;">
 
     <!-- Breadcrumbs -->
@@ -70,7 +118,7 @@ $isAdult = str_contains($product->category, '+18') || stripos($product->category
                     </span>
                     <?php if ($isNational): ?>
                         <span style="background: rgba(34,197,94,0.14); border: 1px solid rgba(34,197,94,0.4); color: #4ade80; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 5px;">
-                            <span>🇧🇷</span> <span>Estoque no Brasil (Envio 3 a 7 dias)</span>
+                            <?= \DomainSystem\Plugins\domain_drop\Helpers\FlagHelper::br(16, 11) ?> <span>Estoque no Brasil (Envio 3 a 7 dias)</span>
                         </span>
                     <?php endif; ?>
                 </div>
@@ -81,14 +129,27 @@ $isAdult = str_contains($product->category, '+18') || stripos($product->category
 
                 <?php
                 $thermometerVal = \DomainSystem\Plugins\domain_drop\Services\ProductMiningService::calculateThermometerScore((float)$product->rating, (int)$product->ordersCount);
+                $salesInformed = (string)($product->attributes['Vendas_Informadas'] ?? '');
+                $starCount = (int)max(1, min(5, round((float)$product->rating)));
+                $starsEmoji = str_repeat('⭐', $starCount);
                 ?>
-                <?php if ($product->rating > 0 || $product->ordersCount > 0): ?>
+                <?php if ($product->rating > 0 || $product->ordersCount > 0 || $salesInformed !== ''): ?>
                     <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 13px; color: #94a3b8; margin-bottom: 22px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.08);">
                         <?php if ($product->rating > 0): ?>
-                            <span style="color: #fbbf24; font-weight: 600;">★ <?= number_format($product->rating, 1) ?> de nota</span>
+                            <span style="color: #fbbf24; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
+                                <span style="font-size: 14px; letter-spacing: 1px;"><?= $starsEmoji ?></span>
+                                <span style="color: #fff; font-weight: 800; font-family: monospace; font-size: 14px;"><?= number_format($product->rating, 1) ?></span>
+                                <?php if (!empty($product->attributes['reviews_count'])): ?>
+                                    <span style="color: #cbd5e1; font-weight: 500; font-size: 12.5px;">(<?= (int)$product->attributes['reviews_count'] ?> avaliações)</span>
+                                <?php endif; ?>
+                            </span>
                         <?php endif; ?>
-                        <?php if ($product->ordersCount > 0): ?>
+                        <?php if ($product->ordersCount > 0 && $salesInformed !== 'nao'): ?>
                             <span>• <?= number_format($product->ordersCount, 0, ',', '.') ?> aprovações / vendidos</span>
+                        <?php elseif ($salesInformed === 'sim'): ?>
+                            <span>• 0 vendidos</span>
+                        <?php elseif ($salesInformed === 'nao'): ?>
+                            <span>• Vendas não informadas</span>
                         <?php endif; ?>
                         <span style="background: rgba(249,115,22,0.14); border: 1px solid rgba(249,115,22,0.4); color: #fdba74; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700;">
                             🔥 Termômetro: <?= (int)$thermometerVal ?>%
@@ -102,7 +163,7 @@ $isAdult = str_contains($product->category, '+18') || stripos($product->category
                         De: R$ <?= number_format($refPrice, 2, ',', '.') ?>
                     </div>
                     <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-                        <div style="font-size: 32px; font-weight: 800; color: #5cd67d; font-family: monospace;">
+                        <div id="product-display-price" style="font-size: 32px; font-weight: 800; color: #5cd67d; font-family: monospace;">
                             R$ <?= number_format($product->salePriceBrl, 2, ',', '.') ?>
                         </div>
                         <div id="product-qty-subtotal" style="display: none; font-size: 13px; color: #F0D060; font-weight: 700; background: rgba(212,175,55,0.12); border: 1px solid rgba(212,175,55,0.3); padding: 4px 10px; border-radius: 6px;"></div>
@@ -125,6 +186,49 @@ $isAdult = str_contains($product->category, '+18') || stripos($product->category
                     </span>
                 </div>
 
+                <?php if ($product->hasVariants()): ?>
+                    <?php
+                    $axes = $product->getVariationAxes();
+                    $variantsList = $product->getVariants();
+                    ?>
+                    <!-- SELETORES DINÂMICOS DE VARIAÇÃO (CORES, TAMANHOS, MODELOS - PADRÃO SKU MATRIX) -->
+                    <div id="product-variants-box" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 16px; margin-bottom: 20px;">
+                        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #F0D060; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+                            <span>🎨 Opções & Variações</span>
+                            <span id="active-variant-summary" style="color: #94a3b8; font-size: 11.5px; text-transform: none; font-weight: 600;"></span>
+                        </div>
+
+                        <?php foreach ($axes as $axisName => $options): ?>
+                            <div class="variant-axis-block" style="margin-bottom: 14px;">
+                                <div style="font-size: 12px; color: #cbd5e1; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                                    <span><?= htmlspecialchars($axisName) ?>:</span>
+                                    <span class="axis-selected-label" data-axis="<?= htmlspecialchars($axisName) ?>" style="color: #5cd67d; font-weight: 700;"></span>
+                                </div>
+                                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                    <?php foreach ($options as $optIdx => $optionValue): ?>
+                                        <?php $isInStock = $product->isOptionAvailable($axisName, $optionValue); ?>
+                                        <button type="button"
+                                                class="btn-variant-chip <?= !$isInStock ? 'is-disabled' : '' ?>"
+                                                data-axis="<?= htmlspecialchars($axisName) ?>"
+                                                data-value="<?= htmlspecialchars($optionValue) ?>"
+                                                data-in-stock="<?= $isInStock ? '1' : '0' ?>"
+                                                <?= !$isInStock ? 'disabled title="Opção indisponível / esgotada neste modelo"' : '' ?>
+                                                onclick="if(!this.disabled) selectVariantOption(this.getAttribute('data-axis'), this.getAttribute('data-value'))"
+                                                style="<?= $isInStock
+                                                    ? 'background: rgba(255,255,255,0.04); border: 1.5px solid rgba(255,255,255,0.14); color: #fff; padding: 7px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 6px;'
+                                                    : 'background: rgba(255,255,255,0.01); border: 1.5px dashed rgba(255,255,255,0.1); color: #64748b; padding: 7px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: not-allowed; opacity: 0.4; display: inline-flex; align-items: center; gap: 6px; text-decoration: line-through; pointer-events: none;' ?>">
+                                            <span><?= htmlspecialchars($optionValue) ?></span>
+                                            <?php if (!$isInStock): ?>
+                                                <span style="font-size: 9.5px; background: rgba(239,68,68,0.18); border: 1px solid rgba(239,68,68,0.3); color: #f87171; padding: 1px 5px; border-radius: 4px; text-decoration: none; font-weight: 700;">Esgotado</span>
+                                            <?php endif; ?>
+                                        </button>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+
                 <!-- Seletor de Quantidade + CTA Comprar Agora -->
                 <div style="display: flex; gap: 12px; align-items: stretch; margin-bottom: 24px; flex-wrap: wrap;">
                     <div style="display: inline-flex; align-items: center; background: #0c0f12; border: 1px solid rgba(212,175,55,0.4); border-radius: 8px; overflow: hidden; height: 54px;">
@@ -133,10 +237,70 @@ $isAdult = str_contains($product->category, '+18') || stripos($product->category
                         <button type="button" onclick="changeProductQuantity(1)" aria-label="Aumentar quantidade" style="width: 42px; height: 100%; background: rgba(255,255,255,0.04); border: none; color: #fff; font-size: 20px; font-weight: 700; cursor: pointer;">+</button>
                     </div>
 
-                    <a id="btn-buy-now" href="<?= htmlspecialchars($checkoutUrl) ?>?qty=1" style="flex: 1; min-width: 210px; display: flex; align-items: center; justify-content: center; gap: 10px; box-sizing: border-box; background: linear-gradient(135deg, #F0D060 0%, #D4AF37 100%); color: #0b0f17; text-decoration: none; padding: 14px 24px; border-radius: 8px; font-size: 16px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 6px 20px rgba(212, 175, 55, 0.4); transition: transform 0.2s ease;">
+                    <a id="btn-buy-now" href="<?= htmlspecialchars($checkoutUrl) ?>?qty=1" onclick="return handleBuyNowClick(event, this)" style="flex: 1; min-width: 210px; display: flex; align-items: center; justify-content: center; gap: 10px; box-sizing: border-box; background: linear-gradient(135deg, #F0D060 0%, #D4AF37 100%); color: #0b0f17; text-decoration: none; padding: 14px 24px; border-radius: 8px; font-size: 16px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 6px 20px rgba(212, 175, 55, 0.4); transition: transform 0.2s ease;">
                         <span>Comprar Agora</span>
                         <span>➔</span>
                     </a>
+                </div>
+                <div id="buy-availability-feedback" style="display: none; margin: -14px 0 20px; padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 600;"></div>
+
+                <!-- Simulador de Frete & Prazos por CEP -->
+                <div class="product-shipping-calc-box" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 16px; margin-bottom: 22px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 6px;">
+                        <span style="font-size: 13px; font-weight: 700; color: #fff; display: inline-flex; align-items: center; gap: 7px;">
+                            <span>🚚</span> <span>Calcular Frete &amp; Prazo de Entrega</span>
+                        </span>
+                        <a href="https://buscacepinter.correios.com.br/app/endereco/index.php" target="_blank" rel="noopener noreferrer" style="font-size: 11px; color: #94a3b8; text-decoration: underline;" onmouseover="this.style.color='#F0D060'" onmouseout="this.style.color='#94a3b8'">Não sei meu CEP</a>
+                    </div>
+
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <div style="position: relative; flex: 1;">
+                            <input type="text" id="shipping-cep-input" maxlength="9" placeholder="Digite seu CEP..." oninput="formatShippingCep(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();calculateProductShipping();}" style="width: 100%; background: #0c0f12; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 9px 12px; color: #fff; font-size: 13px; font-family: monospace; outline: none; box-sizing: border-box;" aria-label="Digite seu CEP">
+                        </div>
+                        <button type="button" id="btn-calc-shipping" onclick="calculateProductShipping()" style="background: rgba(212, 175, 55, 0.15); border: 1px solid #D4AF37; color: #F0D060; padding: 9px 16px; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; white-space: nowrap;">
+                            Calcular
+                        </button>
+                    </div>
+
+                    <!-- Resultado do Frete e Opções de Envio -->
+                    <div id="shipping-result-box" style="display: none; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08);">
+                        <div id="shipping-location-text" style="font-size: 12px; color: #38bdf8; margin-bottom: 10px; font-weight: 600;"></div>
+
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <!-- Opção 1: Frete Padrão com Rastreio -->
+                            <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,210,132,0.06); border: 1px solid rgba(0,210,132,0.3); border-radius: 8px; padding: 10px 12px;">
+                                <div>
+                                    <div style="font-size: 12.5px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 6px;">
+                                        <span>📦</span> <span>Frete Padrão com Rastreamento</span>
+                                    </div>
+                                    <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">
+                                        <?= $isNational ? 'Prazo estimado de <strong>3 a 7 dias úteis</strong> (Estoque Nacional 🇧🇷)' : 'Prazo estimado de <strong>15 a 25 dias úteis</strong> (Envio Internacional 🇨🇳)' ?>
+                                    </div>
+                                </div>
+                                <div style="text-align: right; padding-left: 10px;">
+                                    <span style="font-size: 12.5px; font-weight: 800; color: #00d284; text-transform: uppercase;">GRÁTIS</span>
+                                </div>
+                            </div>
+
+                            <!-- Opção 2: Envio Expresso Prioritário -->
+                            <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px 12px;">
+                                <div>
+                                    <div style="font-size: 12.5px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 6px;">
+                                        <span>⚡</span> <span>Envio Expresso Prioritário (Sedex)</span>
+                                        <span id="product-shipping-weight-badge" style="font-size: 11px; padding: 1px 6px; border-radius: 4px; background: rgba(69,243,255,0.12); color: #45f3ff; font-weight: 600;">
+                                            <?= htmlspecialchars($productFormattedWeight) ?>
+                                        </span>
+                                    </div>
+                                    <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">
+                                        <?= $isNational ? 'Despacho prioritário no mesmo dia (<strong>2 a 4 dias úteis</strong>)' : 'Despacho urgente com prioridade aduaneira (<strong>10 a 15 dias úteis</strong>)' ?>
+                                    </div>
+                                </div>
+                                <div style="text-align: right; padding-left: 10px;">
+                                    <span id="product-shipping-express-badge" style="font-size: 12.5px; font-weight: 800; color: #45f3ff;">+ R$ <?= number_format($productExpressPrice, 2, ',', '.') ?></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Trust Badges -->
@@ -201,9 +365,93 @@ $isAdult = str_contains($product->category, '+18') || stripos($product->category
             Descrição do Produto
         </h2>
         <div style="font-size: 15px; line-height: 1.8; color: #cbd5e1;">
-            <?= $product->description ?>
+            <?php
+            $rawProductDesc = method_exists($product, 'getEnrichedDescription') ? (string)$product->getEnrichedDescription() : (string)$product->description;
+            $safeProductDesc = strip_tags($rawProductDesc, '<p><br><ul><ol><li><strong><b><em><i><h3><h4><h5><h6><span><div>');
+            $safeProductDesc = preg_replace('/\s+on[a-z]+\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', $safeProductDesc) ?? '';
+            $safeProductDesc = preg_replace('/(?:javascript|vbscript|data):/i', '', $safeProductDesc) ?? '';
+            echo $safeProductDesc;
+            ?>
         </div>
     </div>
+
+    <!-- Other Sellers & Similar Offers Section (Amazon / AliExpress / Shopee comparison style) -->
+    <?php if (!empty($similarOffers) && is_array($similarOffers)): ?>
+        <div class="other-sellers-container" style="background: #171d22; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 28px; margin-bottom: 40px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 14px;">
+                <div>
+                    <h2 style="font-size: 20px; font-weight: 700; color: #fff; margin: 0 0 4px 0; display: flex; align-items: center; gap: 8px;">
+                        <span>🏬</span> Outros Vendedores & Ofertas Mais Acessíveis
+                    </h2>
+                    <p style="margin: 0; font-size: 13px; color: #94a3b8;">
+                        Compare preços e condições de diferentes fornecedores parceiros para itens similares desta categoria.
+                    </p>
+                </div>
+                <span style="background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">
+                    <?= count($similarOffers) ?> opções disponíveis
+                </span>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <?php foreach ($similarOffers as $offer): ?>
+                    <?php
+                    $offerSeller = $offer->getSellerInfo();
+                    $isCheaper = $offer->salePriceBrl < $product->salePriceBrl;
+                    $diffAmount = abs($product->salePriceBrl - $offer->salePriceBrl);
+                    $offerImg = $offer->mainImageUrl ?: ($offer->images[0] ?? '');
+                    $offerUrl = $baseUrl . '/produto/' . htmlspecialchars($offer->slug);
+                    $offerCheckoutUrl = $baseUrl . '/checkout/produto/' . (int)$offer->id;
+                    ?>
+                    <div style="display: flex; align-items: center; justify-content: space-between; background: #0e1317; border: 1px solid <?= $isCheaper ? 'rgba(34,197,94,0.3)' : 'rgba(255,255,255,0.06)' ?>; border-radius: 10px; padding: 14px 18px; gap: 16px; flex-wrap: wrap; transition: transform 0.2s ease, border-color 0.2s ease;">
+                        <!-- Thumbnail & Title -->
+                        <div style="display: flex; align-items: center; gap: 14px; flex: 1; min-width: 250px;">
+                            <div style="width: 56px; height: 56px; border-radius: 8px; overflow: hidden; background: #1a2228; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.1);">
+                                <img src="<?= htmlspecialchars($offerImg) ?>" alt="<?= htmlspecialchars($offer->title) ?>" style="width: 100%; height: 100%; object-fit: cover;">
+                            </div>
+                            <div>
+                                <a href="<?= $offerUrl ?>" style="color: #f1f5f9; text-decoration: none; font-size: 14px; font-weight: 600; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;">
+                                    <?= htmlspecialchars($offer->title) ?>
+                                </a>
+                                <div style="display: flex; align-items: center; gap: 10px; margin-top: 4px; font-size: 12px; color: #94a3b8; flex-wrap: wrap;">
+                                    <span>Vendedor: <strong style="color: #cbd5e1;"><?= htmlspecialchars((string)($offerSeller['name'] ?? 'Fornecedor Oficial AliExpress')) ?></strong></span>
+                                    <span>•</span>
+                                    <span style="color: #F0D060;">★ <?= number_format($offer->rating, 1) ?></span>
+                                    <span>•</span>
+                                    <span><?= number_format($offer->ordersCount, 0, ',', '.') ?> vendas</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Price & Badge -->
+                        <div style="text-align: right; min-width: 140px;">
+                            <div style="font-size: 18px; font-weight: 800; color: <?= $isCheaper ? '#4ade80' : '#fff' ?>;">
+                                R$ <?= number_format($offer->salePriceBrl, 2, ',', '.') ?>
+                            </div>
+                            <?php if ($isCheaper): ?>
+                                <div style="font-size: 11px; color: #4ade80; font-weight: 700; margin-top: 2px;">
+                                    Economize R$ <?= number_format($diffAmount, 2, ',', '.') ?>
+                                </div>
+                            <?php else: ?>
+                                <div style="font-size: 11px; color: #94a3b8;">
+                                    Envio Oficial Rastreado
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
+                        <!-- CTA Actions -->
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <a href="<?= $offerUrl ?>" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #cbd5e1; padding: 8px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none; white-space: nowrap;">
+                                Ver Oferta
+                            </a>
+                            <a href="<?= $offerCheckoutUrl ?>" style="background: <?= $isCheaper ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'linear-gradient(135deg, #ff4747 0%, #e03232 100%)' ?>; color: #fff; padding: 8px 16px; border-radius: 6px; font-size: 12px; font-weight: 700; text-decoration: none; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+                                Comprar
+                            </a>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    <?php endif; ?>
 
 </div>
 
@@ -423,7 +671,174 @@ function updateLightbox() {
 
 // Controle de Quantidade na página de detalhes do produto
 var productUnitPriceBrl = <?= json_encode((float)$product->salePriceBrl) ?>;
+var productUnitWeightInGrams = <?= (int)$productWeightGrams ?>;
 var productCheckoutBaseUrl = <?= json_encode($checkoutUrl, JSON_UNESCAPED_SLASHES) ?>;
+
+function calcProductExpressShipping(qty) {
+    var totalWeight = productUnitWeightInGrams * Math.max(1, qty);
+    if (totalWeight <= 300) return 19.90;
+    if (totalWeight <= 1000) return 29.90;
+    if (totalWeight <= 2000) return 39.90;
+    var extraKg = Math.ceil((totalWeight - 2000) / 1000);
+    return Math.round((39.90 + (extraKg * 10.00)) * 100) / 100;
+}
+
+function getProductFormattedWeight(qty) {
+    var totalGrams = productUnitWeightInGrams * Math.max(1, qty);
+    if (totalGrams >= 1000) {
+        var kg = totalGrams / 1000;
+        return (totalGrams % 1000 === 0 ? kg.toFixed(0) : kg.toFixed(1)).replace('.', ',') + ' kg';
+    }
+    return totalGrams + 'g';
+}
+
+// Matriz de Variações e SKUs (Padrão SKU Matrix / AliExpress SDK)
+var productVariants = <?= json_encode(array_map(fn($v) => $v->toArray(), $product->getVariants()), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+var productVariationAxes = <?= json_encode($product->getVariationAxes(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+var selectedVariationOptions = {};
+var activeProductSku = null;
+
+function selectVariantOption(axis, value) {
+    if (!axis || !value) return;
+
+    // Impede seleção de opções desativadas ou sem estoque
+    var isAllowed = false;
+    document.querySelectorAll('.btn-variant-chip').forEach(function(btn) {
+        if (btn.getAttribute('data-axis') === axis && btn.getAttribute('data-value') === value) {
+            if (btn.disabled || btn.getAttribute('data-in-stock') === '0') {
+                isAllowed = false;
+            } else {
+                isAllowed = true;
+            }
+        }
+    });
+    if (!isAllowed) return;
+
+    selectedVariationOptions[axis] = value;
+
+    // Atualiza o rótulo da opção selecionada (sem usar CSS.escape para compatibilidade total)
+    document.querySelectorAll('.axis-selected-label').forEach(function(el) {
+        if (el.getAttribute('data-axis') === axis) {
+            el.textContent = value;
+        }
+    });
+
+    // Atualiza os estilos visuais dos botões do mesmo eixo (mantendo os desativados/esgotados apagados)
+    document.querySelectorAll('.btn-variant-chip').forEach(function(btn) {
+        if (btn.getAttribute('data-axis') === axis) {
+            var inStock = (btn.getAttribute('data-in-stock') !== '0') && !btn.disabled;
+            if (!inStock) {
+                btn.style.background = 'rgba(255,255,255,0.01)';
+                btn.style.borderColor = 'rgba(255,255,255,0.1)';
+                btn.style.color = '#64748b';
+                btn.style.boxShadow = 'none';
+                return;
+            }
+
+            if (btn.getAttribute('data-value') === value) {
+                btn.style.background = 'linear-gradient(135deg, rgba(212,175,55,0.3) 0%, rgba(240,208,96,0.2) 100%)';
+                btn.style.borderColor = '#D4AF37';
+                btn.style.color = '#F0D060';
+                btn.style.boxShadow = '0 0 10px rgba(212,175,55,0.35)';
+            } else {
+                btn.style.background = 'rgba(255,255,255,0.04)';
+                btn.style.borderColor = 'rgba(255,255,255,0.14)';
+                btn.style.color = '#fff';
+                btn.style.boxShadow = 'none';
+            }
+        }
+    });
+
+    // Localiza e aplica a variante correspondente
+    findAndApplyMatchingVariant();
+}
+
+function findAndApplyMatchingVariant() {
+    if (!productVariants || productVariants.length === 0) return;
+
+    var matched = null;
+    for (var i = 0; i < productVariants.length; i++) {
+        var v = productVariants[i];
+        var isMatch = true;
+        for (var axis in selectedVariationOptions) {
+            if (v.options && v.options[axis] !== selectedVariationOptions[axis]) {
+                isMatch = false;
+                break;
+            }
+        }
+        if (isMatch) {
+            matched = v;
+            break;
+        }
+    }
+
+    var summaryEl = document.getElementById('active-variant-summary');
+    var priceDisplayEl = document.getElementById('product-display-price');
+
+    if (matched) {
+        activeProductSku = matched.sku_id;
+
+        // Se tiver imagem específica da SKU, atualiza o palco principal
+        if (matched.image_url) {
+            var mainImg = document.getElementById('main-product-img');
+            if (mainImg) {
+                mainImg.src = matched.image_url;
+            }
+        }
+
+        // Se tiver preço diferenciado na variação, atualiza o valor
+        if (matched.price_brl && matched.price_brl > 0) {
+            productUnitPriceBrl = parseFloat(matched.price_brl);
+            if (priceDisplayEl) {
+                priceDisplayEl.textContent = 'R$ ' + productUnitPriceBrl.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+        }
+
+        // Atualiza o resumo visual da combinação
+        if (summaryEl) {
+            var optsStr = [];
+            for (var ax in matched.options) {
+                optsStr.push(matched.options[ax]);
+            }
+            summaryEl.textContent = optsStr.join(' / ') + ' • ' + (matched.stock > 0 ? (matched.stock + ' em estoque') : 'Pronta Entrega');
+            summaryEl.style.color = '#4ade80';
+        }
+    } else {
+        activeProductSku = null;
+        if (summaryEl) {
+            summaryEl.textContent = 'Selecione todas as opções';
+            summaryEl.style.color = '#f59e0b';
+        }
+    }
+
+    syncProductQuantity();
+}
+
+function initProductVariants() {
+    if (productVariationAxes && Object.keys(productVariationAxes).length > 0) {
+        for (var axis in productVariationAxes) {
+            var preferredVal = null;
+            // Procura o primeiro chip deste eixo que tem estoque ativo e não está disabled
+            var chips = document.querySelectorAll('.btn-variant-chip');
+            for (var c = 0; c < chips.length; c++) {
+                var chip = chips[c];
+                if (chip.getAttribute('data-axis') === axis && !chip.disabled && chip.getAttribute('data-in-stock') === '1') {
+                    preferredVal = chip.getAttribute('data-value');
+                    break;
+                }
+            }
+
+            if (preferredVal) {
+                selectVariantOption(axis, preferredVal);
+            } else {
+                var opts = productVariationAxes[axis];
+                if (opts && opts.length > 0) {
+                    selectVariantOption(axis, opts[0]);
+                }
+            }
+        }
+    }
+}
 
 function syncProductQuantity() {
     var input = document.getElementById('product-qty-input');
@@ -437,7 +852,23 @@ function syncProductQuantity() {
     input.value = qty;
 
     if (buyBtn) {
-        buyBtn.href = productCheckoutBaseUrl + '?qty=' + qty;
+        var checkoutUrl = productCheckoutBaseUrl + '?qty=' + qty;
+        if (activeProductSku) {
+            checkoutUrl += '&sku=' + encodeURIComponent(activeProductSku);
+        }
+        var currentCep = '';
+        try {
+            var cepField = document.getElementById('shipping-cep-input');
+            if (cepField && cepField.value) {
+                currentCep = cepField.value.replace(/\D/g, '');
+            } else {
+                currentCep = localStorage.getItem('rachidd_user_shipping_cep') || '';
+            }
+        } catch(e) {}
+        if (currentCep && currentCep.length === 8) {
+            checkoutUrl += '&shipping_zip=' + encodeURIComponent(currentCep);
+        }
+        buyBtn.href = checkoutUrl;
     }
     if (subtotalEl) {
         if (qty > 1) {
@@ -447,6 +878,31 @@ function syncProductQuantity() {
         } else {
             subtotalEl.style.display = 'none';
         }
+    }
+
+    // Atualiza dinamicamente o badge de peso e preço do frete Sedex para a quantidade selecionada
+    var weightBadge = document.getElementById('product-shipping-weight-badge');
+    var expressBadge = document.getElementById('product-shipping-express-badge');
+    if (weightBadge) {
+        var formattedWeight = getProductFormattedWeight(qty);
+        var totalGrams = productUnitWeightInGrams * qty;
+        if (qty > 1) {
+            weightBadge.textContent = qty + 'x ' + productUnitWeightInGrams + 'g (' + formattedWeight + ')';
+        } else {
+            weightBadge.textContent = formattedWeight;
+        }
+    }
+    if (expressBadge) {
+        var dynamicExpressPrice = calcProductExpressShipping(qty);
+        var totalGrams = productUnitWeightInGrams * qty;
+        var extraNote = '';
+        if (totalGrams > 2000) {
+            var extraKg = Math.ceil((totalGrams - 2000) / 1000);
+            extraNote = ' (+' + extraKg + 'kg extra)';
+        } else if (totalGrams > 300 && productUnitWeightInGrams <= 300) {
+            extraNote = ' (peso acumulado)';
+        }
+        expressBadge.textContent = '+ R$ ' + dynamicExpressPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + extraNote;
     }
 }
 
@@ -467,4 +923,195 @@ document.addEventListener('keydown', function(e) {
         if (e.key === 'ArrowRight') navigateLightbox(1);
     }
 });
+
+// Disparo Inteligente de Demanda (Beacon/Keepalive)
+var productTrackingData = {
+    product_id: <?= json_encode((string)($product->aliexpressId ?: (string)$product->id)) ?>,
+    title: <?= json_encode((string)$product->title) ?>,
+    category: <?= json_encode((string)$product->category) ?>
+};
+
+function trackProductAction(actionType) {
+    if (!productTrackingData.product_id) return;
+    var base = <?= json_encode($baseUrl) ?>;
+    var endpoint = (base ? base.replace(/\/+$/, '') : '') + '/api/drop/track-demand';
+    var payload = JSON.stringify({
+        product_id: productTrackingData.product_id,
+        title: productTrackingData.title,
+        category: productTrackingData.category,
+        action: actionType,
+        timestamp: Math.floor(Date.now() / 1000)
+    });
+
+    try {
+        if (navigator.sendBeacon) {
+            var blob = new Blob([payload], { type: 'application/json' });
+            navigator.sendBeacon(endpoint, blob);
+        } else {
+            fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: payload,
+                keepalive: true
+            }).catch(function() {});
+        }
+    } catch (e) {
+        try {
+            fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: payload,
+                keepalive: true
+            }).catch(function() {});
+        } catch (err) {}
+    }
+}
+
+// Dispara inicialização de variações e evento 'view_details' ao carregar a página de detalhes
+document.addEventListener('DOMContentLoaded', function() {
+    initProductVariants();
+    trackProductAction('view_details');
+
+    // Recupera CEP previamente consultado
+    try {
+        var cachedCep = localStorage.getItem('rachidd_user_shipping_cep');
+        var cepInput = document.getElementById('shipping-cep-input');
+        if (cachedCep && cachedCep.length === 8 && cepInput) {
+            cepInput.value = cachedCep.substring(0, 5) + '-' + cachedCep.substring(5);
+            calculateProductShipping(false);
+        }
+    } catch(e) {}
+});
+
+function formatShippingCep(input) {
+    var v = input.value.replace(/\D/g, '').substring(0, 8);
+    if (v.length > 5) {
+        input.value = v.substring(0, 5) + '-' + v.substring(5);
+    } else {
+        input.value = v;
+    }
+}
+
+function calculateProductShipping(shouldFocus) {
+    var input = document.getElementById('shipping-cep-input');
+    var btn = document.getElementById('btn-calc-shipping');
+    var resultBox = document.getElementById('shipping-result-box');
+    var locText = document.getElementById('shipping-location-text');
+    if (!input || !resultBox || !locText) return;
+
+    var cleanCep = input.value.replace(/\D/g, '');
+    if (cleanCep.length !== 8) {
+        input.style.borderColor = '#ef4444';
+        return;
+    }
+    input.style.borderColor = 'rgba(255,255,255,0.15)';
+
+    var originalBtnText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Calculando...';
+
+    fetch('https://viacep.com.br/ws/' + cleanCep + '/json/')
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            btn.disabled = false;
+            btn.innerHTML = originalBtnText;
+
+            if (data.erro) {
+                locText.innerHTML = '❌ CEP não encontrado. Verifique os dígitos informados.';
+                locText.style.color = '#f87171';
+                resultBox.style.display = 'block';
+                return;
+            }
+
+            var localStr = (data.bairro ? data.bairro + ' - ' : '') + (data.localidade || '') + '/' + (data.uf || '');
+            locText.textContent = '📍 Entrega para: ';
+            var strongEl = document.createElement('strong');
+            strongEl.textContent = localStr;
+            locText.appendChild(strongEl);
+            locText.style.color = '#38bdf8';
+            resultBox.style.display = 'block';
+
+            try {
+                localStorage.setItem('rachidd_user_shipping_cep', cleanCep);
+            } catch(e) {}
+
+            syncProductQuantity();
+        })
+        .catch(function() {
+            btn.disabled = false;
+            btn.innerHTML = originalBtnText;
+            locText.innerHTML = '📍 Frete Padrão com Rastreio <strong>GRÁTIS</strong> disponível para todo o Brasil!';
+            locText.style.color = '#00d284';
+            resultBox.style.display = 'block';
+        });
+}
+
+var _buyCheckInProgress = false;
+function handleBuyNowClick(event, btn) {
+    if (event) event.preventDefault();
+    if (!btn || btn.getAttribute('data-sold-out') === '1' || _buyCheckInProgress) {
+        return false;
+    }
+
+    _buyCheckInProgress = true;
+    var targetHref = btn.href;
+    var origHtml = btn.innerHTML;
+    var fbBox = document.getElementById('buy-availability-feedback');
+    btn.style.opacity = '0.8';
+    btn.innerHTML = '<span>⏳ Verificando estoque...</span>';
+
+    var payload = {
+        product_id: <?= (int)($product->id ?? 0) ?>,
+        slug: <?= json_encode((string)($product->slug ?? ''), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        sku: activeProductSku || ''
+    };
+
+    fetch(<?= json_encode($baseUrl . '/api/drop/check-availability', JSON_UNESCAPED_SLASHES) ?>, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        _buyCheckInProgress = false;
+        if (data && data.available === false) {
+            btn.setAttribute('data-sold-out', '1');
+            btn.style.opacity = '0.55';
+            btn.style.cursor = 'not-allowed';
+            btn.style.background = '#334155';
+            btn.style.color = '#cbd5e1';
+            btn.innerHTML = '<span>Estoque Esgotado</span>';
+            if (fbBox) {
+                fbBox.style.display = 'block';
+                fbBox.style.background = 'rgba(239, 68, 68, 0.14)';
+                fbBox.style.border = '1px solid rgba(239, 68, 68, 0.45)';
+                fbBox.style.color = '#fca5a5';
+                fbBox.textContent = '⚠️ ' + (data.message || 'O estoque deste produto já acabou no momento.');
+            }
+            return;
+        }
+
+        if (fbBox && data && typeof data.stock === 'number' && data.stock > 0) {
+            fbBox.style.display = 'block';
+            fbBox.style.background = 'rgba(16, 185, 129, 0.12)';
+            fbBox.style.border = '1px solid rgba(16, 185, 129, 0.35)';
+            fbBox.style.color = '#6ee7b7';
+            fbBox.textContent = '✅ Estoque atual confirmado: ' + data.stock + ' unidade(s) disponíveis.';
+        }
+
+        btn.style.opacity = '1';
+        btn.innerHTML = origHtml;
+        trackProductAction('buy_click');
+        window.location.href = targetHref;
+    })
+    .catch(function() {
+        _buyCheckInProgress = false;
+        btn.style.opacity = '1';
+        btn.innerHTML = origHtml;
+        trackProductAction('buy_click');
+        window.location.href = targetHref;
+    });
+
+    return false;
+}
 </script>

@@ -66,13 +66,19 @@ class StripeGateway implements PaymentGatewayInterface
             return $path;
         }
 
-        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-        $host = $_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? 'localhost');
         $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
 
         if (str_starts_with($baseUrl, 'http://') || str_starts_with($baseUrl, 'https://')) {
             return rtrim($baseUrl, '/') . '/' . ltrim($path, '/');
         }
+
+        if (defined('APP_URL') && (str_starts_with(APP_URL, 'http://') || str_starts_with(APP_URL, 'https://'))) {
+            return rtrim(APP_URL, '/') . $baseUrl . '/' . ltrim($path, '/');
+        }
+
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $rawHost = (string)($_SERVER['SERVER_NAME'] ?? ($_SERVER['HTTP_HOST'] ?? 'localhost'));
+        $host = preg_match('/^[a-zA-Z0-9.-]+(?::\d{1,5})?$/', $rawHost) ? $rawHost : 'localhost';
 
         return $scheme . '://' . $host . $baseUrl . '/' . ltrim($path, '/');
     }
@@ -136,8 +142,9 @@ class StripeGateway implements PaymentGatewayInterface
             }
         }
 
-        // Modo Simulação / Sandbox (somente com commerce_demo_mode=true)
-        if (!(bool)($this->settings?->get('commerce_demo_mode', false))) {
+        // Modo Simulação / Sandbox (somente com commerce_demo_mode=true e fora de produção)
+        $env = strtolower((string)(getenv('APP_ENV') ?: ($_ENV['APP_ENV'] ?? 'local')));
+        if ($env === 'production' || !(bool)($this->settings?->get('commerce_demo_mode', false))) {
             return PaymentResult::failure($orderRef, 'Gateway Stripe não configurado.', 'stripe');
         }
 
@@ -241,11 +248,15 @@ class StripeGateway implements PaymentGatewayInterface
         $payload = $request->json();
         $eventType = (string)($payload['type'] ?? '');
 
-        if (!in_array($eventType, ['checkout.session.completed', 'payment_intent.succeeded'], true)) {
+        if (!in_array($eventType, ['checkout.session.completed', 'payment_intent.succeeded', 'charge.refunded'], true)) {
             return null;
         }
 
         $dataObj = $payload['data']['object'] ?? [];
+        if ($eventType === 'checkout.session.completed' && isset($dataObj['payment_status']) && $dataObj['payment_status'] !== 'paid') {
+            return null;
+        }
+
         $orderRef = (string)($dataObj['client_reference_id'] ?? ($dataObj['metadata']['order_ref'] ?? ''));
         $txId = (string)($dataObj['id'] ?? '');
 
@@ -253,10 +264,14 @@ class StripeGateway implements PaymentGatewayInterface
             return null;
         }
 
+        $amountCents = $dataObj['amount_total'] ?? ($dataObj['amount_received'] ?? ($dataObj['amount'] ?? 0));
+        $total = is_numeric($amountCents) ? ((float)$amountCents / 100.0) : 0.0;
+
         return [
             'order_ref'      => $orderRef,
-            'status'         => 'approved',
+            'status'         => $eventType === 'charge.refunded' ? 'refunded' : 'approved',
             'transaction_id' => $txId,
+            'total'          => $total,
             'gateway'        => 'stripe',
         ];
     }

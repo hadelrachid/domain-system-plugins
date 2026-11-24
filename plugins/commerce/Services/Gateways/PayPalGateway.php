@@ -68,13 +68,19 @@ class PayPalGateway implements PaymentGatewayInterface
             return $path;
         }
 
-        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-        $host = $_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? 'localhost');
         $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
 
         if (str_starts_with($baseUrl, 'http://') || str_starts_with($baseUrl, 'https://')) {
             return rtrim($baseUrl, '/') . '/' . ltrim($path, '/');
         }
+
+        if (defined('APP_URL') && (str_starts_with(APP_URL, 'http://') || str_starts_with(APP_URL, 'https://'))) {
+            return rtrim(APP_URL, '/') . $baseUrl . '/' . ltrim($path, '/');
+        }
+
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $rawHost = (string)($_SERVER['SERVER_NAME'] ?? ($_SERVER['HTTP_HOST'] ?? 'localhost'));
+        $host = preg_match('/^[a-zA-Z0-9.-]+(?::\d{1,5})?$/', $rawHost) ? $rawHost : 'localhost';
 
         return $scheme . '://' . $host . $baseUrl . '/' . ltrim($path, '/');
     }
@@ -159,8 +165,9 @@ class PayPalGateway implements PaymentGatewayInterface
             }
         }
 
-        // Modo Simulação Local (somente com commerce_demo_mode=true)
-        if (!(bool)($this->settings?->get('commerce_demo_mode', false))) {
+        // Modo Simulação Local (somente com commerce_demo_mode=true e fora de produção)
+        $env = strtolower((string)(getenv('APP_ENV') ?: ($_ENV['APP_ENV'] ?? 'local')));
+        if ($env === 'production' || !(bool)($this->settings?->get('commerce_demo_mode', false))) {
             return PaymentResult::failure($orderRef, 'Gateway PayPal não configurado.', 'paypal');
         }
 
@@ -279,6 +286,10 @@ class PayPalGateway implements PaymentGatewayInterface
 
     public function handleWebhook(RequestInterface $request): ?array
     {
+        if (!$this->isConfigured()) {
+            return null;
+        }
+
         $payload = $request->json();
         $eventType = (string)($payload['event_type'] ?? '');
 
@@ -286,18 +297,73 @@ class PayPalGateway implements PaymentGatewayInterface
             return null;
         }
 
-        $resource = $payload['resource'] ?? [];
-        $orderRef = (string)($resource['purchase_units'][0]['reference_id'] ?? ($resource['custom_id'] ?? ''));
-        $txId = (string)($resource['id'] ?? '');
+        // Verifica assinatura oficial do webhook do PayPal se paypal_webhook_id estiver configurado,
+        // ou valida o status real da transação diretamente na API do PayPal (zero trust no payload).
+        $webhookId = trim((string)($this->settings?->get('paypal_webhook_id') ?: (getenv('PAYPAL_WEBHOOK_ID') ?: '')));
+        $transmissionSig = (string)($request->header('PAYPAL-TRANSMISSION-SIG') ?? ($request->header('paypal-transmission-sig') ?? ''));
+        $transmissionId = (string)($request->header('PAYPAL-TRANSMISSION-ID') ?? ($request->header('paypal-transmission-id') ?? ''));
+        $transmissionTime = (string)($request->header('PAYPAL-TRANSMISSION-TIME') ?? ($request->header('paypal-transmission-time') ?? ''));
+        $certUrl = (string)($request->header('PAYPAL-CERT-URL') ?? ($request->header('paypal-cert-url') ?? ''));
+        $authAlgo = (string)($request->header('PAYPAL-AUTH-ALGO') ?? ($request->header('paypal-auth-algo') ?? ''));
 
+        $token = $this->getAccessToken();
+        if ($token === null) {
+            return null;
+        }
+
+        if ($webhookId !== '') {
+            if ($transmissionSig === '' || $transmissionId === '' || $certUrl === '' || $authAlgo === '') {
+                return null;
+            }
+            $verifyRes = $this->sendHttpRequest('POST', '/v1/notifications/verify-webhook-signature', [
+                'auth_algo'         => $authAlgo,
+                'cert_url'          => $certUrl,
+                'transmission_id'   => $transmissionId,
+                'transmission_sig'  => $transmissionSig,
+                'transmission_time' => $transmissionTime,
+                'webhook_id'        => $webhookId,
+                'webhook_event'     => $payload,
+            ], $token);
+
+            if (($verifyRes['verification_status'] ?? '') !== 'SUCCESS') {
+                return null;
+            }
+        } elseif (!$this->isSandbox()) {
+            // Fail-closed em produção quando paypal_webhook_id não está configurado
+            return null;
+        }
+
+        $resource = $payload['resource'] ?? [];
+        $txId = (string)($resource['id'] ?? '');
+        if ($txId === '') {
+            return null;
+        }
+
+        // Confirma o pagamento e valor diretamente na API do PayPal (nunca confia em campos do payload sem validação)
+        $endpoint = $eventType === 'PAYMENT.CAPTURE.COMPLETED'
+            ? '/v2/payments/captures/' . urlencode($txId)
+            : '/v2/checkout/orders/' . urlencode($txId);
+        $verified = $this->sendHttpRequest('GET', $endpoint, [], $token);
+        $remoteStatus = strtoupper((string)($verified['status'] ?? ''));
+        if (!in_array($remoteStatus, ['COMPLETED', 'APPROVED'], true)) {
+            return null;
+        }
+
+        $orderRef = (string)($verified['custom_id']
+            ?? ($verified['purchase_units'][0]['reference_id']
+            ?? ($verified['purchase_units'][0]['custom_id'] ?? '')));
         if ($orderRef === '') {
             return null;
         }
+
+        $total = (float)($verified['amount']['value']
+            ?? ($verified['purchase_units'][0]['amount']['value'] ?? 0.0));
 
         return [
             'order_ref'      => $orderRef,
             'status'         => 'approved',
             'transaction_id' => $txId,
+            'total'          => $total,
             'gateway'        => 'paypal',
         ];
     }

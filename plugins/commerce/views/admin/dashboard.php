@@ -140,15 +140,21 @@ foreach ($gateways as $gw) {
         </div>
     </header>
 
-    <?php if (!empty($flash)): ?>
+    <?php 
+    $flashText = is_array($flash ?? null) ? ($flash['msg'] ?? '') : (string)($flash ?? '');
+    if ($flashText !== ''): 
+    ?>
         <div style="background: rgba(0, 210, 132, 0.12); border: 1px solid rgba(0, 210, 132, 0.35); color: #00d284; padding: 14px 20px; border-radius: 10px; margin-bottom: 24px; font-size: 0.94rem; display: flex; align-items: center; gap: 10px;">
-            <span>✓</span> <?= htmlspecialchars($flash, ENT_QUOTES, 'UTF-8') ?>
+            <span>✓</span> <?= htmlspecialchars($flashText, ENT_QUOTES, 'UTF-8') ?>
         </div>
     <?php endif; ?>
 
-    <?php if (!empty($error)): ?>
+    <?php 
+    $errorText = is_array($error ?? null) ? ($error['msg'] ?? '') : (string)($error ?? '');
+    if ($errorText !== ''): 
+    ?>
         <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); color: #ef4444; padding: 14px 20px; border-radius: 10px; margin-bottom: 24px; font-size: 0.94rem; display: flex; align-items: center; gap: 10px;">
-            <span>⚠</span> <?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?>
+            <span>⚠</span> <?= htmlspecialchars($errorText, ENT_QUOTES, 'UTF-8') ?>
         </div>
     <?php endif; ?>
 
@@ -699,7 +705,7 @@ foreach ($gateways as $gw) {
 
                                 <td style="padding: 16px; text-align: right; white-space: nowrap;">
                                     <?php if ($status === 'pending'): ?>
-                                        <button type="button" onclick="window.dsConfirmApproval(<?= (int)$order['id'] ?>, '<?= htmlspecialchars((string)$order['order_ref'], ENT_QUOTES, 'UTF-8') ?>')" style="background: rgba(0, 210, 132, 0.15); color: #00d284; border: 1px solid rgba(0, 210, 132, 0.45); padding: 6px 14px; border-radius: 6px; font-size: 0.82rem; cursor: pointer; font-weight: 700; transition: all 0.2s;" onmouseover="this.style.background='#00d284'; this.style.color='#000';" onmouseout="this.style.background='rgba(0, 210, 132, 0.15)'; this.style.color='#00d284';">
+                                        <button type="button" onclick="window.dsConfirmApproval(<?= (int)$order['id'] ?>, <?= htmlspecialchars((string)json_encode((string)$order['order_ref'], JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8') ?>)" style="background: rgba(0, 210, 132, 0.15); color: #00d284; border: 1px solid rgba(0, 210, 132, 0.45); padding: 6px 14px; border-radius: 6px; font-size: 0.82rem; cursor: pointer; font-weight: 700; transition: all 0.2s;" onmouseover="this.style.background='#00d284'; this.style.color='#000';" onmouseout="this.style.background='rgba(0, 210, 132, 0.15)'; this.style.color='#00d284';">
                                             ✓ Aprovar
                                         </button>
                                     <?php else: ?>

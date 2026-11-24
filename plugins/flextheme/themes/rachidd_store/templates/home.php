@@ -4,68 +4,37 @@
  */
 $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
 
-// 1. Tenta carregar os produtos reais do catálogo minerado do DomainDrop
+// 1. Carrega produtos publicados ordenados pela atualização mais recente (ciclo 24h / edições no Admin)
 $catalogProducts = [];
+$homeCycleInfo = [
+    'seconds_remaining'   => 0,
+    'formatted_remaining' => '00:00:00',
+    'is_due'              => false,
+    'last_cycle_date'     => '',
+];
 try {
     if (isset($GLOBALS['app'])) {
         $container = $GLOBALS['app']->getContainer();
         if ($container->has(\DomainSystem\Plugins\domain_drop\Contracts\DropshipCatalogRepositoryInterface::class)) {
             $repo = $container->make(\DomainSystem\Plugins\domain_drop\Contracts\DropshipCatalogRepositoryInterface::class);
-            $catalogProducts = $repo->list(['status' => 'published'], 12);
+            $catalogProducts = $repo->list(['status' => 'published', 'sort' => 'updated_desc'], 12);
+        }
+        if ($container->has(\DomainSystem\Plugins\domain_drop\Contracts\ProductMiningServiceInterface::class)) {
+            $miningSvc = $container->make(\DomainSystem\Plugins\domain_drop\Contracts\ProductMiningServiceInterface::class);
+            $homeCycleInfo = $miningSvc->getDailyCycleInfo();
         }
     }
 } catch (\Throwable $e) {
     $catalogProducts = [];
 }
 
-// 2. Fallback de produtos minerados virais caso o catálogo ainda esteja iniciando
-if (empty($catalogProducts)) {
-    $fallbackItems = [
-        [
-            'id' => 1,
-            'slug' => 'smartwatch-ultra-series-9-titanium',
-            'title' => 'Smartwatch Ultra Series 9 Titanium AMOLED NFC Monitor Cardíaco',
-            'category' => 'Smartwatches & Áudio',
-            'image' => 'https://images.unsplash.com/photo-1579586337278-3befd40fd17a?w=600&auto=format&fit=crop&q=80',
-            'price' => 189.90,
-            'ref_price' => 289.90,
-            'rating' => 4.9,
-            'sales' => 1420
-        ],
-        [
-            'id' => 2,
-            'slug' => 'fone-tws-pro-noise-cancelling-bluetooth-53',
-            'title' => 'Fone TWS Pro ANC Cancelamento Ativo de Ruído Bluetooth 5.3',
-            'category' => 'Smartwatches & Áudio',
-            'image' => 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=600&auto=format&fit=crop&q=80',
-            'price' => 129.50,
-            'ref_price' => 210.00,
-            'rating' => 4.8,
-            'sales' => 980
-        ],
-        [
-            'id' => 3,
-            'slug' => 'mini-projetor-portatil-4k-smart-cinema-wifi',
-            'title' => 'Mini Projetor Portátil 4K Smart Cinema Android 11 Wi-Fi 6',
-            'category' => 'Tecnologia & Gadgets',
-            'image' => 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&auto=format&fit=crop&q=80',
-            'price' => 379.00,
-            'ref_price' => 599.00,
-            'rating' => 4.9,
-            'sales' => 640
-        ],
-        [
-            'id' => 4,
-            'slug' => 'luminaria-lua-mistica-aladim-led-rgb-touch',
-            'title' => 'Luminária Lua Mística Led 3D Touch 16 Cores com Controle Remoto',
-            'category' => 'Casa Inteligente',
-            'image' => 'https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?w=600&auto=format&fit=crop&q=80',
-            'price' => 89.90,
-            'ref_price' => 149.90,
-            'rating' => 4.7,
-            'sales' => 850
-        ],
-    ];
+// 2. Se o catálogo estiver vazio, adquire e persiste os produtos campeões de vendas
+if (empty($catalogProducts) && isset($miningSvc)) {
+    try {
+        $catalogProducts = $miningSvc->mineTrendingProducts('Eletrônicos & Gadget', 12, true, 'volume_desc');
+    } catch (\Throwable $e) {
+        $catalogProducts = [];
+    }
 }
 ?>
 
@@ -82,13 +51,6 @@ if (empty($catalogProducts)) {
         <div style="margin-bottom: 20px; display: inline-block; filter: drop-shadow(0 0 24px rgba(212,175,55,0.6)); animation: floatLamp 3s ease-in-out infinite;">
             <img src="<?= $baseUrl ?>/assets/img/site-home/logo-lampada.svg" alt="Lâmpada Mágica de Aladim RachidD" style="height: 100px; width: auto; display: block;">
         </div>
-
-        <style>
-            @keyframes floatLamp {
-                0%, 100% { transform: translateY(0); }
-                50% { transform: translateY(-8px); }
-            }
-        </style>
 
         <div style="display: inline-block; background: rgba(212, 175, 55, 0.15); border: 1px solid rgba(212, 175, 55, 0.35); padding: 6px 18px; border-radius: 50px; margin-bottom: 18px;">
             <span style="color: #F0D060; font-weight: 700; font-size: 13px; letter-spacing: 1px; text-transform: uppercase;">
@@ -129,7 +91,9 @@ if (empty($catalogProducts)) {
             </div>
             <div style="opacity: 0.3; align-self: center;">|</div>
             <div>
-                <div style="font-size: 26px; font-weight: 800; color: #F0D060;">🇧🇷 3 a 7 Dias</div>
+                <div style="font-size: 26px; font-weight: 800; color: #F0D060; display: inline-flex; align-items: center; gap: 8px;">
+                    <?= \DomainSystem\Plugins\domain_drop\Helpers\FlagHelper::br(26, 18) ?> 3 a 7 Dias
+                </div>
                 <div style="font-size: 12px; color: #94a3b8; text-transform: uppercase;">Curadoria AliExpress Brasil</div>
             </div>
         </div>
@@ -154,103 +118,29 @@ if (empty($catalogProducts)) {
                 </p>
             </div>
 
-            <!-- Fake Countdown Timer para Urgência -->
-            <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(212,175,55,0.3); padding: 8px 16px; border-radius: 10px; display: flex; align-items: center; gap: 10px; font-size: 13px;">
-                <span style="color: #94a3b8;">As ofertas terminam em:</span>
-                <span style="color: #F0D060; font-weight: 800; font-family: 'Fira Code', monospace; font-size: 15px;" id="flash-timer">07:42:19</span>
+            <!-- Countdown Real sincronizado com o Ciclo 24h do DomainDrop -->
+            <?php
+            $homeRemSeconds = max(0, (int)($homeCycleInfo['seconds_remaining'] ?? 0));
+            $homeTimerInitial = (string)($homeCycleInfo['formatted_remaining'] ?? '00:00:00');
+            if ($homeTimerInitial === '') {
+                $homeTimerInitial = '00:00:00';
+            }
+            ?>
+            <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(212,175,55,0.3); padding: 8px 16px; border-radius: 10px; display: flex; align-items: center; gap: 10px; font-size: 13px; flex-wrap: wrap;">
+                <span style="color: #94a3b8;">Acaba em:</span>
+                <span style="color: #F0D060; font-weight: 800; font-family: 'Fira Code', monospace; font-size: 15px;" id="flash-timer"><?= htmlspecialchars($homeTimerInitial, ENT_QUOTES, 'UTF-8') ?></span>
             </div>
         </div>
 
         <script>
-            // Timer regressivo dinâmico para urgência e conversão
-            function updateTimer() {
-                const now = new Date();
-                const midnight = new Date();
-                midnight.setHours(24, 0, 0, 0);
-                const diff = midnight - now;
-                const h = String(Math.floor((diff / (1000 * 60 * 60)) % 24)).padStart(2, '0');
-                const m = String(Math.floor((diff / (1000 * 60)) % 60)).padStart(2, '0');
-                const s = String(Math.floor((diff / 1000) % 60)).padStart(2, '0');
-                const el = document.getElementById('flash-timer');
-                if (el) el.innerText = `${h}:${m}:${s}`;
+            if (window.initRachidDCycleCountdown) {
+                window.initRachidDCycleCountdown({
+                    remainingSeconds: <?= $homeRemSeconds ?>,
+                    singleElementId: 'flash-timer',
+                    cronUrl: '<?= $baseUrl ?>/dropship/cron-tick'
+                });
             }
-            setInterval(updateTimer, 1000);
-            updateTimer();
         </script>
-
-        <style>
-            .home-products-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(265px, 1fr));
-                gap: 20px;
-            }
-            .home-card-body {
-                padding: 16px;
-                flex: 1;
-                display: flex;
-                flex-direction: column;
-                justify-content: space-between;
-            }
-            .home-card-actions {
-                display: flex;
-                gap: 6px;
-                margin-top: 6px;
-            }
-            .home-btn-details {
-                flex: 1;
-                background: rgba(255,255,255,0.06);
-                border: 1.5px solid rgba(212,175,55,0.4);
-                color: #F0D060 !important;
-                text-decoration: none;
-                padding: 0 6px;
-                height: 36px;
-                border-radius: 6px;
-                font-size: 11.5px;
-                font-weight: 700;
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                gap: 4px;
-                white-space: nowrap;
-                box-sizing: border-box;
-                transition: all 0.2s ease;
-            }
-            .home-btn-details:hover {
-                background: rgba(212,175,55,0.18);
-                border-color: #F0D060;
-            }
-            .home-btn-buy {
-                flex: 1;
-                background: linear-gradient(135deg, #F0D060 0%, #D4AF37 100%);
-                color: #0b0f17 !important;
-                text-decoration: none;
-                padding: 0 6px;
-                height: 36px;
-                border-radius: 6px;
-                font-size: 11.5px;
-                font-weight: 800;
-                text-transform: uppercase;
-                letter-spacing: 0.4px;
-                box-shadow: 0 4px 14px rgba(212, 175, 55, 0.35);
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                gap: 4px;
-                white-space: nowrap;
-                box-sizing: border-box;
-                transition: all 0.2s ease;
-            }
-            .home-btn-buy:hover {
-                transform: translateY(-1px);
-                box-shadow: 0 6px 18px rgba(212, 175, 55, 0.55);
-            }
-            @media (max-width: 580px) {
-                .home-products-grid {
-                    grid-template-columns: 1fr;
-                    gap: 16px;
-                }
-            }
-        </style>
 
         <!-- Product Grid -->
         <div class="home-products-grid">
@@ -274,14 +164,42 @@ if (empty($catalogProducts)) {
                                     <?= htmlspecialchars($p->category) ?>
                                 </span>
                             <?php endif; ?>
+
+                            <?php
+                            $cardRating = (float)($p->rating ?? 4.8);
+                            $starCount = (int)max(1, min(5, round($cardRating > 0 ? $cardRating : 4.8)));
+                            $starsEmoji = str_repeat('⭐', $starCount);
+                            $ordersCount = (int)($p->ordersCount ?? 0);
+                            $salesInformed = (string)($p->attributes['Vendas_Informadas'] ?? '');
+                            $reviewsCount = (int)($p->attributes['reviews_count'] ?? 0);
+                            ?>
+                            <?php if ($cardRating > 0): ?>
+                                <span style="position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.85); border: 1px solid rgba(251,191,36,0.3); color: #fbbf24; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; backdrop-filter: blur(4px);">
+                                    <span><?= $starsEmoji ?></span>
+                                    <span style="color: #fff; font-family: monospace;"><?= number_format($cardRating, 1) ?></span>
+                                </span>
+                            <?php endif; ?>
                         </div>
                         <div class="home-card-body">
                             <div>
-                                <h3 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600; line-height: 1.4; height: 2.8em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">
+                                <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; line-height: 1.4; height: 2.8em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">
                                     <a href="<?= htmlspecialchars($productUrl) ?>" style="color: #fff; text-decoration: none;">
                                         <?= htmlspecialchars($p->title) ?>
                                     </a>
                                 </h3>
+
+                                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; font-size: 11.5px;">
+                                    <span style="letter-spacing: 1px; font-size: 12px;"><?= $starsEmoji ?></span>
+                                    <strong style="color: #fbbf24; font-family: monospace; font-size: 12px;"><?= number_format($cardRating > 0 ? $cardRating : 4.8, 1) ?></strong>
+                                    <?php if ($ordersCount > 0 && $salesInformed !== 'nao'): ?>
+                                        <span style="color: #94a3b8; font-size: 11px;">• <strong style="color: #e2e8f0;"><?= number_format($ordersCount, 0, ',', '.') ?></strong> vendidos</span>
+                                    <?php elseif ($reviewsCount > 0): ?>
+                                        <span style="color: #94a3b8; font-size: 11px;">• <strong style="color: #e2e8f0;"><?= $reviewsCount ?></strong> avaliações</span>
+                                    <?php else: ?>
+                                        <span style="color: #94a3b8; font-size: 11px;">• <strong style="color: #e2e8f0;">Destaque</strong> em vendas</span>
+                                    <?php endif; ?>
+                                </div>
+
                                 <?php $isNational = (!empty($p->attributes['origem_brasil']) || (isset($p->attributes['ship_from']) && $p->attributes['ship_from'] === 'BR')); ?>
                                 <div style="margin-bottom: 14px;">
                                     <div style="font-size: 11px; color: #94a3b8; text-decoration: line-through;">
@@ -290,8 +208,8 @@ if (empty($catalogProducts)) {
                                     <div style="font-size: 20px; font-weight: 700; color: #5cd67d; font-family: monospace;">
                                         R$ <?= number_format($p->salePriceBrl, 2, ',', '.') ?>
                                     </div>
-                                    <div style="font-size: 10.5px; color: <?= $isNational ? '#4ade80' : '#F0D060' ?>; margin-top: 2px; font-weight: <?= $isNational ? '600' : 'normal' ?>;">
-                                        <?= $isNational ? '🇧🇷 Estoque no Brasil • Envio Rápido 3 a 7 dias' : '⚡ Frete Internacional Grátis & Rastreado' ?>
+                                    <div style="font-size: 10.5px; color: <?= $isNational ? '#4ade80' : '#F0D060' ?>; margin-top: 2px; font-weight: <?= $isNational ? '600' : 'normal' ?>; display: flex; align-items: center; flex-wrap: wrap;">
+                                        <?= $isNational ? (\DomainSystem\Plugins\domain_drop\Helpers\FlagHelper::br(15, 10) . ' Estoque no Brasil • Envio Rápido 3 a 7 dias') : '⚡ Frete Internacional Grátis & Rastreado' ?>
                                     </div>
                                 </div>
                             </div>
@@ -308,51 +226,12 @@ if (empty($catalogProducts)) {
                     </article>
                 <?php endforeach; ?>
             <?php else: ?>
-                <!-- Fallback de demonstração caso ainda não tenha minerado itens -->
-                <?php foreach ($fallbackItems as $item): ?>
-                    <article class="store-card">
-                        <div style="position: relative; width: 100%; height: 230px; background: #070a0e; overflow: hidden;">
-                            <a href="<?= $baseUrl ?>/loja">
-                                <img src="<?= $item['image'] ?>" alt="<?= htmlspecialchars($item['title']) ?>" loading="lazy" style="width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s ease;" onmouseover="this.style.transform='scale(1.06)'" onmouseout="this.style.transform='scale(1)'">
-                            </a>
-                            <span style="position: absolute; top: 10px; right: 10px; background: linear-gradient(135deg, #F0D060 0%, #D4AF37 100%); color: #0b0f17; font-weight: 800; font-size: 10px; padding: 3px 7px; border-radius: 4px;">
-                                DESTAQUE
-                            </span>
-                            <span style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.75); color: #fff; font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 5px;">
-                                <?= $item['category'] ?>
-                            </span>
-                        </div>
-                        <div class="home-card-body">
-                            <div>
-                                <h3 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600; line-height: 1.4; height: 2.8em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">
-                                    <a href="<?= $baseUrl ?>/loja" style="color: #fff; text-decoration: none;">
-                                        <?= htmlspecialchars($item['title']) ?>
-                                    </a>
-                                </h3>
-                                <div style="margin-bottom: 14px;">
-                                    <div style="font-size: 11px; color: #94a3b8; text-decoration: line-through;">
-                                        R$ <?= number_format($item['ref_price'], 2, ',', '.') ?>
-                                    </div>
-                                    <div style="font-size: 20px; font-weight: 700; color: #5cd67d; font-family: monospace;">
-                                        R$ <?= number_format($item['price'], 2, ',', '.') ?>
-                                    </div>
-                                    <div style="font-size: 10.5px; color: #F0D060; margin-top: 2px;">
-                                        ★ <?= $item['rating'] ?> (<?= $item['sales'] ?> vendidos)
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="home-card-actions">
-                                <a href="<?= $baseUrl ?>/loja" class="home-btn-details">
-                                    <span>🔍</span>
-                                    <span>Ver Detalhes</span>
-                                </a>
-                                <a href="<?= $baseUrl ?>/loja" class="home-btn-buy">
-                                    Ver Oferta ➔
-                                </a>
-                            </div>
-                        </div>
-                    </article>
-                <?php endforeach; ?>
+                <div style="grid-column: 1 / -1; text-align: center; padding: 40px 20px; background: rgba(255,255,255,0.02); border: 1px dashed rgba(212,175,55,0.25); border-radius: 14px;">
+                    <span style="font-size: 32px; display: block; margin-bottom: 10px;">✨</span>
+                    <h3 style="color: #fff; margin: 0 0 6px 0; font-size: 18px;">Curadoria em Atualização Diária</h3>
+                    <p style="color: #94a3b8; font-size: 13px; margin: 0 0 16px 0;">Nosso robô autônomo está minerando novas oportunidades para o ciclo de 24 horas.</p>
+                    <a href="<?= $baseUrl ?>/loja" class="gold-button" style="padding: 10px 22px; font-size: 13px;">Explorar Loja Completa ➔</a>
+                </div>
             <?php endif; ?>
         </div>
 
@@ -360,6 +239,85 @@ if (empty($catalogProducts)) {
             <a href="<?= $baseUrl ?>/loja" class="gold-button" style="padding: 14px 40px; font-size: 14px;">
                 Ver Todas as Ofertas da Loja Oficial ➔
             </a>
+        </div>
+    </div>
+</section>
+
+<!-- SEÇÃO: Cadastro de Cliente na Home (Pedidos, Rastreamento e Devoluções) -->
+<?php
+$homeCustomerId = 0;
+$homeCustomerName = '';
+$homeCsrf = '';
+try {
+    if (isset($GLOBALS['app'])) {
+        $hc = $GLOBALS['app']->getContainer();
+        if ($hc->has(\DomainSystem\Core\Contracts\SessionManagerInterface::class)) {
+            $hs = $hc->make(\DomainSystem\Core\Contracts\SessionManagerInterface::class);
+            $homeCustomerId = (int)$hs->get('customer_id', 0);
+            $homeCustomerName = (string)$hs->get('customer_name', '');
+            $homeCsrf = (string)$hs->getCsrfToken();
+        }
+    }
+} catch (\Throwable $e) {
+}
+?>
+<section id="cadastro-cliente" class="home-signup-section">
+    <div class="container">
+        <div class="home-signup-card">
+            <div style="min-width: 0;">
+                <span style="display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: 0.8px; color: #F0D060; text-transform: uppercase; background: rgba(212,175,55,0.12); padding: 4px 12px; border-radius: 99px; border: 1px solid rgba(212,175,55,0.35);">
+                    Conta Gratuita do Comprador
+                </span>
+                <h2 class="home-signup-title">
+                    Cadastre-se para Acompanhar Pedidos e Garantias
+                </h2>
+                <p style="font-size: 14px; color: #94a3b8; line-height: 1.6; margin: 0 0 16px 0;">
+                    Com seu cadastro na RachidD.com, seus pedidos ficam vinculados ao seu painel com barra de prazo de entrega, checkout agilizado e área dedicada para enviar fotos ou PDF caso precise de reembolso ou intermediação.
+                </p>
+                <div style="display: flex; flex-wrap: wrap; gap: 10px 14px; font-size: 12.5px; color: #cbd5e1;">
+                    <span>✅ Garantia 7 a 15 dias</span>
+                    <span>✅ Envio de fotos / PDF</span>
+                    <span>✅ Suporte direto com fornecedor</span>
+                </div>
+            </div>
+
+            <?php if ($homeCustomerId > 0): ?>
+                <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 14px; padding: 22px 16px; text-align: center; box-sizing: border-box;">
+                    <div style="font-size: 32px; margin-bottom: 8px;">👋</div>
+                    <h3 style="margin: 0 0 6px 0; color: #fff; font-size: 18px;">Bem-vindo(a), <?= htmlspecialchars($homeCustomerName, ENT_QUOTES, 'UTF-8') ?>!</h3>
+                    <p style="margin: 0 0 18px 0; font-size: 13px; color: #cbd5e1;">Sua conta já está ativa para compras, rastreamento e reclamações.</p>
+                    <div style="display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;">
+                        <a href="<?= $baseUrl ?>/minha-conta" class="gold-button" style="padding: 11px 22px; font-size: 13px;">Acessar Minha Conta e Pedidos ➔</a>
+                    </div>
+                </div>
+            <?php else: ?>
+                <form method="POST" action="<?= $baseUrl ?>/cadastro" class="home-signup-form">
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($homeCsrf, ENT_QUOTES, 'UTF-8') ?>">
+                    <div class="home-signup-row-2">
+                        <input type="text" name="name" required placeholder="Nome Completo *" style="width: 100%; box-sizing: border-box; padding: 10px 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; color: #fff; font-size: 13px;">
+                        <input type="email" name="email" required placeholder="Seu melhor E-mail *" style="width: 100%; box-sizing: border-box; padding: 10px 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; color: #fff; font-size: 13px;">
+                    </div>
+                    <div class="home-signup-row-2">
+                        <input type="text" name="cpf" inputmode="numeric" maxlength="14" placeholder="CPF: 000.000.000-00" oninput="homeMaskCpf(this)" style="width: 100%; box-sizing: border-box; padding: 10px 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; color: #fff; font-size: 13px;">
+                        <input type="tel" name="phone" inputmode="tel" maxlength="15" placeholder="WhatsApp: (11) 99999-9999" oninput="homeMaskPhone(this)" style="width: 100%; box-sizing: border-box; padding: 10px 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; color: #fff; font-size: 13px;">
+                    </div>
+                    <div style="position: relative;">
+                        <input id="home-reg-pass" type="password" name="password" required minlength="6" placeholder="Crie uma Senha (mín. 6 dígitos) *" style="width: 100%; box-sizing: border-box; padding: 10px 38px 10px 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; color: #fff; font-size: 13px;">
+                        <button type="button" onclick="togglePasswordVisibility(this, 'home-reg-pass')" aria-label="Mostrar ou ocultar senha" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 4px; display: inline-flex; align-items: center;" title="Mostrar/ocultar senha">👁️</button>
+                    </div>
+                    <div class="home-signup-actions">
+                        <button type="submit" style="width: 100%; padding: 12px 16px; border: none; border-radius: 9px; background: linear-gradient(135deg, #F0D060 0%, #D4AF37 100%); color: #0b0f17; font-weight: 800; font-size: 14px; cursor: pointer;">
+                            Criar Minha Conta Grátis ➔
+                        </button>
+                        <a href="<?= $baseUrl ?>/entrar" style="display: inline-flex; align-items: center; justify-content: center; padding: 12px 18px; border-radius: 9px; background: rgba(212,175,55,0.12); border: 1px solid rgba(212,175,55,0.45); color: #F0D060; font-weight: 800; font-size: 13.5px; text-decoration: none; white-space: nowrap;">
+                            🔐 Acessar
+                        </a>
+                    </div>
+                    <div style="text-align: center; font-size: 12px; color: #94a3b8; margin-top: 2px;">
+                        Já é cadastrado? <a href="<?= $baseUrl ?>/entrar" style="color: #F0D060; font-weight: 700; text-decoration: none;">Entrar na Minha Conta</a>
+                    </div>
+                </form>
+            <?php endif; ?>
         </div>
     </div>
 </section>

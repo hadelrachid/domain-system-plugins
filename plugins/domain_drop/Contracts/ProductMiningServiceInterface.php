@@ -18,9 +18,10 @@ interface ProductMiningServiceInterface
      * @param string $category Categoria ou palavra-chave de busca
      * @param int $limit Quantidade de produtos para minerar
      * @param bool $autoPersist Se deve persistir automaticamente no catálogo
+     * @param string $sort Critério de ordenação ('volume_desc', 'price_asc', etc.)
      * @return array<int, DropshipProductDto>
      */
-    public function mineTrendingProducts(string $category = 'Eletrônicos', int $limit = 10, bool $autoPersist = true): array;
+    public function mineTrendingProducts(string $category = 'Eletrônicos', int $limit = 10, bool $autoPersist = true, string $sort = 'volume_desc'): array;
 
     /**
      * Importa um produto específico através da URL ou ID do AliExpress.
@@ -42,6 +43,29 @@ interface ProductMiningServiceInterface
     public function importFromBrowserSource(string $rawSource, ?string $category = null): DropshipProductDto;
 
     /**
+     * Localiza um produto do catálogo curado oficial pelo ID numérico.
+     * 
+     * @return array<string, mixed>|null
+     */
+    public function findCuratedProductById(string $productId): ?array;
+
+    /**
+     * Localiza um produto do catálogo curado oficial pelo slug amigável.
+     * 
+     * @return array<string, mixed>|null
+     */
+    public function findCuratedProductBySlug(string $slug): ?array;
+
+    /**
+     * Converte um array de dados brutos (API ou catálogo curado) para DTO formatado.
+     * 
+     * @param array<string, mixed> $item
+     * @param string|null $category
+     * @return DropshipProductDto
+     */
+    public function transformRawItemToDto(array $item, ?string $category = null): DropshipProductDto;
+
+    /**
      * Executa o ciclo de rotação diária automatizada de 24 horas.
      * Minera produtos virais aleatórios para todas as 9 categorias oficiais:
      * - Eletrônicos & Gadget
@@ -56,10 +80,10 @@ interface ProductMiningServiceInterface
      * 
      * Atualiza o catálogo, registra a data/hora de conclusão e retorna o resumo estatístico.
      * 
-     * @param int $itemsPerCategory Quantidade de produtos frescos minerados por categoria
+     * @param int $itemsPerCategory Quantidade de produtos frescos minerados por categoria (padrão 10 = ~90 a 100 produtos no ciclo diário de 24h)
      * @return array<string, mixed> Resumo da rodada executada
      */
-    public function runDailyAutomatedRotation(int $itemsPerCategory = 4): array;
+    public function runDailyAutomatedRotation(int $itemsPerCategory = 10): array;
 
     /**
      * Retorna os metadados do ciclo diário de 24 horas:
@@ -69,4 +93,22 @@ interface ProductMiningServiceInterface
      * @return array<string, mixed>
      */
     public function getDailyCycleInfo(): array;
+
+    /**
+     * Retorna os metadados da Sentinela de Preços e Estoque de 6 Horas:
+     * timestamp da última verificação, próxima execução, segundos restantes e status (is_due).
+     *
+     * @return array<string, mixed>
+     */
+    public function getPriceSyncInfo(): array;
+
+    /**
+     * Executa a varredura da Sentinela de Preços e Estoque a cada 6 horas:
+     * Consulta o fornecedor no AliExpress, aplica o Índice de Correção de Volatilidade (12%)
+     * e ajusta preços de venda em R$ ou pausa produtos esgotados.
+     *
+     * @param int $batchLimit Quantidade máxima de produtos verificados por rodada
+     * @return array<string, mixed> Relatório estatístico da varredura
+     */
+    public function runPriceAndStockSync(int $batchLimit = 50): array;
 }

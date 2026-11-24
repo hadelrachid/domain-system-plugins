@@ -42,6 +42,7 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
         $os->provideHook('commerce.register_item_resolvers');
         $os->provideHook('commerce.register_gateways');
         $os->provideHook('payment.approved');
+        $os->provideHook('dropship.order_created');
         $os->listenHook('router.register');
         $os->listenHook('admin.menu');
     }
@@ -89,13 +90,7 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
         $runtime->singleton(PurchasableItemResolverInterface::class, function () use ($runtime) {
             $resolver = new PurchasableItemResolver();
             try {
-                $dispatcher = null;
-                try {
-                    $dispatcher = $runtime->getLink('core.events');
-                } catch (\Throwable $e) {
-                    $dispatcher = $runtime->make(EventDispatcherInterface::class);
-                }
-
+                $dispatcher = $runtime->getLink('core.events');
                 if ($dispatcher instanceof EventDispatcherInterface) {
                     $dispatcher->dispatch('commerce.register_item_resolvers', $resolver);
                 }
@@ -106,21 +101,76 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
         });
 
         // 5. Fábrica Controladora do Checkout
-        $runtime->singleton(CheckoutController::class, function () use ($runtime) {
+        $runtime->singleton(CheckoutController::class, function ($c = null) use ($runtime) {
             $courseRepo = null;
             try {
-                $courseRepo = $runtime->make(\DomainSystem\Plugins\academy\Contracts\CourseRepositoryInterface::class);
+                if (is_object($c) && method_exists($c, 'has') && $c->has(\DomainSystem\Plugins\academy\Contracts\CourseRepositoryInterface::class)) {
+                    $courseRepo = $c->make(\DomainSystem\Plugins\academy\Contracts\CourseRepositoryInterface::class);
+                }
             } catch (\Throwable $e) {
+                $courseRepo = null;
             }
 
             $dispatcher = null;
             try {
                 $dispatcher = $runtime->getLink('core.events');
             } catch (\Throwable $e) {
-                try {
-                    $dispatcher = $runtime->make(EventDispatcherInterface::class);
-                } catch (\Throwable $e2) {
-                }
+                $dispatcher = null;
+            }
+
+            $dropshipOrderFinder = null;
+            $dropshipCustomerFinder = null;
+            $dropshipCustomerAddressSaver = null;
+
+            if (interface_exists(\DomainSystem\Plugins\domain_drop\Contracts\DropshipOrderRepositoryInterface::class)
+                && $runtime->has(\DomainSystem\Plugins\domain_drop\Contracts\DropshipOrderRepositoryInterface::class)
+            ) {
+                $dropshipOrderFinder = static function (string $ref) use ($c): ?array {
+                    try {
+                        if (is_object($c) && method_exists($c, 'make')) {
+                            $repo = $c->make(\DomainSystem\Plugins\domain_drop\Contracts\DropshipOrderRepositoryInterface::class);
+                            return $repo->findByOrderRef($ref);
+                        }
+                    } catch (\Throwable $e) {
+                    }
+                    return null;
+                };
+            }
+
+            if (interface_exists(\DomainSystem\Plugins\domain_drop\Contracts\DropshipCustomerRepositoryInterface::class)
+                && $runtime->has(\DomainSystem\Plugins\domain_drop\Contracts\DropshipCustomerRepositoryInterface::class)
+            ) {
+                $dropshipCustomerFinder = static function (int $id, string $email = '') use ($c): ?array {
+                    try {
+                        if (is_object($c) && method_exists($c, 'make')) {
+                            $repo = $c->make(\DomainSystem\Plugins\domain_drop\Contracts\DropshipCustomerRepositoryInterface::class);
+                            if ($id > 0) {
+                                return $repo->findById($id);
+                            }
+                            if ($email !== '') {
+                                return $repo->findByEmail($email);
+                            }
+                        }
+                    } catch (\Throwable $e) {
+                    }
+                    return null;
+                };
+
+                $dropshipCustomerAddressSaver = static function (int $id, string $email, array $addressData) use ($c): bool {
+                    try {
+                        if (is_object($c) && method_exists($c, 'make')) {
+                            $repo = $c->make(\DomainSystem\Plugins\domain_drop\Contracts\DropshipCustomerRepositoryInterface::class);
+                            if ($id > 0) {
+                                return $repo->updateAddress($id, $addressData);
+                            }
+                            if ($email !== '') {
+                                return $repo->saveAddressByEmail($email, $addressData);
+                            }
+                        }
+                    } catch (\Throwable $e) {
+                    }
+                    return false;
+                };
             }
 
             return new CheckoutController(
@@ -130,7 +180,10 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
                 courseRepo: $courseRepo,
                 dispatcher: $dispatcher,
                 itemResolver: $runtime->make(PurchasableItemResolverInterface::class),
-                settings: $runtime->make(CommerceSettingsInterface::class)
+                settings: $runtime->make(CommerceSettingsInterface::class),
+                dropshipOrderFinder: $dropshipOrderFinder,
+                dropshipCustomerFinder: $dropshipCustomerFinder,
+                dropshipCustomerAddressSaver: $dropshipCustomerAddressSaver
             );
         });
 
@@ -138,9 +191,21 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
         $runtime->onHook('admin.menu', function ($menus, $role = 'guest') {
             if ($role === 'admin') {
                 $menus[] = [
-                    'title' => 'DomainCommerce',
-                    'url'   => '/admin/commerce',
-                    'icon'  => '🛒',
+                    'title'   => 'DomainCommerce',
+                    'url'     => '#',
+                    'icon'    => '🛒',
+                    'submenu' => [
+                        [
+                            'title' => 'Painel & Vendas',
+                            'url'   => '/admin/commerce',
+                            'icon'  => '📊',
+                        ],
+                        [
+                            'title' => 'Gateways & Configs',
+                            'url'   => '/admin/commerce/settings',
+                            'icon'  => '⚙️',
+                        ],
+                    ],
                 ];
             }
             return $menus;

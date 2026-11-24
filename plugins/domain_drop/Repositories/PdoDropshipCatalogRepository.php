@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace DomainSystem\Plugins\domain_drop\Repositories;
 
 use DomainSystem\Core\Contracts\DatabaseConnectionInterface;
+use DomainSystem\Plugins\domain_drop\Contracts\CategoryTaxonomyInterface;
 use DomainSystem\Plugins\domain_drop\Contracts\DropshipCatalogRepositoryInterface;
 use DomainSystem\Plugins\domain_drop\DTO\DropshipProductDto;
+use DomainSystem\Plugins\domain_drop\Services\CategoryTaxonomyService;
 use PDO;
 
 /**
@@ -15,12 +17,17 @@ use PDO;
 class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
 {
     private PDO $pdo;
+    private CategoryTaxonomyInterface $taxonomy;
 
-    public function __construct(DatabaseConnectionInterface|PDO $connection)
-    {
+    public function __construct(
+        DatabaseConnectionInterface|PDO $connection,
+        ?CategoryTaxonomyInterface $taxonomy = null
+    ) {
         $this->pdo = $connection instanceof DatabaseConnectionInterface
             ? $connection->getPdo()
             : $connection;
+        $this->taxonomy = $taxonomy ?? new CategoryTaxonomyService();
+        DomainDropSchemaEnsurer::ensure($this->pdo);
     }
 
     public function save(DropshipProductDto $product): int
@@ -119,7 +126,7 @@ class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
         $params = [];
 
         if (!empty($criteria['category'])) {
-            $where[] = $this->buildCategoryClause((string)$criteria['category'], $params);
+            $where[] = $this->buildCategoryListClause($criteria['category'], $params);
         }
 
         if (!empty($criteria['slug'])) {
@@ -146,6 +153,8 @@ class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
             $sortVal = (string)$criteria['sort'];
             if ($sortVal === 'sales' || $sortVal === 'best_sellers' || $sortVal === 'volume_desc') {
                 $orderBy = "orders_count DESC, id DESC";
+            } elseif ($sortVal === 'updated_desc' || $sortVal === 'recent' || $sortVal === 'cycle') {
+                $orderBy = "updated_at DESC, id DESC";
             } elseif ($sortVal === 'price_asc') {
                 $orderBy = "sale_price_brl ASC, id DESC";
             } elseif ($sortVal === 'price_desc') {
@@ -155,6 +164,8 @@ class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
             }
         }
 
+        $limit = max(1, $limit);
+        $offset = max(0, $offset);
         $sql .= " ORDER BY {$orderBy} LIMIT {$limit} OFFSET {$offset}";
 
         $stmt = $this->pdo->prepare($sql);
@@ -170,7 +181,7 @@ class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
         $params = [];
 
         if (!empty($criteria['category'])) {
-            $where[] = $this->buildCategoryClause((string)$criteria['category'], $params);
+            $where[] = $this->buildCategoryListClause($criteria['category'], $params);
         }
 
         if (!empty($criteria['slug'])) {
@@ -204,7 +215,7 @@ class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
      *
      * @param array<int, mixed> $params
      */
-    public function buildSearchClause(string $search, array &$params): string
+    private function buildSearchClause(string $search, array &$params): string
     {
         $search = trim($search);
         if ($search === '') {
@@ -301,52 +312,38 @@ class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
     }
 
     /**
-     * Constrói cláusula SQL inteligente para categoria com tolerância a apelidos e termos semânticos.
+     * Suporta uma única categoria ou lista de categorias oficiais combinadas com OR.
+     *
+     * @param string|array<int, string> $category
+     * @param array<int, mixed> $params
+     */
+    private function buildCategoryListClause(string|array $category, array &$params): string
+    {
+        if (is_array($category)) {
+            $parts = [];
+            foreach ($category as $catItem) {
+                $catStr = trim((string)$catItem);
+                if ($catStr !== '') {
+                    $parts[] = $this->buildCategoryClause($catStr, $params);
+                }
+            }
+            if (!empty($parts)) {
+                return '(' . implode(' OR ', $parts) . ')';
+            }
+            return '1=1';
+        }
+
+        return $this->buildCategoryClause($category, $params);
+    }
+
+    /**
+     * Constrói cláusula SQL inteligente para categoria delegando para a Taxonomia Desacoplada (SOLID / DIP).
      *
      * @param array<int, mixed> $params
      */
     private function buildCategoryClause(string $category, array &$params): string
     {
-        $raw = trim($category);
-        $lower = mb_strtolower($raw, 'UTF-8');
-
-        return match ($lower) {
-            'tecnologia', 'tecnologia & gadgets', 'gadgets', 'eletrônicos', 'eletrônicos & gadget', 'eletronicos', 'eletronicos & gadget' =>
-                "(category IN ('Tecnologia & Gadgets', 'Eletrônicos & Gadget', 'Eletrônicos') OR category LIKE '%Tecnologia%' OR category LIKE '%Eletrônicos%' OR category LIKE '%Eletronicos%' OR category LIKE '%Gadget%')",
-
-            'smartwatches', 'smartwatch', 'smartwatches & áudio', 'smartwatches & audio', 'áudio', 'audio' =>
-                "(category IN ('Smartwatches & Áudio', 'Smartwatches & Audio') OR category LIKE '%Smartwatch%' OR category LIKE '%Áudio%' OR category LIKE '%Audio%' OR title LIKE '%Smartwatch%' OR title LIKE '%Relógio%' OR title LIKE '%Watch%' OR title LIKE '%Fone%' OR title LIKE '%Tws%')",
-
-            'casa', 'casa inteligente', 'casa inteligente & organização', 'casa inteligente & organizacao', 'casa & organização' =>
-                "(category IN ('Casa Inteligente', 'Casa Inteligente & Organização') OR category LIKE '%Casa%')",
-
-            'acessorios', 'acessórios', 'acessórios virais', 'acessorios virais', 'ferramentas', 'ferramentas & utilidades' =>
-                "(category IN ('Acessórios Virais', 'Ferramentas & Utilidades', 'Acessórios para Veículos') OR category LIKE '%Acessório%' OR category LIKE '%Acessorio%' OR category LIKE '%Ferramenta%')",
-
-            'beleza', 'saúde', 'saude', 'saúde & cuidados', 'saude & cuidados', 'beleza, cuidados & estilo', 'estilo' =>
-                "(category IN ('Saúde & Cuidados', 'Beleza, Cuidados & Estilo') OR category LIKE '%Beleza%' OR category LIKE '%Saúde%' OR category LIKE '%Saude%' OR category LIKE '%Cuidado%')",
-
-            'moda', 'roupas', 'vestuário', 'vestuario', 'moda, roupas & vestuário', 'moda, roupas & vestuario', 'moda & vestuário' =>
-                "(category IN ('Moda, Roupas & Vestuário', 'Roupas', 'Vestuário') OR category LIKE '%Moda%' OR category LIKE '%Roupa%' OR category LIKE '%Vestuário%' OR category LIKE '%Vestuario%')",
-
-            'lingerie', 'lingeries', 'moda íntima', 'moda intima', 'moda íntima, lingeries & pijamas', 'moda intima, lingeries & pijamas', 'pijamas' =>
-                "(category IN ('Moda Íntima, Lingeries & Pijamas', 'Lingeries') OR category LIKE '%Lingerie%' OR category LIKE '%Íntima%' OR category LIKE '%Intima%')",
-
-            'sex shop', 'sexshop', 'adulto', 'adultos', 'produtos adultos', 'sex shop & produtos adultos (+18)', '+18' =>
-                "(category IN ('Sex Shop & Produtos Adultos (+18)', 'Sex Shop') OR category LIKE '%Sex Shop%' OR category LIKE '%Adulto%' OR category LIKE '%+18%')",
-
-            'pets', 'pet shop', 'pet shop & pets virais' =>
-                "(category IN ('Pet Shop & Pets Virais', 'Pet Shop') OR category LIKE '%Pet%')",
-
-            'veiculos', 'veículos', 'acessórios para veículos', 'acessorios para veiculos', 'automotivo' =>
-                "(category IN ('Acessórios para Veículos') OR category LIKE '%Veículo%' OR category LIKE '%Veiculo%' OR category LIKE '%Auto%')",
-
-            default => (function() use ($raw, &$params) {
-                $params[] = $raw;
-                $params[] = '%' . $raw . '%';
-                return "(category = ? OR category LIKE ?)";
-            })()
-        };
+        return $this->taxonomy->buildSqlFilter($category, $params);
     }
 
     public function delete(int $id): bool
@@ -375,10 +372,97 @@ class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
         return $stmt->execute([$salePriceBrl, $now, $id]);
     }
 
+    public function updateStatus(int $id, string $status): bool
+    {
+        $stmt = $this->pdo->prepare("
+            UPDATE domain_drop_catalog 
+            SET status = ?, updated_at = ? 
+            WHERE id = ?
+        ");
+
+        return $stmt->execute([$status, date('Y-m-d H:i:s'), $id]);
+    }
+
     public function getCategories(): array
     {
+        $canonicals = $this->taxonomy->getCanonicalCategories();
         $stmt = $this->pdo->query("SELECT DISTINCT category FROM domain_drop_catalog WHERE category != '' ORDER BY category ASC");
-        return $stmt ? $stmt->fetchAll(PDO::FETCH_COLUMN) : [];
+        $dbCats = $stmt ? $stmt->fetchAll(PDO::FETCH_COLUMN) : [];
+        return array_values(array_unique(array_merge($canonicals, $dbCats)));
+    }
+
+    public function clearAll(bool $preserveOrdered = true): int
+    {
+        if ($preserveOrdered) {
+            try {
+                // Preserva produtos vinculados a pedidos de clientes
+                $sql = "
+                    DELETE FROM domain_drop_catalog
+                    WHERE aliexpress_id NOT IN (
+                        SELECT aliexpress_product_id 
+                        FROM domain_drop_orders 
+                        WHERE aliexpress_product_id IS NOT NULL AND aliexpress_product_id != ''
+                    )
+                ";
+                $stmt = $this->pdo->prepare($sql);
+                $stmt->execute();
+                return $stmt->rowCount();
+            } catch (\Throwable $e) {
+                // Fallback se a tabela de pedidos ainda não tiver sido criada
+            }
+        }
+
+        $stmt = $this->pdo->prepare("DELETE FROM domain_drop_catalog");
+        $stmt->execute();
+        return $stmt->rowCount();
+    }
+
+    public function purgeDrafts(): int
+    {
+        $stmt = $this->pdo->prepare("DELETE FROM domain_drop_catalog WHERE status != 'published'");
+        $stmt->execute();
+        return $stmt->rowCount();
+    }
+
+    public function publishAll(): int
+    {
+        $now = date('Y-m-d H:i:s');
+        $stmt = $this->pdo->prepare("UPDATE domain_drop_catalog SET status = 'published', updated_at = ? WHERE status != 'published'");
+        $stmt->execute([$now]);
+        return $stmt->rowCount();
+    }
+
+    public function findSimilarOffers(int $excludeId, string $category, string $title = '', int $limit = 4): array
+    {
+        $limit = max(1, min(20, $limit));
+        $params = [$excludeId];
+
+        $where = ["status = 'published'", "id != ?"];
+
+        // 1. Prioriza filtro por categoria oficial
+        if ($category !== '') {
+            $catClause = $this->buildCategoryListClause($category, $params);
+            $where[] = $catClause;
+        }
+
+        $sql = "SELECT * FROM domain_drop_catalog WHERE " . implode(' AND ', $where) . " ORDER BY sale_price_brl ASC, orders_count DESC LIMIT {$limit}";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        // 2. Se a categoria tiver poucos itens, busca ofertas de produtos com alta reputação geral
+        if (count($rows) < $limit) {
+            $needed = $limit - count($rows);
+            $existingIds = array_merge([$excludeId], array_column($rows, 'id'));
+            $placeholders = implode(',', array_fill(0, count($existingIds), '?'));
+            $fallbackSql = "SELECT * FROM domain_drop_catalog WHERE status = 'published' AND id NOT IN ({$placeholders}) ORDER BY sale_price_brl ASC, rating DESC LIMIT {$needed}";
+            $fbStmt = $this->pdo->prepare($fallbackSql);
+            $fbStmt->execute($existingIds);
+            $fbRows = $fbStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            $rows = array_merge($rows, $fbRows);
+        }
+
+        return array_map([$this, 'hydrate'], $rows);
     }
 
     /**

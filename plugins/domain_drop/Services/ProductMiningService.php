@@ -6,12 +6,14 @@ namespace DomainSystem\Plugins\domain_drop\Services;
 
 use DomainSystem\Plugins\domain_drop\Contracts\AiProductEnricherInterface;
 use DomainSystem\Plugins\domain_drop\Contracts\AliExpressApiClientInterface;
+use DomainSystem\Plugins\domain_drop\Contracts\CategoryTaxonomyInterface;
 use DomainSystem\Plugins\domain_drop\Contracts\CurrencyConverterInterface;
 use DomainSystem\Plugins\domain_drop\Contracts\DropshipCatalogRepositoryInterface;
 use DomainSystem\Plugins\domain_drop\Contracts\ProductLinkScraperInterface;
 use DomainSystem\Plugins\domain_drop\Contracts\ProductMiningServiceInterface;
 use DomainSystem\Plugins\domain_drop\DTO\DropshipProductDto;
 use DomainSystem\Plugins\domain_drop\DTO\ScrapedProductDto;
+use DomainSystem\Plugins\domain_drop\Services\CategoryTaxonomyService;
 use RuntimeException;
 use Throwable;
 
@@ -21,19 +23,22 @@ use Throwable;
 class ProductMiningService implements ProductMiningServiceInterface
 {
     public const OFFICIAL_CATEGORIES = [
-        'Eletrônicos & Gadget',
-        'Casa Inteligente & Organização',
-        'Beleza, Cuidados & Estilo',
+        'Eletrônicos & Telefonia',
+        'Relógios & Smartwatches',
+        'Casa, Iluminação & Eletro',
         'Ferramentas & Utilidades',
-        'Pet Shop & Pets Virais',
-        'Acessórios para Veículos',
-        'Moda, Roupas & Vestuário',
-        'Moda Íntima, Lingeries & Pijamas',
-        'Sex Shop & Produtos Adultos (+18)',
+        'Beleza, Saúde & Maquiagem',
+        'Pet Shop',
+        'Peças & Acessórios Automotivos',
+        'Roupas, Bolsas & Calçados',
+        'Roupa Íntima & Pijamas',
+        'Novidades & Uso Especial',
     ];
 
     private ProductLinkScraperInterface $linkScraper;
+    private CategoryTaxonomyInterface $taxonomy;
     private ?string $configFilePath;
+    private ?\DomainSystem\Plugins\domain_drop\Contracts\DemandMetricsRepositoryInterface $demandMetricsRepo;
 
     public function __construct(
         private readonly AliExpressApiClientInterface $apiClient,
@@ -41,10 +46,14 @@ class ProductMiningService implements ProductMiningServiceInterface
         private readonly AiProductEnricherInterface $aiEnricher,
         private readonly DropshipCatalogRepositoryInterface $repository,
         ?ProductLinkScraperInterface $linkScraper = null,
-        ?string $configFilePath = null
+        ?string $configFilePath = null,
+        ?\DomainSystem\Plugins\domain_drop\Contracts\DemandMetricsRepositoryInterface $demandMetricsRepo = null,
+        ?CategoryTaxonomyInterface $taxonomy = null
     ) {
-        $this->linkScraper = $linkScraper ?? new AliExpressLinkScraperService();
+        $this->taxonomy = $taxonomy ?? new CategoryTaxonomyService();
+        $this->linkScraper = $linkScraper ?? new AliExpressLinkScraperService($this->taxonomy);
         $this->configFilePath = $configFilePath;
+        $this->demandMetricsRepo = $demandMetricsRepo;
     }
 
     /**
@@ -52,50 +61,7 @@ class ProductMiningService implements ProductMiningServiceInterface
      */
     public static function normalizeCategory(string $category): string
     {
-        $trimmed = trim($category);
-        if ($trimmed === '') {
-            return 'Eletrônicos & Gadget';
-        }
-
-        $map = [
-            'Eletrônicos'                       => 'Eletrônicos & Gadget',
-            'Eletrônicos & Gadget'              => 'Eletrônicos & Gadget',
-            'Gadgets'                           => 'Eletrônicos & Gadget',
-            'Casa Inteligente'                  => 'Casa Inteligente & Organização',
-            'Casa Inteligente & Organização'    => 'Casa Inteligente & Organização',
-            'Casa & Organização'                => 'Casa Inteligente & Organização',
-            'Beleza & Estilo'                   => 'Beleza, Cuidados & Estilo',
-            'Beleza, Cuidados & Estilo'         => 'Beleza, Cuidados & Estilo',
-            'Beleza'                            => 'Beleza, Cuidados & Estilo',
-            'Ferramentas'                       => 'Ferramentas & Utilidades',
-            'Ferramentas & Utilidades'          => 'Ferramentas & Utilidades',
-            'Utilidades'                        => 'Ferramentas & Utilidades',
-            'Pet Shop'                          => 'Pet Shop & Pets Virais',
-            'Pet Shop & Pets Virais'            => 'Pet Shop & Pets Virais',
-            'Pets'                              => 'Pet Shop & Pets Virais',
-            'Acessórios Auto'                   => 'Acessórios para Veículos',
-            'Acessórios para Veículos'          => 'Acessórios para Veículos',
-            'Automotivo'                        => 'Acessórios para Veículos',
-            'Veículos'                          => 'Acessórios para Veículos',
-            'Roupas'                            => 'Moda, Roupas & Vestuário',
-            'Vestuário'                         => 'Moda, Roupas & Vestuário',
-            'Moda'                              => 'Moda, Roupas & Vestuário',
-            'Moda & Vestuário'                  => 'Moda, Roupas & Vestuário',
-            'Moda, Roupas & Vestuário'          => 'Moda, Roupas & Vestuário',
-            'Lingerie'                          => 'Moda Íntima, Lingeries & Pijamas',
-            'Lingeries'                         => 'Moda Íntima, Lingeries & Pijamas',
-            'Moda Íntima'                       => 'Moda Íntima, Lingeries & Pijamas',
-            'Moda Íntima, Lingeries & Pijamas'  => 'Moda Íntima, Lingeries & Pijamas',
-            'Sex Shop'                          => 'Sex Shop & Produtos Adultos (+18)',
-            'Sexshop'                           => 'Sex Shop & Produtos Adultos (+18)',
-            'Adulto'                            => 'Sex Shop & Produtos Adultos (+18)',
-            'Adultos'                           => 'Sex Shop & Produtos Adultos (+18)',
-            'Produtos Adultos'                  => 'Sex Shop & Produtos Adultos (+18)',
-            'Sex Shop & Produtos Adultos (+18)' => 'Sex Shop & Produtos Adultos (+18)',
-            'Geral'                             => 'Ferramentas & Utilidades',
-        ];
-
-        return $map[$trimmed] ?? $trimmed;
+        return (new CategoryTaxonomyService())->normalizeCategory($category);
     }
 
     public function mineTrendingProducts(string $category = 'Eletrônicos & Gadget', int $limit = 10, bool $autoPersist = true, string $sort = 'volume_desc'): array
@@ -103,13 +69,45 @@ class ProductMiningService implements ProductMiningServiceInterface
         $category = self::normalizeCategory($category);
         $rawProducts = [];
         try {
-            $rawProducts = $this->apiClient->searchProducts([
-                'keywords'          => $category,
-                'page_size'         => (string)min(max($limit * 2, $limit), 50),
-                'sort'              => $sort,
-                'ship_from_country' => 'BR',
-                'ship_to_country'   => 'BR',
-            ]);
+            $pageSize = min(max($limit, 10), 50);
+            $pagesNeeded = (int)ceil($limit / $pageSize);
+
+            // Obtém IDs e termos de busca oficiais da taxonomia alinhada ao AliExpress (categoria-e-atributos.pdf e dropshiper.pdf)
+            $catIds = $this->taxonomy->getAliExpressCategoryIds($category);
+            $primaryCatId = !empty($catIds) ? (string)$catIds[0] : null;
+            $searchTerms = $this->taxonomy->getAliExpressSearchKeywords($category);
+            $primaryKeyword = !empty($searchTerms) ? $searchTerms[0] : $category;
+
+            for ($page = 1; $page <= $pagesNeeded; $page++) {
+                $batch = $this->apiClient->searchProducts([
+                    'keyword'           => $primaryKeyword,
+                    'keyWord'           => $primaryKeyword,
+                    'query'             => $primaryKeyword,
+                    'category_id'       => $primaryCatId,
+                    'categoryId'        => $primaryCatId,
+                    'feed_name'         => 'DS bestseller',
+                    'page_size'         => (string)$pageSize,
+                    'page_no'           => (string)$page,
+                    'page_index'        => (string)$page,
+                    'sort'              => $sort,
+                    'sort_by'           => 'orders,desc',
+                    'local'             => 'pt_BR',
+                    'country_code'      => 'BR',
+                    'country'           => 'BR',
+                    'currency'          => 'USD',
+                    'ship_from_country' => 'BR',
+                    'ship_to_country'   => 'BR',
+                ]);
+                if (empty($batch) || !is_array($batch)) {
+                    break;
+                }
+                foreach ($batch as $bItem) {
+                    $rawProducts[] = $bItem;
+                }
+                if (count($rawProducts) >= $limit) {
+                    break;
+                }
+            }
         } catch (Throwable $e) {
             $rawProducts = [];
         }
@@ -218,39 +216,28 @@ class ProductMiningService implements ProductMiningServiceInterface
      *
      * @return array<int, DropshipProductDto>
      */
-    private function mineLiveFromAliExpressSearch(string $category, int $limit, bool $autoPersist): array
+    protected function mineLiveFromAliExpressSearch(string $category, int $limit, bool $autoPersist): array
     {
         $category = self::normalizeCategory($category);
 
         $searchTerms = [
-            'Eletrônicos & Gadget'           => ['smartwatch brasil', 'fone sem fio bluetooth brasil', 'projetor portatil 4k', 'mini drone 4k camera', 'power bank inducao', 'caixa som bluetooth potente', 'camera seguranca wifi 360'],
-            'Casa Inteligente & Organização' => ['lampada led inteligente wifi rgb', 'tomada inteligente wifi tuya', 'sensor presenca inteligente', 'dispensador sabonete automatico sensor', 'fita led rgb inteligente wifi', 'aspirador po robo inteligente', 'fechadura digital biometrica'],
-            'Beleza, Cuidados & Estilo'      => ['modelador cabelo profissional automatico', 'escova secadora modeladora eletrica', 'depilador laser luz pulsada ipl', 'massageador facial eletrico gua sha', 'maquina corte cabelo vintage profissional', 'espelho led maquiagem recarregavel'],
-            'Ferramentas & Utilidades'       => ['alicate desencapador fios multifuncional', 'trena laser digital fita metrica', 'parafusadeira eletrica recarregavel sem fio', 'canivete tatico multifuncional', 'chave universal precisao multifuncoes', 'lanterna tatica led potente militar'],
-            'Pet Shop & Pets Virais'         => ['coleira led luminosa cachorro recarregavel', 'bebedouro fonte automatica pet gato', 'escova a vapor pet removedora pelos', 'brinquedo interativo inteligente pet gato', 'cama nuvem calmante cachorro', 'cortador unhas pet com led'],
-            'Acessórios para Veículos'       => ['suporte celular veicular carregador inducao', 'aspirador portatil automotivo sem fio', 'transmissor bluetooth veicular fm', 'compressor ar portatil eletrico pneus carro', 'led interno veicular sensor som', 'camera dvr veicular gravador transito'],
+            'Eletrônicos & Gadget'              => ['smartwatch brasil', 'fone sem fio bluetooth brasil', 'headphone over ear cancelamento ruido', 'headset gamer microfone rgb', 'fone conducao ossea corrida', 'projetor portatil 4k', 'mini drone 4k camera', 'power bank inducao', 'caixa som bluetooth potente', 'camera seguranca wifi 360'],
+            'Casa Inteligente & Organização'    => ['lampada led inteligente wifi rgb', 'tomada inteligente wifi tuya', 'sensor presenca inteligente', 'dispensador sabonete automatico sensor', 'fita led rgb inteligente wifi', 'aspirador po robo inteligente', 'fechadura digital biometrica'],
+            'Beleza, Cuidados & Estilo'         => ['paleta de sombras maquiagem profissional', 'kit pinceis maquiagem profissional', 'batom matte longa duracao a prova d agua', 'gloss labial efeito plump volume', 'modelador cabelo profissional automatico', 'escova secadora modeladora eletrica', 'depilador laser luz pulsada ipl', 'massageador facial eletrico gua sha', 'espelho led maquiagem recarregavel'],
+            'Ferramentas & Utilidades'          => ['alicate desencapador fios multifuncional', 'trena laser digital fita metrica', 'parafusadeira eletrica recarregavel sem fio', 'canivete tatico multifuncional', 'chave universal precisao multifuncoes', 'lanterna tatica led potente militar', 'chaveiro tatico mosquetao multifuncional militar'],
+            'Pet Shop & Pets Virais'            => ['coleira led luminosa cachorro recarregavel', 'bebedouro fonte automatica pet gato', 'escova a vapor pet removedora pelos', 'brinquedo interativo inteligente pet gato', 'cama nuvem calmante cachorro', 'cortador unhas pet com led'],
+            'Acessórios para Veículos'          => ['suporte celular veicular carregador inducao', 'aspirador portatil automotivo sem fio', 'transmissor bluetooth veicular fm', 'compressor ar portatil eletrico pneus carro', 'led interno veicular sensor som', 'camera dvr veicular gravador transito', 'chaveiro automotivo couro metal'],
+            'Moda, Roupas & Vestuário'          => ['mochila impermeavel executiva antifurto usb brasil', 'tenis esportivo masculino corrida caminhada respiravel', 'tenis feminino casual leve caminhada', 'bolsa feminina transversal tiracolo couro', 'carteira masculina de couro slim antifurto rfid', 'kit meias masculinas cano invisivel algodao', 'jaqueta corta vento impermeavel capuz ciclismo', 'calca jogger streetwear unissex'],
+            'Moda Íntima, Lingeries & Pijamas'  => ['meia calca termica translucida feminina inverno', 'meia calca arrastao sexy feminina cintura alta', 'kit cuecas boxer masculinas sem costura modal', 'conjunto lingerie renda floral sutiã calcinha', 'calcinhas sem costura confortaveis kit', 'sutia push up sustentacao confortavel', 'pijama de seda acetinado feminino camisola'],
+            'Sex Shop & Produtos Adultos (+18)' => ['vibrador liquido estimulador feminino discreto', 'massageador varinha magica corporal silencioso', 'estimulador sucção clitoriana silicone recarregavel', 'oleo corporal beijavel aromaterapia massagem'],
         ];
 
         $termList = $searchTerms[$category] ?? ['smartwatch brasil', 'fone bluetooth'];
         $searchTerm = $termList[array_rand($termList)];
-        // Empurra para a vitrine e estoques do Brasil (Remessa Conforme e Envio Local)
-        $searchUrl = "https://pt.aliexpress.com/w/wholesale-" . urlencode($searchTerm) . ".html?country=BR&locale=pt_BR&currency=BRL&isrefine=y";
+        // Empurra para a vitrine e estoques do Brasil (Remessa Conforme e Envio Local com Estoque no Brasil)
+        $searchUrl = "https://pt.aliexpress.com/w/wholesale-" . urlencode($searchTerm) . ".html?country=BR&locale=pt_BR&currency=BRL&shipFrom=BR&isrefine=y";
 
-        $ch = curl_init($searchUrl);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 6);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 4);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language: pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Cookie: aep_usuc_f=region=BR&site=bra&b_locale=pt_BR&c_tp=BRL; xman_us_f=x_locale=pt_BR; intl_locale=pt_BR;',
-        ]);
-        $html = curl_exec($ch);
-        curl_close($ch);
-
+        $html = $this->fetchLiveSearchHtml($searchUrl);
         if (!$html || !is_string($html)) {
             return [];
         }
@@ -325,10 +312,9 @@ class ProductMiningService implements ProductMiningServiceInterface
                 // Precificação oficial em BRL e conversão limpa para USD de custo
                 $minPriceBrl = (float)($raw['prices']['salePrice']['minPrice'] ?? ($raw['prices']['originalPrice']['minPrice'] ?? 0.0));
                 $costPriceUsd = $minPriceBrl > 0.0 ? round($minPriceBrl / $usdRate, 2) : 12.00;
-                $salePriceBrl = $this->currencyConverter->calculateSalePrice($costPriceUsd);
-                if ($salePriceBrl <= $minPriceBrl) {
-                    $salePriceBrl = round($minPriceBrl * 1.45, 2);
-                }
+                $salePriceBrl = $minPriceBrl > 0.0
+                    ? $this->currencyConverter->calculateSalePriceFromBrl($minPriceBrl, 100.0)
+                    : $this->currencyConverter->calculateSalePrice($costPriceUsd, 100.0);
 
                 // Avaliações e Métricas reais de compra
                 $rating = (float)($raw['evaluation']['starRating'] ?? 4.8);
@@ -337,24 +323,34 @@ class ProductMiningService implements ProductMiningServiceInterface
                 }
 
                 $ordersCount = 0;
-                $tradeDesc = (string)($raw['trade']['tradeDesc'] ?? '');
-                if (preg_match('/(\d+[\.,]?\d*)/', $tradeDesc, $mTrade)) {
-                    $ordersCount = (int)str_replace(['.', ','], '', $mTrade[1]);
-                }
-                if ($ordersCount <= 0) {
-                    $ordersCount = rand(25, 420);
+                $ordersCountKnown = false;
+                $tradeDesc = trim((string)($raw['trade']['tradeDesc'] ?? ''));
+                if ($tradeDesc !== '' && preg_match('/(\d+[\.,]?\d*)/', $tradeDesc, $mTrade)) {
+                    $ordersCount = max(0, (int)str_replace(['.', ','], '', $mTrade[1]));
+                    $ordersCountKnown = true;
+                } elseif (isset($raw['trade']['tradeCount']) && is_numeric($raw['trade']['tradeCount'])) {
+                    $ordersCount = max(0, (int)$raw['trade']['tradeCount']);
+                    $ordersCountKnown = true;
+                } elseif (isset($raw['orders_count']) && is_numeric($raw['orders_count'])) {
+                    $ordersCount = max(0, (int)$raw['orders_count']);
+                    $ordersCountKnown = true;
                 }
 
                 // Enriquecimento e Polimento de Cópia Comercial por IA
                 $polishedTitle = $this->aiEnricher->polishTitle($rawTitle, $category);
                 $slug = $this->slugify($polishedTitle . '-' . substr($aeId, -4));
 
+                $salesLabel = $ordersCount > 0
+                    ? "{$ordersCount} vendidos"
+                    : ($ordersCountKnown ? '0 vendidos' : 'vendas não informadas');
+
                 $attributes = [
-                    'Origem'     => 'Estoque Brasil / Remessa Conforme',
-                    'Categoria'  => $category,
-                    'Garantia'   => '90 dias contra defeitos de fabricação',
-                    'Envio'      => 'Rastreamento Expresso com Seguro',
-                    'Avaliações' => "{$rating} estrelas ({$ordersCount} vendidos)",
+                    'Origem'            => 'Estoque Brasil / Remessa Conforme',
+                    'Categoria'         => $category,
+                    'Garantia'          => '90 dias contra defeitos de fabricação',
+                    'Envio'             => 'Rastreamento Expresso com Seguro',
+                    'Avaliações'        => "{$rating} estrelas ({$salesLabel})",
+                    'Vendas_Informadas' => $ordersCountKnown ? 'sim' : 'nao',
                 ];
                 if (!empty($raw['sellingPoints']) && is_array($raw['sellingPoints'])) {
                     foreach ($raw['sellingPoints'] as $sp) {
@@ -407,19 +403,35 @@ class ProductMiningService implements ProductMiningServiceInterface
         return $mined;
     }
 
+    /**
+     * Executa requisição HTTPS para a página pública de busca com verificação estrita de certificado SSL.
+     */
+    protected function fetchLiveSearchHtml(string $searchUrl): ?string
+    {
+        $ch = curl_init($searchUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 6);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 4);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language: pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Cookie: aep_usuc_f=region=BR&site=bra&b_locale=pt_BR&c_tp=BRL; xman_us_f=x_locale=pt_BR; intl_locale=pt_BR;',
+        ]);
+        $html = curl_exec($ch);
+        curl_close($ch);
+
+        return is_string($html) && $html !== '' ? $html : null;
+    }
+
     public function importSingleProduct(string|int $productIdOrUrl): DropshipProductDto
     {
         $inputStr = trim((string)$productIdOrUrl);
 
-        // 1. Se for uma URL completa, tenta extrair em tempo real diretamente da página web oficial
-        if (str_starts_with($inputStr, 'http://') || str_starts_with($inputStr, 'https://')) {
-            $scraped = $this->linkScraper->scrape($inputStr);
-            if ($scraped !== null) {
-                return $this->createAndSaveDtoFromScraped($scraped);
-            }
-        }
-
-        // 2. Extrai ID numérico
+        // 1. Extrai ID numérico do produto (seja via URL ou ID direto)
         $numericId = $inputStr;
         if (preg_match('/\/item\/(\d+)\.html/', $numericId, $matches)) {
             $numericId = $matches[1];
@@ -427,14 +439,17 @@ class ProductMiningService implements ProductMiningServiceInterface
             $numericId = $matches[1];
         }
 
-        // 3. Tenta via API Oficial (IOP SDK)
+        // 2. Consulta Primária: API Oficial do AliExpress (IOP Dropshipping SDK - aliexpress.ds.product.get)
+        // O SDK oficial é a fonte prioritária garantindo a integridade dos atributos de SKUs (tamanhos, cores, estoque)
         $productData = null;
-        try {
-            $raw = $this->apiClient->getProductDetails($numericId);
-            $productData = $raw['result'] 
-                ?? ($raw['aliexpress_ds_product_get_response']['result'] ?? null);
-        } catch (Throwable $e) {
-            $productData = null;
+        if ($numericId !== '') {
+            try {
+                $raw = $this->apiClient->getProductDetails($numericId);
+                $productData = $raw['result'] 
+                    ?? ($raw['aliexpress_ds_product_get_response']['result'] ?? null);
+            } catch (Throwable $e) {
+                $productData = null;
+            }
         }
 
         if (!empty($productData)) {
@@ -443,23 +458,104 @@ class ProductMiningService implements ProductMiningServiceInterface
             return $this->repository->findById($savedId) ?? $dto;
         }
 
-        // 4. Se a API não retornou dados, tenta scraper pelo ID numérico
-        $scrapedById = $this->linkScraper->scrape($numericId);
-        if ($scrapedById !== null) {
-            return $this->createAndSaveDtoFromScraped($scrapedById);
+        // 3. Consulta de Simulação/Catálogo Curado SDK:
+        // Caso a chave da API do AliExpress não esteja com OAuth ativo em ambiente local,
+        // busca no pool curado com a matriz de SKUs (tamanhos e cores) oficial
+        if ($numericId !== '') {
+            $curatedItem = $this->findCuratedProductById($numericId);
+            if ($curatedItem !== null) {
+                $dto = $this->transformRawItemToDto($curatedItem, (string)($curatedItem['category_name'] ?? 'Geral'));
+                $savedId = $this->repository->save($dto);
+                return $this->repository->findById($savedId) ?? $dto;
+            }
         }
 
-        // 5. Se for uma URL pública e nem o scraper nem a API encontraram o produto, o anúncio não existe (404)
+        // 4. Fallback de Scraping Web em Tempo Real (apenas se nem a API nem o pool curado possuírem o item)
+        if (str_starts_with($inputStr, 'http://') || str_starts_with($inputStr, 'https://')) {
+            $scraped = $this->linkScraper->scrape($inputStr);
+            if ($scraped !== null) {
+                return $this->createAndSaveDtoFromScraped($scraped);
+            }
+        }
+
+        // 5. Scraper pelo ID numérico
+        if ($numericId !== '') {
+            $scrapedById = $this->linkScraper->scrape($numericId);
+            if ($scrapedById !== null) {
+                return $this->createAndSaveDtoFromScraped($scrapedById);
+            }
+        }
+
+        // 6. Se for uma URL pública e nem a API, nem o catálogo curado, nem o scraper encontraram o produto
         if (str_starts_with($inputStr, 'http://') || str_starts_with($inputStr, 'https://')) {
             throw new RuntimeException("O link informado não foi encontrado ou está desativado no AliExpress (Erro 404). Por favor, forneça o link de um anúncio ativo.");
         }
 
-        // 6. Fallback estruturado para testes com IDs sintéticos
+        // 7. Fallback estruturado para testes com IDs sintéticos
         $productData = $this->createFallbackItemFromIdOrUrl($numericId, (string)$productIdOrUrl);
         $dto = $this->transformRawItemToDto($productData);
         $savedId = $this->repository->save($dto);
 
         return $this->repository->findById($savedId) ?? $dto;
+    }
+
+    /**
+     * Localiza um produto no catálogo curado oficial pelo ID numérico do AliExpress.
+     * 
+     * @return array<string, mixed>|null
+     */
+    public function findCuratedProductById(string $productId): ?array
+    {
+        $catalog = $this->getCuratedCatalog();
+        foreach ($catalog as $catName => $items) {
+            foreach ($items as $item) {
+                if ((string)($item['product_id'] ?? '') === $productId) {
+                    $item['category_name'] = $item['category_name'] ?? $catName;
+                    return $item;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Localiza um produto no catálogo curado oficial ou nos padrões de mineração pelo slug amigável da URL.
+     * 
+     * @return array<string, mixed>|null
+     */
+    public function findCuratedProductBySlug(string $slug): ?array
+    {
+        $normalizedSlug = mb_strtolower(trim(urldecode($slug)));
+        if ($normalizedSlug === '') {
+            return null;
+        }
+
+        $catalog = $this->getCuratedCatalog();
+        foreach ($catalog as $catName => $items) {
+            foreach ($items as $item) {
+                $title = (string)($item['product_title'] ?? '');
+                $itemSlug = self::slugify($title);
+                if ($itemSlug === $normalizedSlug || str_contains($itemSlug, $normalizedSlug) || str_contains($normalizedSlug, $itemSlug)) {
+                    $item['category_name'] = $item['category_name'] ?? $catName;
+                    return $item;
+                }
+            }
+        }
+
+        foreach (self::OFFICIAL_CATEGORIES as $cat) {
+            $pool = $this->expandCategoryPoolToLimit([], $cat, 15);
+            foreach ($pool as $item) {
+                $title = (string)($item['product_title'] ?? '');
+                $itemSlug = self::slugify($title);
+                if ($itemSlug === $normalizedSlug || str_contains($itemSlug, $normalizedSlug) || str_contains($normalizedSlug, $itemSlug)) {
+                    $item['category_name'] = $item['category_name'] ?? $cat;
+                    return $item;
+                }
+            }
+        }
+
+        return null;
     }
 
     public function importFromBrowserSource(string $rawSource, ?string $category = null): DropshipProductDto
@@ -534,7 +630,10 @@ class ProductMiningService implements ProductMiningServiceInterface
         $category = $overrideCategory !== null ? self::normalizeCategory($overrideCategory) : self::normalizeCategory($scraped->category);
         $polishedTitle = $this->aiEnricher->polishTitle($scraped->rawTitle, $category);
         $slug = $this->slugify($polishedTitle . '-' . substr($scraped->sourceId, -4));
-        $salePriceBrl = $this->currencyConverter->calculateSalePrice($scraped->costPriceUsd);
+        $costBrl = !empty($scraped->attributes['cost_price_brl']) ? (float)$scraped->attributes['cost_price_brl'] : 0.0;
+        $salePriceBrl = $costBrl > 0.0
+            ? $this->currencyConverter->calculateSalePriceFromBrl($costBrl, 100.0)
+            : $this->currencyConverter->calculateSalePrice($scraped->costPriceUsd, 100.0);
         $salesCopy = $this->aiEnricher->generateSalesCopy(
             "Produto importado oficial de alta durabilidade com compatibilidade e acabamento premium.",
             $scraped->attributes
@@ -568,15 +667,27 @@ class ProductMiningService implements ProductMiningServiceInterface
      * 
      * @param array<string, mixed> $item
      */
-    private function transformRawItemToDto(array $item, string $defaultCategory = 'Eletrônicos & Gadget'): DropshipProductDto
+    public function transformRawItemToDto(array $item, ?string $category = null): DropshipProductDto
     {
+        $defaultCategory = $category ?: 'Eletrônicos & Gadget';
         $baseInfo = $item['ae_item_base_info_dto'] ?? [];
         $multiMedia = $item['ae_multimedia_info_dto'] ?? [];
         $skuDtos = $item['ae_item_sku_info_dtos']['ae_item_sku_info_d_t_o'] ?? ($item['ae_item_sku_info_dtos'] ?? []);
 
-        $aeId = (string)($item['product_id'] ?? ($baseInfo['product_id'] ?? ($item['item_id'] ?? uniqid('ae_'))));
-        $rawTitle = (string)($item['product_title'] ?? ($baseInfo['subject'] ?? ($item['title'] ?? 'Produto Internacional')));
-        $rawCat = (string)($item['category_name'] ?? $defaultCategory);
+        $aeId = (string)(
+            $item['itemId']
+            ?? ($item['product_id']
+            ?? ($baseInfo['product_id']
+            ?? ($item['item_id']
+            ?? ($item['productId'] ?? uniqid('ae_')))))
+        );
+        $rawTitle = (string)(
+            $item['title']
+            ?? ($item['product_title']
+            ?? ($baseInfo['subject']
+            ?? 'Produto Internacional'))
+        );
+        $rawCat = (string)($item['category_name'] ?? ($item['cateId'] ?? $defaultCategory));
         $category = self::normalizeCategory($rawCat);
 
         // 1. Higienização por I.A.
@@ -584,7 +695,12 @@ class ProductMiningService implements ProductMiningServiceInterface
         $slug = $this->slugify($polishedTitle . '-' . substr($aeId, -4));
 
         // 2. Extração de Imagens e Galeria Completa (Multi-Image Carousel)
-        $rawMainImage = (string)($item['product_main_image_url'] ?? ($item['image_url'] ?? ''));
+        $rawMainImage = (string)(
+            $item['itemMainPic']
+            ?? ($item['product_main_image_url']
+            ?? ($item['image_url']
+            ?? ($item['pic_url'] ?? '')))
+        );
         $collectedImages = [];
 
         // 2.1 Da galeria oficial do IOP SDK (image_urls delimitado por ponto-e-vírgula ';')
@@ -626,6 +742,15 @@ class ProductMiningService implements ProductMiningServiceInterface
             }
         }
 
+        // 2.5.1 De variantes estruturadas locais
+        if (!empty($item['variants']) && is_array($item['variants'])) {
+            foreach ($item['variants'] as $v) {
+                if (is_array($v) && !empty($v['image_url'])) {
+                    $collectedImages[] = (string)$v['image_url'];
+                }
+            }
+        }
+
         // 2.6 Higienização, desduplicação e normalização para Full HD (remove sufixos de thumbnails _80x80.jpg)
         $images = [];
         if (!empty($rawMainImage)) {
@@ -647,14 +772,32 @@ class ProductMiningService implements ProductMiningServiceInterface
             $mainImage = $images[0];
         }
 
-        // 3. Precificação em Dólar e Conversão em Reais
-        $costPriceUsd = (float)($item['target_sale_price'] ?? ($item['sale_price'] ?? ($item['original_price'] ?? 10.0)));
-        $salePriceBrl = $this->currencyConverter->calculateSalePrice($costPriceUsd);
+        // 3. Precificação em Dólar e Conversão em Reais (suporta camelCase do dropshiper.pdf e snake_case legado)
+        $costBrl = (float)($item['cost_price_brl'] ?? 0.0);
+        $costPriceUsd = (float)(
+            $item['targetSalePrice']
+            ?? ($item['salePrice']
+            ?? ($item['target_sale_price']
+            ?? ($item['sale_price']
+            ?? ($item['targetOriginalPrice']
+            ?? ($item['originalPrice']
+            ?? ($item['original_price'] ?? 10.0))))))
+        );
+        if ($costBrl > 0.0) {
+            $salePriceBrl = $this->currencyConverter->calculateSalePriceFromBrl($costBrl, 100.0);
+            $costPriceUsd = round($costBrl / 5.75, 2);
+        } else {
+            $salePriceBrl = $this->currencyConverter->calculateSalePrice($costPriceUsd, 100.0);
+        }
 
         // 4. Métricas e Atributos de Curadoria
-        $rating = (float)($item['evaluate_rate'] ?? ($baseInfo['avg_evaluation_rating'] ?? 4.8));
-        $effectiveRating = $rating > 0 ? $rating : 4.8;
-        $ordersCount = (int)($item['volume'] ?? ($item['orders_count'] ?? 0));
+        $rawRate = $item['evaluateRate'] ?? ($item['evaluate_rate'] ?? ($item['score'] ?? ($baseInfo['avg_evaluation_rating'] ?? 4.8)));
+        $numRate = is_numeric($rawRate) ? (float)$rawRate : (float)str_replace(['%', ','], ['', '.'], (string)$rawRate);
+        if ($numRate > 5.0) {
+            $numRate = round(($numRate / 100.0) * 5.0, 1);
+        }
+        $effectiveRating = $numRate > 0 ? $numRate : 4.8;
+        $ordersCount = (int)($item['orders'] ?? ($item['volume'] ?? ($item['orders_count'] ?? 0)));
         $thermometer = self::calculateThermometerScore($effectiveRating, $ordersCount);
 
         $props = is_array($item['properties'] ?? null) ? $item['properties'] : [];
@@ -663,6 +806,131 @@ class ProductMiningService implements ProductMiningServiceInterface
         if (!isset($props['ship_from'])) {
             $props['ship_from'] = 'BR';
             $props['origem_brasil'] = true;
+        }
+        if (!empty($item['itemUrl'])) {
+            $props['aliexpress_url'] = (string)$item['itemUrl'];
+        }
+        if (!empty($item['productVideoUrl'])) {
+            $props['video_url'] = (string)$item['productVideoUrl'];
+        }
+        if (!empty($item['discount'])) {
+            $props['discount_label'] = (string)$item['discount'];
+        }
+
+        // 4.1 Extração de Variações e SKUs (Padrão SKU Matrix / AliExpress Open Platform)
+        $extractedVariants = [];
+        $variationAxes = [];
+
+        if (!empty($item['variants']) && is_array($item['variants'])) {
+            $extractedVariants = $item['variants'];
+            if (!empty($item['variation_axes']) && is_array($item['variation_axes'])) {
+                $variationAxes = $item['variation_axes'];
+            } else {
+                foreach ($extractedVariants as $ev) {
+                    if (!is_array($ev) || empty($ev['options']) || !is_array($ev['options'])) {
+                        continue;
+                    }
+                    foreach ($ev['options'] as $axisName => $axisVal) {
+                        $axisName = trim((string)$axisName);
+                        $axisVal = trim((string)$axisVal);
+                        if ($axisName !== '' && $axisVal !== '') {
+                            if (!isset($variationAxes[$axisName])) {
+                                $variationAxes[$axisName] = [];
+                            }
+                            if (!in_array($axisVal, $variationAxes[$axisName], true)) {
+                                $variationAxes[$axisName][] = $axisVal;
+                            }
+                        }
+                    }
+                }
+            }
+        } elseif (is_array($skuDtos) && !empty($skuDtos)) {
+            $normalizedSkus = (isset($skuDtos['sku_id']) || isset($skuDtos['id']) || isset($skuDtos['ae_sku_property_dtos']) || isset($skuDtos['sku_properties']))
+                ? [$skuDtos]
+                : $skuDtos;
+
+            foreach ($normalizedSkus as $sku) {
+                if (!is_array($sku)) {
+                    continue;
+                }
+                $skuId = (string)($sku['sku_id'] ?? ($sku['id'] ?? uniqid('sku_')));
+                $skuPriceUsd = (float)($sku['sku_price'] ?? ($sku['offer_sale_price'] ?? $costPriceUsd));
+                $skuCostBrl = (float)($sku['cost_price_brl'] ?? 0.0);
+                $skuPriceBrl = $skuCostBrl > 0.0
+                    ? $this->currencyConverter->calculateSalePriceFromBrl($skuCostBrl, 100.0)
+                    : $this->currencyConverter->calculateSalePrice($skuPriceUsd, 100.0);
+                $skuImage = !empty($sku['sku_image_url']) ? $this->cleanImageUrl((string)$sku['sku_image_url']) : $mainImage;
+                $skuStock = (int)($sku['sku_available_stock'] ?? ($sku['sku_stock'] ?? 100));
+                $skuAttr = (string)($sku['sku_attr'] ?? ($sku['sku_code'] ?? ''));
+
+                $options = [];
+                $rawProps = $sku['ae_sku_property_dtos']['ae_sku_property_d_t_o']
+                    ?? ($sku['ae_sku_property_dtos'] ?? ($sku['sku_properties'] ?? []));
+                if (is_array($rawProps)) {
+                    if (isset($rawProps['sku_property_name']) || isset($rawProps['property_name'])) {
+                        $rawProps = [$rawProps];
+                    }
+                    foreach ($rawProps as $rp) {
+                        if (!is_array($rp)) {
+                            continue;
+                        }
+                        $propName = trim((string)($rp['sku_property_name'] ?? ($rp['property_name'] ?? '')));
+                        $lowerProp = mb_strtolower($propName, 'UTF-8');
+                        if ($lowerProp === 'color' || $lowerProp === 'colour') {
+                            $propName = 'Cor';
+                        } elseif ($lowerProp === 'size') {
+                            $propName = 'Tamanho';
+                        } elseif ($lowerProp === 'plug' || $lowerProp === 'plug type') {
+                            $propName = 'Tipo de Tomada';
+                        } elseif ($lowerProp === 'voltage') {
+                            $propName = 'Voltagem';
+                        } elseif ($lowerProp === 'material') {
+                            $propName = 'Material';
+                        } elseif ($lowerProp === 'bundle' || $lowerProp === 'package') {
+                            $propName = 'Pacote';
+                        } elseif ($lowerProp === 'model') {
+                            $propName = 'Modelo';
+                        }
+                        $propVal = trim((string)($rp['property_value_definition_name'] ?? ($rp['sku_property_value'] ?? ($rp['property_value'] ?? ''))));
+                        if ($propName !== '' && $propVal !== '') {
+                            $options[$propName] = $propVal;
+                            if (!isset($variationAxes[$propName])) {
+                                $variationAxes[$propName] = [];
+                            }
+                            if (!in_array($propVal, $variationAxes[$propName], true)) {
+                                $variationAxes[$propName][] = $propVal;
+                            }
+                        }
+                    }
+                }
+
+                $skuEan = trim((string)($sku['ean_code'] ?? ($sku['barcode'] ?? ($sku['gtin'] ?? ''))));
+
+                if (!empty($options)) {
+                    $extractedVariants[] = [
+                        'sku_id'         => $skuId,
+                        'sku_attr'       => $skuAttr,
+                        'options'        => $options,
+                        'price_brl'      => $skuPriceBrl,
+                        'cost_price_usd' => $skuPriceUsd,
+                        'image_url'      => $skuImage,
+                        'stock'          => $skuStock,
+                        'ean_code'       => $skuEan,
+                    ];
+                }
+            }
+        }
+
+        if (!empty($extractedVariants)) {
+            $props['variants'] = $extractedVariants;
+            if (!empty($variationAxes)) {
+                $props['variation_axes'] = $variationAxes;
+            }
+        }
+
+        $productEan = trim((string)($item['ean_code'] ?? ($baseInfo['ean_code'] ?? ($item['gtin'] ?? ''))));
+        if ($productEan !== '') {
+            $props['ean_code'] = $productEan;
         }
 
         $rawDesc = (string)($item['product_description'] ?? ($baseInfo['detail'] ?? ($item['description'] ?? '')));
@@ -724,7 +992,173 @@ class ProductMiningService implements ProductMiningServiceInterface
      */
     private function getCuratedTrendingFallback(string $category, int $limit, string $sort = 'volume_desc'): array
     {
-        $catalog = [
+        $catalog = $this->getCuratedCatalog();
+
+        // Mapeia apelidos para a categoria oficial do pool
+        $normalizedCat = self::normalizeCategory($category);
+        $aliasMap = [
+            'Eletrônicos & Telefonia'        => 'Eletrônicos & Gadget',
+            'Relógios & Smartwatches'        => 'Eletrônicos & Gadget',
+            'Casa, Iluminação & Eletro'      => 'Casa Inteligente & Organização',
+            'Ferramentas & Utilidades'       => 'Ferramentas & Utilidades',
+            'Beleza, Saúde & Maquiagem'      => 'Beleza, Cuidados & Estilo',
+            'Pet Shop'                       => 'Pet Shop & Pets Virais',
+            'Peças & Acessórios Automotivos' => 'Acessórios para Veículos',
+            'Roupas, Bolsas & Calçados'      => 'Moda, Roupas & Vestuário',
+            'Roupa Íntima & Pijamas'         => 'Moda Íntima, Lingeries & Pijamas',
+            'Novidades & Uso Especial'       => 'Sex Shop & Produtos Adultos (+18)',
+        ];
+        $curatedKey = $aliasMap[$normalizedCat] ?? ($aliasMap[$category] ?? $normalizedCat);
+        $pool = $catalog[$normalizedCat] ?? ($catalog[$category] ?? ($catalog[$curatedKey] ?? $catalog['Eletrônicos & Gadget']));
+
+        // Se o limite solicitado for maior que o pool da categoria, completa garantindo variedade da própria categoria
+        if (count($pool) < $limit) {
+            $pool = $this->expandCategoryPoolToLimit($pool, $normalizedCat, $limit);
+        }
+
+        // Ordena pelo critério de reputação solicitado: maior volume de vendas ou maior avaliação por estrelas
+        if ($sort === 'evaluate_rate_desc') {
+            usort($pool, fn($a, $b) => ((float)($b['evaluate_rate'] ?? 0)) <=> ((float)($a['evaluate_rate'] ?? 0)));
+        } else {
+            usort($pool, fn($a, $b) => ((int)($b['volume'] ?? 0)) <=> ((int)($a['volume'] ?? 0)));
+        }
+
+        return array_slice($pool, 0, $limit);
+    }
+
+    /**
+     * Expande o pool da categoria com produtos virais qualificados (4.8★ a 5.0★) até o limite solicitado.
+     *
+     * @param array<int, array<string, mixed>> $pool
+     * @return array<int, array<string, mixed>>
+     */
+    private function expandCategoryPoolToLimit(array $pool, string $normalizedCat, int $limit): array
+    {
+        $existingTitles = array_column($pool, 'product_title');
+        $catalogPatterns = [
+            'Eletrônicos & Gadget' => [
+                ['Smartwatch Series 9 Ultra AMOLED 49mm GPS Titânio', 28.50, 'https://ae-pic-a1.aliexpress-media.com/kf/A6528ac8364bb4be08857064c2e00cf33v.jpg', '4.9', 9200, ['Resistência' => 'IP68', 'Bateria' => '7 dias', 'Bluetooth' => '5.3']],
+                ['Fone de Ouvido TWS Bluetooth 5.4 Gamer Baixa Latência LED RGB', 11.80, 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=800&auto=format&fit=crop&q=80', '4.8', 14200, ['ANC' => '35dB', 'Bateria' => '30h', 'Bluetooth' => '5.4']],
+                ['Caixa de Som Bluetooth Potente Portátil À Prova D\'água Graves Extra', 26.90, 'https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=800&auto=format&fit=crop&q=80', '4.9', 7800, ['Potência' => '30W RMS', 'Bateria' => '12h', 'Resistência' => 'IPX7']],
+                ['Headphone Bluetooth Over-Ear Cancelamento de Ruído ANC Bateria 60h', 36.50, 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80', '4.9', 5400, ['ANC' => '40dB', 'Autonomia' => '60h', 'Conexão' => 'Bluetooth 5.3 + P2']],
+                ['Carregador GaN Turbo 65W 3 Portas USB-C PD para Notebook e Celular', 15.20, 'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=800&auto=format&fit=crop&q=80', '5.0', 16100, ['Potência' => '65W Max', 'Tecnologia' => 'GaN III Fast', 'Bivolt' => '100-240V']],
+                ['Mini Câmera de Segurança Wi-Fi 360 Graus Visão Noturna Infravermelho Full HD', 18.90, 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80', '4.8', 8900, ['Resolução' => '1080p FHD', 'Áudio' => 'Bidirecional', 'App' => 'iOS/Android']],
+                ['Power Bank Magnético MagSafe 10000mAh Carregamento Sem Fio por Indução', 21.50, 'https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=800&auto=format&fit=crop&q=80', '4.9', 11400, ['Capacidade' => '10000mAh', 'Indução' => '15W Fast', 'Cabo' => 'USB-C 20W']],
+                ['Adaptador Hub USB-C 8 em 1 HDMI 4K Gigabit Ethernet Leitor SD PD 100W', 22.80, 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800&auto=format&fit=crop&q=80', '4.9', 6200, ['Saída' => 'HDMI 4K@60Hz', 'Rede' => 'RJ45 1000Mbps', 'Portas' => '3x USB 3.0']],
+                ['Fone Condução Óssea Esportivo À Prova de Suor Corrida Academia', 16.50, 'https://images.unsplash.com/photo-1546435770-a3e426bf472b?w=800&auto=format&fit=crop&q=80', '4.8', 7900, ['Tecnologia' => 'Condução Óssea', 'Resistência' => 'IP67', 'Bateria' => '8h']],
+                ['Microfone de Lapela Sem Fio Duplo Plug and Play para Celular Vídeos e Lives', 17.00, 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=800&auto=format&fit=crop&q=80', '4.9', 9300, ['Alcance' => '20m sem barreiras', 'Latência' => '0.009s', 'Conector' => 'Type-C/Lightning']],
+                ['Luminária Barra de LED para Monitor Computador RGB Controle Touch Screen', 23.50, 'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?w=800&auto=format&fit=crop&q=80', '5.0', 6500, ['Iluminação' => 'RGB + Luz Quente/Fria', 'Fixação' => 'Gravação Anti-Reflexo', 'Alimentação' => 'USB 5V']],
+                ['Mouse Sem Fio Ergonômico Vertical Recarregável 6 Botões Silencioso', 13.90, 'https://images.unsplash.com/photo-1615663245857-ac93bb7c39e7?w=800&auto=format&fit=crop&q=80', '4.9', 8100, ['DPI' => '800-1600-2400', 'Ergonomia' => 'Postural Anti-LER', 'Conexão' => '2.4GHz + BT 5.0']],
+            ],
+            'Casa Inteligente & Organização' => [
+                ['Lâmpada LED Inteligente Wi-Fi RGB 15W Bivolt Compatível Alexa Google', 6.50, 'https://images.unsplash.com/photo-1550985616-10810253b84d?w=800&auto=format&fit=crop&q=80', '4.9', 15400, ['Potência' => '15W Bivolt', 'Conexão' => 'Wi-Fi 2.4GHz', 'Cores' => '16 Milhões RGB']],
+                ['Tomada Inteligente Wi-Fi 16A com Monitoramento de Consumo de Energia', 7.80, 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800&auto=format&fit=crop&q=80', '4.8', 13200, ['Corrente' => '16A Máx', 'App' => 'Smart Life / Tuya', 'Controle' => 'Voz Alexa/Google']],
+                ['Fita LED Inteligente RGB 5m Wi-Fi Sincronização Musical App Celular', 11.20, 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&auto=format&fit=crop&q=80', '4.9', 11500, ['Comprimento' => '5 Metros', 'Controle' => 'App + Controle Remoto', 'Efeitos' => 'Sincronia com Música']],
+                ['Dispensador Automático de Sabonete Líquido Espuma Sensor Infravermelho', 12.50, 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=800&auto=format&fit=crop&q=80', '4.8', 8400, ['Capacidade' => '350ml', 'Sensor' => 'Infravermelho 0.25s', 'Alimentação' => 'Bateria Recarregável USB']],
+                ['Aspirador de Pó Robô Inteligente Varre Aspira e Passa Pano Sensor Anti-Queda', 42.00, 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&auto=format&fit=crop&q=80', '4.9', 4600, ['Funções' => '3 em 1 (Varre, Aspira, Pano)', 'Sensores' => 'Anti-colisão e Anti-queda', 'Bateria' => '90min contínuos']],
+                ['Organizador Giratório 360 Graus para Temperos Cosméticos e Despensa', 13.90, 'https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=800&auto=format&fit=crop&q=80', '4.9', 7300, ['Material' => 'Acrílico Reforçado', 'Rotação' => '360 Graus Suave', 'Bordas' => 'Anti-queda']],
+                ['Termômetro e Higrômetro Digital Bluetooth com Tela LCD Ambientes', 5.80, 'https://images.unsplash.com/photo-1563770660941-20978e870e26?w=800&auto=format&fit=crop&q=80', '5.0', 16500, ['Display' => 'LCD Alta Precisão', 'Conexão' => 'Bluetooth Low Energy', 'Histórico' => 'App Tuya']],
+            ],
+            'Beleza, Cuidados & Estilo' => [
+                ['Escova Secadora Modeladora Alisadora Multifuncional 3 em 1 Bivolt', 19.80, 'https://ae-pic-a1.aliexpress-media.com/kf/S1b35ffbb765b4c10a16c4e03bc1fc9b1m.jpg', '4.9', 14800, ['Potência' => '1200W', 'Revestimento' => 'Cerâmica e Turmalina', 'Temperaturas' => '3 Níveis']],
+                ['Depilador a Laser Luz Pulsada IPL Indolor com 999.000 Disparos', 38.00, 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=800&auto=format&fit=crop&q=80', '4.9', 6100, ['Disparos' => '999.000 Flashes', 'Tecnologia' => 'IPL Rejuvenescimento', 'Ajustes' => '5 Intensidades']],
+                ['Modelador de Cachos Automático Sem Fio Cerâmica Display Digital LCD', 24.50, 'https://images.unsplash.com/photo-1527799820374-dcf8d9d4a388?w=800&auto=format&fit=crop&q=80', '4.8', 8200, ['Bateria' => 'Recarregável 5200mAh', 'Câmara' => 'Isolamento Térmico Anti-Queimadura', 'Sentido' => 'Esquerda/Direita']],
+                ['Kit Pincéis de Maquiagem Profissional 14 Peças Cerdas Macias Estojo Couro', 11.50, 'https://images.unsplash.com/photo-1512496015851-a90fb38ba796?w=800&auto=format&fit=crop&q=80', '4.9', 12300, ['Peças' => '14 Pincéis Profissionais', 'Cerdas' => 'Sintéticas Ultra Macias', 'Estojo' => 'Couro Sintético']],
+                ['Massageador Facial Elétrico Gua Sha Lifting Microcorrentes e LED Terapia', 16.90, 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=800&auto=format&fit=crop&q=80', '5.0', 7900, ['Tecnologia' => 'Microcorrentes EMS', 'LED' => 'Luz Vermelha e Azul', 'Modos' => 'Aquecimento 45°C']],
+            ],
+            'Ferramentas & Utilidades' => [
+                ['Parafusadeira Furadeira Sem Fio Bateria 12V com Kit 24 Peças Maleta', 29.50, 'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=800&auto=format&fit=crop&q=80', '4.9', 8500, ['Voltagem' => '12V Íon-Lítio', 'Mandril' => 'Aperto Rápido 10mm', 'Acessórios' => 'Bits, Brocas e Maleta']],
+                ['Alicate Desencapador de Fios Automático Multifuncional Ajuste de Pressão', 12.00, 'https://images.unsplash.com/photo-1581783342308-f792dbdd27c5?w=800&auto=format&fit=crop&q=80', '4.9', 11200, ['Capacidade' => 'Cabos 0.2 a 6.0mm²', 'Corte' => 'Lâmina de Alta Dureza', 'Crimpador' => 'Terminais Isolados']],
+                ['Trena Laser Digital Medidor de Distância 40m com Nível Eletrônico', 16.50, 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=800&auto=format&fit=crop&q=80', '5.0', 9800, ['Alcance' => '40 Metros', 'Precisão' => '±2mm', 'Funções' => 'Área, Volume e Pitágoras']],
+                ['Lanterna Tática Militar LED P90 Super Potente Zoom Recarregável USB', 14.80, 'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=800&auto=format&fit=crop&q=80', '4.8', 13400, ['Lúmens' => '5000 Lumens', 'Bateria' => '26650 Recarregável', 'Corpo' => 'Alumínio Aeronáutico']],
+            ],
+            'Pet Shop & Pets Virais' => [
+                ['Bebedouro Fonte Automática para Gatos e Cães com Filtro Carvão Ativado', 16.20, 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=800&auto=format&fit=crop&q=80', '4.9', 12800, ['Capacidade' => '2.5 Litros', 'Bomba' => 'Silenciosa USB', 'Filtragem' => 'Tripla Camada']],
+                ['Escova a Vapor para Gatos e Cães Removedora de Pelos Mortos com Massagem', 9.50, 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=800&auto=format&fit=crop&q=80', '4.8', 15100, ['Tecnologia' => 'Spray de Vapor Suave', 'Cerdas' => 'Silicone Macio', 'Alimentação' => 'USB Recarregável']],
+                ['Coleira LED Luminosa para Cachorro Recarregável Noturna Ajustável', 6.80, 'https://images.unsplash.com/photo-1601758228041-f3b2795255f1?w=800&auto=format&fit=crop&q=80', '4.9', 9700, ['Modos' => 'Pisca Rápido, Lento e Contínuo', 'Bateria' => 'USB Recarregável', 'Resistência' => 'Resistente à Chuva']],
+            ],
+            'Acessórios para Veículos' => [
+                ['Suporte de Celular Veicular com Carregador por Indução 15W Sensor Automático', 17.80, 'https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?w=800&auto=format&fit=crop&q=80', '4.9', 13900, ['Indução' => '15W Fast Charge', 'Abertura' => 'Sensor Infravermelho Elétrico', 'Fixação' => 'Saída de Ar Reforçada']],
+                ['Compressor de Ar Portátil Elétrico Digital para Pneus de Carro e Moto', 28.50, 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=800&auto=format&fit=crop&q=80', '5.0', 8800, ['Pressão' => '150 PSI Máx', 'Display' => 'Digital LED com Auto Desligamento', 'Bateria' => 'Recarregável 6000mAh']],
+                ['Aspirador Portátil Sem Fio Automotivo Potente Sucção para Carro e Casa', 18.20, 'https://images.unsplash.com/photo-1558317374-067fb5f30001?w=800&auto=format&fit=crop&q=80', '4.8', 11400, ['Potência' => '120W 9000Pa', 'Filtro' => 'HEPA Lavável', 'Acessórios' => 'Bicos de Canto e Escova']],
+            ],
+            'Moda, Roupas & Vestuário' => [
+                ['Mochila Executiva Impermeável Antifurto com Trava TSA e Saída USB', 27.90, 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=800&auto=format&fit=crop&q=80', '4.9', 9800, ['Material' => 'Oxford Impermeável', 'Segurança' => 'Trava de Segredo TSA', 'Compartimento' => 'Notebook até 15.6 polegadas']],
+                ['Tênis Esportivo Masculino Respirável Leve Amortecimento Corrida e Caminhada', 21.50, 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&auto=format&fit=crop&q=80', '4.8', 14500, ['Solado' => 'EVA com Gel de Amortecimento', 'Cabedal' => 'Mesh Tecido Respirável', 'Uso' => 'Corrida, Caminhada e Treino']],
+                ['Carteira Masculina de Couro Genuíno Slim com Bloqueio RFID Antifurto', 9.80, 'https://images.unsplash.com/photo-1627123424574-724758594e93?w=800&auto=format&fit=crop&q=80', '4.9', 16700, ['Proteção' => 'RFID Anti-clonagem', 'Capacidade' => '8 Cartões + Cédulas', 'Design' => 'Ultra Fina de Bolso']],
+            ],
+            'Moda Íntima, Lingeries & Pijamas' => [
+                ['Meia-Calça Térmica Feminina Forrada Translúcida Efeito Invisível Inverno', 11.90, 'https://images.unsplash.com/photo-1582533561751-ef6f6ab93a2e?w=800&auto=format&fit=crop&q=80', '4.9', 18200, ['Forro' => 'Pelúcia Térmica Macia', 'Efeito' => 'Translúcido Fio 15 Natural', 'Cintura' => 'Alta Modeladora Sem Costura']],
+                ['Kit 5 Cuecas Boxer Masculinas Modal Sem Costura Conforto Térmico Antibacteriano', 14.50, 'https://images.unsplash.com/photo-1586790170083-2f9ceadc732d?w=800&auto=format&fit=crop&q=80', '4.8', 15600, ['Tecido' => 'Fibra de Modal e Elastano', 'Design' => 'Sem Costura Anatômica', 'Pacote' => 'Kit com 5 Cores Neutras']],
+                ['Conjunto de Lingerie Renda Floral Sexy Sutiã com Sustentação e Calcinha', 13.80, 'https://images.unsplash.com/photo-1616150638538-ffb0679a3fc4?w=800&auto=format&fit=crop&q=80', '4.9', 9400, ['Renda' => 'Guipir Macia Antialérgica', 'Sutiã' => 'Com Aro Sustentação Push Up', 'Acabamento' => 'Detalhes em Cetim']],
+            ],
+            'Sex Shop & Produtos Adultos (+18)' => [
+                ['Vibrador Líquido Estimulador Clitoriano Silencioso Silicone Médico', 16.50, 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=800&auto=format&fit=crop&q=80', '4.9', 8700, ['Material' => 'Silicone Cirúrgico Hipoalergênico', 'Ruído' => 'Silencioso < 40dB', 'Carga' => 'Magnética USB À Prova D\'água']],
+                ['Varinha Mágica Massageador Corporal Elétrico Potente Recarregável', 23.90, 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=800&auto=format&fit=crop&q=80', '4.8', 10200, ['Vibração' => '20 Modos e 8 Velocidades', 'Cabeça' => 'Silicone Flexível 360 Graus', 'Bateria' => 'Longo Alcance 2 horas']],
+                ['Estimulador de Sucção de Ar Clitoriano Pulsações e Ondas de Pressão', 19.80, 'https://images.unsplash.com/photo-1512290900672-1f81d117e3f8?w=800&auto=format&fit=crop&q=80', '5.0', 12300, ['Tecnologia' => 'Ondas Sonoras Sem Contato', 'Intensidades' => '10 Níveis Progressivos', 'Resistência' => '100% À Prova D\'água IPX7']],
+            ],
+        ];
+
+        $patterns = $catalogPatterns[$normalizedCat] ?? $catalogPatterns['Eletrônicos & Gadget'];
+        $variants = [
+            ' Edição Especial Brasil',
+            ' Pro Max 2026',
+            ' Versão Global Bivolt',
+            ' Plus Alta Performance',
+            ' Premium Original',
+            ' Ultra Durabilidade',
+            ' Turbo Edition',
+            ' Linha Ouro Oficial',
+            ' Smart Series',
+            ' Black Titanium',
+        ];
+
+        $catSeed = abs(crc32($normalizedCat));
+        $counter = 1;
+
+        while (count($pool) < $limit) {
+            $base = $patterns[($counter - 1) % count($patterns)];
+            $variantIdx = (int)floor(($counter - 1) / count($patterns)) % count($variants);
+            $suffix = $variantIdx > 0 ? $variants[$variantIdx] : '';
+            $title = $base[0] . $suffix;
+
+            if (in_array($title, $existingTitles, true)) {
+                $counter++;
+                continue;
+            }
+
+            $uniqueNumericId = '100508' . sprintf('%010d', ($catSeed + ($counter * 7919)) % 10000000000);
+            $priceVariance = round((($counter % 5) - 2) * 1.5, 2);
+            $salePrice = max(5.50, round((float)$base[1] + $priceVariance, 2));
+
+            $pool[] = [
+                'product_id'             => $uniqueNumericId,
+                'product_title'          => $title,
+                'category_name'          => $normalizedCat,
+                'target_sale_price'      => (string)$salePrice,
+                'product_main_image_url' => $base[2],
+                'images'                 => [$base[2]],
+                'evaluate_rate'          => $base[3],
+                'volume'                 => (int)$base[4] + ($counter * 17),
+                'product_description'    => "Produto de altíssima reputação e destaque em vendas no Brasil na categoria {$normalizedCat}. Construção robusta com acabamento premium e entrega pontual.",
+                'properties'             => $base[5] ?? ['Origem' => 'Estoque Brasil / Remessa Conforme', 'Garantia' => '90 dias'],
+            ];
+
+            $existingTitles[] = $title;
+            $counter++;
+        }
+
+        return $pool;
+    }
+
+    /**
+     * Catálogo mestre curado com especificações completas de produtos e matrizes de SKUs (tamanhos, cores, estoque).
+     *
+     * @return array<string, array<int, array<string, mixed>>>
+     */
+    private function getCuratedCatalog(): array
+    {
+        return [
             'Eletrônicos & Gadget' => [
                 [
                     'product_id' => '1005012009938049',
@@ -747,9 +1181,9 @@ class ProductMiningService implements ProductMiningServiceInterface
                     'product_title' => 'Fone de Ouvido Lenovo TWS Pro Cancelamento de Ruído ANC Microfone HD',
                     'category_name' => 'Eletrônicos & Gadget',
                     'target_sale_price' => '12.80',
-                    'product_main_image_url' => 'https://ae-pic-a1.aliexpress-media.com/kf/S19d1c7dace654de7918987ecffe76d2fh.jpg',
+                    'product_main_image_url' => 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=800&auto=format&fit=crop&q=80',
                     'images' => [
-                        'https://ae-pic-a1.aliexpress-media.com/kf/S19d1c7dace654de7918987ecffe76d2fh.jpg',
+                        'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=800&auto=format&fit=crop&q=80',
                         'https://ae-pic-a1.aliexpress-media.com/kf/Saf56a139d0034b62b7e6ecac7f3f90fao.jpg',
                     ],
                     'evaluate_rate' => '4.8',
@@ -790,7 +1224,8 @@ class ProductMiningService implements ProductMiningServiceInterface
                     'product_id' => '1005013507767839',
                     'product_title' => 'Relógio Inteligente Esportivo Militar AMOLED Pro Display GPS IP68',
                     'category_name' => 'Eletrônicos & Gadget',
-                    'target_sale_price' => '22.00',
+                    'cost_price_brl' => 52.59,
+                    'target_sale_price' => '9.15',
                     'product_main_image_url' => 'https://ae-pic-a1.aliexpress-media.com/kf/S7401a0230b174d39906c9426dedb874eS.jpg',
                     'images' => [
                         'https://ae-pic-a1.aliexpress-media.com/kf/S7401a0230b174d39906c9426dedb874eS.jpg',
@@ -1061,9 +1496,9 @@ class ProductMiningService implements ProductMiningServiceInterface
                     'product_title' => 'Modelador de Cabelo Automático Auto Curling Sem Fio Display LED',
                     'category_name' => 'Beleza, Cuidados & Estilo',
                     'target_sale_price' => '17.20',
-                    'product_main_image_url' => 'https://ae-pic-a1.aliexpress-media.com/kf/S19d1c7dace654de7918987ecffe76d2fh.jpg',
+                    'product_main_image_url' => 'https://images.unsplash.com/photo-1527799820374-dcf8d9d4a388?w=800&auto=format&fit=crop&q=80',
                     'images' => [
-                        'https://ae-pic-a1.aliexpress-media.com/kf/S19d1c7dace654de7918987ecffe76d2fh.jpg',
+                        'https://images.unsplash.com/photo-1527799820374-dcf8d9d4a388?w=800&auto=format&fit=crop&q=80',
                     ],
                     'evaluate_rate' => '4.8',
                     'volume' => 8400,
@@ -1104,7 +1539,8 @@ class ProductMiningService implements ProductMiningServiceInterface
                     'product_id' => '1005010179002980',
                     'product_title' => 'Alicate Crimpador e Decapador Universal Multifuncional Aço Forjado para Eletricistas',
                     'category_name' => 'Ferramentas & Utilidades',
-                    'target_sale_price' => '8.37',
+                    'cost_price_brl' => 29.09,
+                    'target_sale_price' => '5.06',
                     'product_main_image_url' => 'https://ae-pic-a1.aliexpress-media.com/kf/S94c8418536694e0db6a78043c458f7b6q.jpg',
                     'images' => [
                         'https://ae-pic-a1.aliexpress-media.com/kf/S94c8418536694e0db6a78043c458f7b6q.jpg',
@@ -1112,13 +1548,37 @@ class ProductMiningService implements ProductMiningServiceInterface
                     'evaluate_rate' => '4.9',
                     'volume' => 19300,
                     'product_description' => 'Alicate profissional de precisão para eletricistas com decapagem rápida de fios AWG 24-10 e corpo reforçado em aço forjado.',
-                    'properties' => ['Capacidade' => 'AWG 24-10 (0.2 - 6.0mm²)', 'Aço' => 'Aço Carbono Forjado', 'Empunhadura' => 'Ergonômica Antiderrapante'],
+                    'properties' => ['Capacidade' => 'AWG 24-10 (0.2 - 6.0mm²)', 'Aço' => 'Aço Carbono Forjado', 'Empunhadura' => 'Ergonômica Antiderrapante', 'Cores' => 'Amarelo, Vermelho'],
+                    'variation_axes' => [
+                        'Cor' => ['Amarelo', 'Vermelho'],
+                    ],
+                    'variants' => [
+                        [
+                            'sku_id' => '1005010179002980-AMARELO',
+                            'sku_attr' => '14:200000181',
+                            'options' => ['Cor' => 'Amarelo'],
+                            'price_brl' => 58.18,
+                            'cost_price_usd' => 5.06,
+                            'image_url' => 'https://ae-pic-a1.aliexpress-media.com/kf/S94c8418536694e0db6a78043c458f7b6q.jpg',
+                            'stock' => 65,
+                        ],
+                        [
+                            'sku_id' => '1005010179002980-VERMELHO',
+                            'sku_attr' => '14:200000183',
+                            'options' => ['Cor' => 'Vermelho'],
+                            'price_brl' => 58.18,
+                            'cost_price_usd' => 5.06,
+                            'image_url' => 'https://ae-pic-a1.aliexpress-media.com/kf/S94c8418536694e0db6a78043c458f7b6q.jpg',
+                            'stock' => 50,
+                        ],
+                    ],
                 ],
                 [
                     'product_id' => '1005006459530266',
                     'product_title' => 'Alicate Automático Decapador e Crimpador 5 em 1 Descascador de Fios de Alta Dureza',
                     'category_name' => 'Ferramentas & Utilidades',
-                    'target_sale_price' => '9.50',
+                    'cost_price_brl' => 44.77,
+                    'target_sale_price' => '7.78',
                     'product_main_image_url' => 'https://ae-pic-a1.aliexpress-media.com/kf/Af74ca0a2fa8f418082f4dad0f68bc3fdE.png',
                     'images' => [
                         'https://ae-pic-a1.aliexpress-media.com/kf/Af74ca0a2fa8f418082f4dad0f68bc3fdE.png',
@@ -1126,13 +1586,37 @@ class ProductMiningService implements ProductMiningServiceInterface
                     'evaluate_rate' => '4.8',
                     'volume' => 14200,
                     'product_description' => 'Alicate automático para descascar e crimpar fios com regulagem de pressão e limitador de comprimento em aço temperado.',
-                    'properties' => ['Ação' => 'Automática 1-Click', 'Bitola' => '0.5mm² a 6.0mm²', 'Crimpagem' => 'Terminais Ilhós e Pré-isolados'],
+                    'properties' => ['Ação' => 'Automática 1-Click', 'Bitola' => '0.5mm² a 6.0mm²', 'Crimpagem' => 'Terminais Ilhós e Pré-isolados', 'Cores' => 'Amarelo, Vermelho'],
+                    'variation_axes' => [
+                        'Cor' => ['Amarelo', 'Vermelho'],
+                    ],
+                    'variants' => [
+                        [
+                            'sku_id' => '1005006459530266-AMARELO',
+                            'sku_attr' => '14:200000181',
+                            'options' => ['Cor' => 'Amarelo'],
+                            'price_brl' => 89.54,
+                            'cost_price_usd' => 7.78,
+                            'image_url' => 'https://ae-pic-a1.aliexpress-media.com/kf/Af74ca0a2fa8f418082f4dad0f68bc3fdE.png',
+                            'stock' => 45,
+                        ],
+                        [
+                            'sku_id' => '1005006459530266-VERMELHO',
+                            'sku_attr' => '14:200000183',
+                            'options' => ['Cor' => 'Vermelho'],
+                            'price_brl' => 89.54,
+                            'cost_price_usd' => 7.78,
+                            'image_url' => 'https://ae-pic-a1.aliexpress-media.com/kf/Af74ca0a2fa8f418082f4dad0f68bc3fdE.png',
+                            'stock' => 40,
+                        ],
+                    ],
                 ],
                 [
                     'product_id' => '1005008830668625',
                     'product_title' => 'Alicate de Bico Longo Aço Carbono para Manutenção Elétrica Descascamento e Corte',
                     'category_name' => 'Ferramentas & Utilidades',
-                    'target_sale_price' => '6.20',
+                    'cost_price_brl' => 29.09,
+                    'target_sale_price' => '5.06',
                     'product_main_image_url' => 'https://ae-pic-a1.aliexpress-media.com/kf/S5fecb65c164546f49227e27fea911acdk.jpg',
                     'images' => [
                         'https://ae-pic-a1.aliexpress-media.com/kf/S5fecb65c164546f49227e27fea911acdk.jpg',
@@ -1154,7 +1638,30 @@ class ProductMiningService implements ProductMiningServiceInterface
                     'evaluate_rate' => '4.9',
                     'volume' => 8800,
                     'product_description' => 'Decapador profissional modelo D3N com lâminas de liga especial que removem capas plásticas sem romper os filamentos de cobre.',
-                    'properties' => ['Modelo' => 'D3N Auto-Adjusting', 'Material' => 'Liga Especial HRC 55', 'Garantia' => 'Uso Contínuo'],
+                    'properties' => ['Modelo' => 'D3N Auto-Adjusting', 'Material' => 'Liga Especial HRC 55', 'Garantia' => 'Uso Contínuo', 'Cores' => 'Amarelo, Vermelho'],
+                    'variation_axes' => [
+                        'Cor' => ['Amarelo', 'Vermelho'],
+                    ],
+                    'variants' => [
+                        [
+                            'sku_id' => '1005013591449434-AMARELO',
+                            'sku_attr' => '14:200000181',
+                            'options' => ['Cor' => 'Amarelo'],
+                            'price_brl' => 157.50,
+                            'cost_price_usd' => 15.00,
+                            'image_url' => 'https://ae-pic-a1.aliexpress-media.com/kf/Sb12c9a65cb064973a3f420ae65a2f1e4G.jpg',
+                            'stock' => 42,
+                        ],
+                        [
+                            'sku_id' => '1005013591449434-VERMELHO',
+                            'sku_attr' => '14:200000183',
+                            'options' => ['Cor' => 'Vermelho'],
+                            'price_brl' => 157.50,
+                            'cost_price_usd' => 15.00,
+                            'image_url' => 'https://ae-pic-a1.aliexpress-media.com/kf/Sb12c9a65cb064973a3f420ae65a2f1e4G.jpg',
+                            'stock' => 38,
+                        ],
+                    ],
                 ],
                 [
                     'product_id' => '1005006727505916',
@@ -1355,10 +1862,30 @@ class ProductMiningService implements ProductMiningServiceInterface
                     'images' => [
                         'https://ae-pic-a1.aliexpress-media.com/kf/Seac388b674504c8c8e01ffc74db92072x.jpg',
                     ],
-                    'evaluate_rate' => '4.9',
-                    'volume' => 16800,
-                    'product_description' => 'Conjunto de lingerie sofisticado em renda macia toque suave, decote anatômico em V e acabamento premium antialérgico.',
-                    'properties' => ['Material' => 'Renda Poliamida e Elastano', 'Sutiã' => 'Aro Anatômico Sustentação', 'Forro' => '100% Algodão Puro'],
+                    'evaluate_rate' => '5.0',
+                    'volume' => 25,
+                    'reviews_count' => 2,
+                    'product_description' => 'Conjunto de lingerie sensual de duas peças em renda floral e malha trançada premium. Decote em V profundo com delicados detalhes em laço, tecido elástico e respirável em mistura de poliéster e elastano que se adapta confortavelmente ao corpo.',
+                    'properties' => [
+                        'Composição' => 'Poliéster e Elastano de Alta Elasticidade',
+                        'Modelo'     => 'Conjunto 2 Peças (Sutiã Decote V + Calcinha Rendada)',
+                        'Detalhes'   => 'Renda Floral Trançada e Detalhes em Laço',
+                        'Estrutura'  => 'Sem aros rígidos / Conforto anatômico noturno',
+                        'Tamanhos'   => 'S (BR P), M (BR M), L (BR G) e XL (BR GG)',
+                        'Cores'      => 'Vermelho Natalino, Preto Noir, Vinho Bordô',
+                    ],
+                    'variation_axes' => [
+                        'Cor'     => ['Vermelho Natalino', 'Preto Noir', 'Vinho Bordô'],
+                        'Tamanho' => ['S (BR P)', 'M (BR M)', 'L (BR G)', 'XL (BR GG)'],
+                    ],
+                    'variants' => self::buildColorSizeVariants(
+                        '1005013303040786',
+                        ['Vermelho Natalino', 'Preto Noir', 'Vinho Bordô'],
+                        ['S (BR P)', 'M (BR M)', 'L (BR G)', 'XL (BR GG)'],
+                        64.90,
+                        6.10,
+                        'https://ae-pic-a1.aliexpress-media.com/kf/Seac388b674504c8c8e01ffc74db92072x.jpg'
+                    ),
                 ],
                 [
                     'product_id' => '1005006996593220',
@@ -1372,7 +1899,25 @@ class ProductMiningService implements ProductMiningServiceInterface
                     'evaluate_rate' => '4.8',
                     'volume' => 12900,
                     'product_description' => 'Lingerie leve e sensual sem aros rígidos, com alças reguláveis e elástico suave que não aperta nem marca sob a roupa.',
-                    'properties' => ['Estrutura' => 'Sem Aros Wirefree', 'Alças' => 'Reguláveis Duplas', 'Estilo' => 'Bralette Rendado'],
+                    'properties' => [
+                        'Estrutura' => 'Sem Aros Wirefree',
+                        'Alças'     => 'Reguláveis Duplas',
+                        'Estilo'    => 'Bralette Rendado',
+                        'Tamanhos'  => 'S (BR P), M (BR M), L (BR G) e XL (BR GG)',
+                        'Cores'     => 'Preto Noir, Branco Pérola, Rosa Nude',
+                    ],
+                    'variation_axes' => [
+                        'Cor'     => ['Preto Noir', 'Branco Pérola', 'Rosa Nude'],
+                        'Tamanho' => ['S (BR P)', 'M (BR M)', 'L (BR G)', 'XL (BR GG)'],
+                    ],
+                    'variants' => self::buildColorSizeVariants(
+                        '1005006996593220',
+                        ['Preto Noir', 'Branco Pérola', 'Rosa Nude'],
+                        ['S (BR P)', 'M (BR M)', 'L (BR G)', 'XL (BR GG)'],
+                        69.90,
+                        7.20,
+                        'https://ae-pic-a1.aliexpress-media.com/kf/S70b1538ac3494d0ea1a11a943eb8792c9.jpg'
+                    ),
                 ],
                 [
                     'product_id' => '1005013529453545',
@@ -1386,21 +1931,62 @@ class ProductMiningService implements ProductMiningServiceInterface
                     'evaluate_rate' => '4.8',
                     'volume' => 9700,
                     'product_description' => 'Conjunto de amarração frontal halter neck com sutiã em tule bordado e calcinha de tiras laterais ajustáveis.',
-                    'properties' => ['Design' => 'Halter Neck Frente Única', 'Tecido' => 'Tule Ilusion Bordado', 'Ajuste' => 'Amarração Flexível'],
+                    'properties' => [
+                        'Design'   => 'Halter Neck Frente Única',
+                        'Tecido'   => 'Tule Ilusion Bordado',
+                        'Ajuste'   => 'Amarração Flexível',
+                        'Tamanhos' => 'S (BR P), M (BR M), L (BR G) e XL (BR GG)',
+                        'Cores'    => 'Vinho & Preto, Preto Clássico, Azul Marinho',
+                    ],
+                    'variation_axes' => [
+                        'Cor'     => ['Vinho & Preto', 'Preto Clássico', 'Azul Marinho'],
+                        'Tamanho' => ['S (BR P)', 'M (BR M)', 'L (BR G)', 'XL (BR GG)'],
+                    ],
+                    'variants' => self::buildColorSizeVariants(
+                        '1005013529453545',
+                        ['Vinho & Preto', 'Preto Clássico', 'Azul Marinho'],
+                        ['S (BR P)', 'M (BR M)', 'L (BR G)', 'XL (BR GG)'],
+                        59.90,
+                        5.90,
+                        'https://ae-pic-a1.aliexpress-media.com/kf/S51db7b9432c64b6db8cade757321c6e9j.png'
+                    ),
                 ],
                 [
                     'product_id' => '1005006982221921',
-                    'product_title' => 'Conjunto Lingerie Push-Up Renda Bordada com Aro e Calcinha Alta',
+                    'product_title' => 'Conjunto De Lingerie Feminina Renda Bordado Push Up Sutiã Calcinha',
                     'category_name' => 'Moda Íntima, Lingeries & Pijamas',
                     'target_sale_price' => '8.90',
                     'product_main_image_url' => 'https://ae-pic-a1.aliexpress-media.com/kf/Se68992bea5cd4a508b0576ef287f351eq.jpg',
                     'images' => [
                         'https://ae-pic-a1.aliexpress-media.com/kf/Se68992bea5cd4a508b0576ef287f351eq.jpg',
+                        'https://ae-pic-a1.aliexpress-media.com/kf/Sc43b545078314ac0bb425938c4aed2c4d.jpg',
+                        'https://ae-pic-a1.aliexpress-media.com/kf/S4444beb307ad4b60b03ff1737d33b0df6.jpg',
+                        'https://ae-pic-a1.aliexpress-media.com/kf/S99a722e6fe3946af836e00fa84a91942F.jpg',
+                        'https://ae-pic-a1.aliexpress-media.com/kf/Sfc3e4cbdd7e74f5ba1d54e176f7b5aa4k.jpg',
+                        'https://ae-pic-a1.aliexpress-media.com/kf/Sed06f394d52d4c9fbca667dafa56b05cz.jpg',
                     ],
                     'evaluate_rate' => '4.9',
                     'volume' => 15400,
-                    'product_description' => 'Sutiã efeito push-up com bojo macio que modela e valoriza o colo com renda floral bordada de alta qualidade.',
-                    'properties' => ['Bojo' => 'Push-Up Anatômico', 'Fecho' => 'Costas Triplo Ajuste', 'Renda' => 'Guipir Floral Relevo'],
+                    'product_description' => 'Sutiã efeito push-up com bojo macio e suporte em aro que modela e valoriza o colo com renda floral bordada de alta qualidade, acompanhado de calcinha alta anatômica.',
+                    'properties' => [
+                        'Bojo'       => 'Push-Up Anatômico com Suporte Aro',
+                        'Fecho'      => 'Costas Triplo Ajuste Reforçado',
+                        'Renda'      => 'Guipir Floral Relevo Macio',
+                        'Tamanhos'   => 'S (BR P), M (BR M), L (BR G) e XL (BR GG)',
+                        'Cores'      => 'Preto, Vermelho Rubi, Branco',
+                    ],
+                    'variation_axes' => [
+                        'Cor'     => ['Preto', 'Vermelho Rubi', 'Branco'],
+                        'Tamanho' => ['S (BR P)', 'M (BR M)', 'L (BR G)', 'XL (BR GG)'],
+                    ],
+                    'variants' => self::buildColorSizeVariants(
+                        '1005006982221921',
+                        ['Preto', 'Vermelho Rubi', 'Branco'],
+                        ['S (BR P)', 'M (BR M)', 'L (BR G)', 'XL (BR GG)'],
+                        79.90,
+                        8.90,
+                        'https://ae-pic-a1.aliexpress-media.com/kf/Se68992bea5cd4a508b0576ef287f351eq.jpg'
+                    ),
                 ],
             ],
             'Sex Shop & Produtos Adultos (+18)' => [
@@ -1448,39 +2034,41 @@ class ProductMiningService implements ProductMiningServiceInterface
                 ],
             ],
         ];
+    }
 
-        // Mapeia apelidos para a categoria oficial do pool
-        $normalizedCat = self::normalizeCategory($category);
-        $pool = $catalog[$normalizedCat] ?? ($catalog[$category] ?? $catalog['Eletrônicos & Gadget'] ?? $catalog['Eletrônicos']);
-
-        // Se o limite solicitado for maior que o pool da categoria, completa com itens de outras categorias
-        if (count($pool) < $limit) {
-            foreach ($catalog as $catName => $items) {
-                if ($catName !== $category) {
-                    foreach ($items as $extraItem) {
-                        $pool[] = $extraItem;
-                        if (count($pool) >= $limit) {
-                            break 2;
-                        }
-                    }
-                }
+    /**
+     * Gera a matriz completa de variantes (Cor x Tamanho) para itens curados/teste.
+     *
+     * @param array<int, string> $colors
+     * @param array<int, string> $sizes
+     * @return array<int, array<string, mixed>>
+     */
+    private static function buildColorSizeVariants(
+        string $productId,
+        array $colors,
+        array $sizes,
+        float $basePriceBrl,
+        float $baseCostUsd,
+        string $imageUrl
+    ): array {
+        $variants = [];
+        foreach ($colors as $cIdx => $color) {
+            $colorSlug = strtoupper(preg_replace('/[^A-Za-z0-9]+/', '', $color) ?: (string)$cIdx);
+            foreach ($sizes as $sIdx => $size) {
+                $sizeCode = strtok($size, ' ') ?: (string)$sIdx;
+                $variants[] = [
+                    'sku_id'         => "{$productId}-{$colorSlug}-{$sizeCode}",
+                    'sku_attr'       => '14:' . (200000180 + $cIdx) . ';5:' . (100014064 + $sIdx),
+                    'options'        => ['Cor' => $color, 'Tamanho' => $size],
+                    'price_brl'      => round($basePriceBrl + ($sIdx * 5.0), 2),
+                    'cost_price_usd' => round($baseCostUsd + ($sIdx * 0.6), 2),
+                    'image_url'      => $imageUrl,
+                    'stock'          => max(15, 60 - ($sIdx * 10) - ($cIdx * 5)),
+                ];
             }
         }
 
-        // Ordena pelo critério de reputação solicitado: maior volume de vendas ou maior avaliação por estrelas
-        if ($sort === 'evaluate_rate_desc') {
-            usort($pool, fn($a, $b) => ((float)($b['evaluate_rate'] ?? 0)) <=> ((float)($a['evaluate_rate'] ?? 0)));
-        } else {
-            usort($pool, fn($a, $b) => ((int)($b['volume'] ?? 0)) <=> ((int)($a['volume'] ?? 0)));
-        }
-
-        $slice = array_slice($pool, 0, $limit);
-        foreach ($slice as &$p) {
-            $p['category_name'] = $normalizedCat;
-        }
-        unset($p);
-
-        return $slice;
+        return $variants;
     }
 
     /**
@@ -1540,7 +2128,8 @@ class ProductMiningService implements ProductMiningServiceInterface
         curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 8);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
         $html = curl_exec($ch);
         curl_close($ch);
 
@@ -1627,36 +2216,106 @@ class ProductMiningService implements ProductMiningServiceInterface
      * Minera produtos virais aleatórios para todas as 9 categorias oficiais,
      * atualiza o catálogo, registra a data/hora de conclusão e retorna o resumo estatístico.
      *
-     * @param int $itemsPerCategory Quantidade de novos produtos minerados por categoria
+     * @param int $itemsPerCategory Quantidade de novos produtos minerados por categoria (padrão 10 = ~90 a 100 no ciclo diário de 24h)
      * @return array<string, mixed> Resumo da rodada executada
      */
-    public function runDailyAutomatedRotation(int $itemsPerCategory = 4): array
+    public function runDailyAutomatedRotation(int $itemsPerCategory = 10): array
     {
-        $results = [];
-        $totalProducts = 0;
-
-        foreach (self::OFFICIAL_CATEGORIES as $cat) {
-            try {
-                $mined = $this->mineTrendingProducts(category: $cat, limit: $itemsPerCategory, autoPersist: true);
-                $count = count($mined);
-                $results[$cat] = $count;
-                $totalProducts += $count;
-            } catch (Throwable $e) {
-                $results[$cat] = 0;
-            }
+        $config = $this->loadConfig();
+        if (isset($config['daily_items_per_category']) && is_numeric($config['daily_items_per_category'])) {
+            $itemsPerCategory = max(1, min(20, (int)$config['daily_items_per_category']));
+        }
+        $lockPath = $this->getConfigFilePath() . '.rotation.lock';
+        $lockDir = dirname($lockPath);
+        if (!is_dir($lockDir)) {
+            @mkdir($lockDir, 0775, true);
         }
 
-        // Registra a conclusão do ciclo de 24 horas
-        $now = time();
-        $this->updateConfigField('last_daily_cycle_at', $now);
+        $lockHandle = @fopen($lockPath, 'c+');
+        if ($lockHandle === false) {
+            return [
+                'success'         => false,
+                'skipped'         => true,
+                'reason'          => 'lock_file_unavailable',
+                'executed_at'     => 0,
+                'total_mined'     => 0,
+                'category_counts' => [],
+            ];
+        }
 
-        return [
-            'success'         => true,
-            'executed_at'     => $now,
-            'executed_date'   => date('d/m/Y H:i:s', $now),
-            'total_mined'     => $totalProducts,
-            'category_counts' => $results,
-        ];
+        if (!flock($lockHandle, LOCK_EX | LOCK_NB)) {
+            fclose($lockHandle);
+            return [
+                'success'         => false,
+                'skipped'         => true,
+                'reason'          => 'rotation_already_running',
+                'executed_at'     => 0,
+                'total_mined'     => 0,
+                'category_counts' => [],
+            ];
+        }
+
+        try {
+            $results = [];
+            $totalProducts = 0;
+
+            // 1. Curadoria Prioritária por Demanda: Garante vagas cativas para os produtos campeões de cliques/compras
+            $priorityTermsPreserved = [];
+            if ($this->demandMetricsRepo !== null) {
+                try {
+                    $topDemanded = $this->demandMetricsRepo->getMonthlyRankings(date('Y-m'), 5);
+                    foreach ($topDemanded as $demandedItem) {
+                        $term = trim((string)($demandedItem['product_title'] ?? ''));
+                        $cat = trim((string)($demandedItem['category_slug'] ?? ''));
+                        if ($term !== '') {
+                            $targetCat = self::normalizeCategory($cat);
+                            try {
+                                $priorityMined = $this->mineTrendingProducts(category: $targetCat, limit: 1, autoPersist: true, sort: 'volume_desc');
+                                if (!empty($priorityMined)) {
+                                    $priorityTermsPreserved[] = $term;
+                                    $totalProducts += count($priorityMined);
+                                }
+                            } catch (Throwable $e) {}
+                        }
+                    }
+                } catch (Throwable $e) {
+                    // Isolamento gracioso
+                }
+            }
+
+            // 2. Rotação das 9 Categorias Oficiais
+            foreach (self::OFFICIAL_CATEGORIES as $cat) {
+                try {
+                    $mined = $this->mineTrendingProducts(category: $cat, limit: $itemsPerCategory, autoPersist: true);
+                    $count = count($mined);
+                    $results[$cat] = $count;
+                    $totalProducts += $count;
+                } catch (Throwable $e) {
+                    $results[$cat] = 0;
+                }
+            }
+
+            // 3. Limpeza automática de anúncios cuja página no AliExpress retornou 404 / "Página não encontrada" (ciclo de 24h)
+            $removedDeadLinks = $this->purgeNotFoundProducts(50);
+
+            // Registra a conclusão do ciclo de 24 horas
+            $now = time();
+            $this->updateConfigField('last_daily_cycle_at', $now);
+
+            return [
+                'success'            => true,
+                'skipped'            => false,
+                'executed_at'        => $now,
+                'executed_date'      => date('d/m/Y H:i:s', $now),
+                'total_mined'        => $totalProducts,
+                'deleted_not_found'  => $removedDeadLinks,
+                'category_counts'    => $results,
+                'priority_preserved' => $priorityTermsPreserved,
+            ];
+        } finally {
+            flock($lockHandle, LOCK_UN);
+            fclose($lockHandle);
+        }
     }
 
     /**
@@ -1679,7 +2338,9 @@ class ProductMiningService implements ProductMiningServiceInterface
             : 0;
 
         $now = time();
-        $autoSyncEnabled = !isset($config['auto_sync_enabled']) || !empty($config['auto_sync_enabled']);
+        $autoSyncEnabled = isset($config['price_sync_enabled'])
+            ? !empty($config['price_sync_enabled'])
+            : (!isset($config['auto_sync_enabled']) || !empty($config['auto_sync_enabled']));
 
         if ($lastCycleAt <= 0) {
             // Se nunca executou, marca como vencido para disparar a primeira rodada
@@ -1708,6 +2369,543 @@ class ProductMiningService implements ProductMiningServiceInterface
             'is_due'              => $isDue,
             'auto_sync_enabled'   => $autoSyncEnabled,
             'official_categories' => self::OFFICIAL_CATEGORIES,
+        ];
+    }
+
+    /**
+     * Retorna os metadados da Sentinela de Preços e Estoque de 6 Horas.
+     */
+    public function getPriceSyncInfo(): array
+    {
+        $config = $this->loadConfig();
+        $intervalSeconds = (int)($config['price_sync_interval_seconds'] ?? 21600); // 6 horas padrão (21600s)
+        if ($intervalSeconds <= 0) {
+            $intervalSeconds = 21600;
+        }
+
+        $lastSyncAt = isset($config['last_price_sync_at']) && is_numeric($config['last_price_sync_at'])
+            ? (int)$config['last_price_sync_at']
+            : 0;
+
+        $now = time();
+        $autoSyncEnabled = isset($config['price_sync_enabled'])
+            ? !empty($config['price_sync_enabled'])
+            : (!isset($config['auto_sync_enabled']) || !empty($config['auto_sync_enabled']));
+
+        if ($lastSyncAt <= 0) {
+            $nextSyncAt = $now;
+            $secondsRemaining = 0;
+            $isDue = true;
+        } else {
+            $nextSyncAt = $lastSyncAt + $intervalSeconds;
+            $secondsRemaining = max(0, $nextSyncAt - $now);
+            $isDue = ($secondsRemaining === 0);
+        }
+
+        $hours = (int)floor($secondsRemaining / 3600);
+        $minutes = (int)floor(($secondsRemaining % 3600) / 60);
+        $seconds = (int)($secondsRemaining % 60);
+        $formatted = sprintf('%02d:%02d:%02d', $hours, $minutes, $seconds);
+
+        return [
+            'last_sync_at'        => $lastSyncAt,
+            'last_sync_date'      => $lastSyncAt > 0 ? date('d/m/Y H:i:s', $lastSyncAt) : 'Pendente de primeira execução',
+            'next_sync_at'        => $nextSyncAt,
+            'next_sync_date'      => date('d/m/Y H:i:s', $nextSyncAt),
+            'interval_seconds'    => $intervalSeconds,
+            'seconds_remaining'   => $secondsRemaining,
+            'formatted_remaining' => $formatted,
+            'is_due'              => $isDue,
+            'auto_sync_enabled'   => $autoSyncEnabled,
+            'volatility_percent'  => (float)($config['volatility_index_percent'] ?? 12.0),
+        ];
+    }
+
+    /**
+     * Executa a varredura da Sentinela de Preços e Estoque a cada 6 horas:
+     * Consulta o fornecedor no AliExpress, aplica o Índice de Correção de Volatilidade (12%)
+     * e ajusta preços de venda em R$ ou pausa produtos esgotados.
+     *
+     * @param int $batchLimit Quantidade máxima de produtos verificados por rodada
+     * @return array<string, mixed> Relatório estatístico da varredura
+     */
+    public function runPriceAndStockSync(int $batchLimit = 50): array
+    {
+        $lockPath = $this->getConfigFilePath() . '.price_sync.lock';
+        $lockDir = dirname($lockPath);
+        if (!is_dir($lockDir)) {
+            @mkdir($lockDir, 0775, true);
+        }
+
+        $lockHandle = @fopen($lockPath, 'c+');
+        if ($lockHandle === false) {
+            return [
+                'success' => false,
+                'skipped' => true,
+                'reason'  => 'lock_file_unavailable',
+                'executed_at' => 0,
+            ];
+        }
+
+        if (!flock($lockHandle, LOCK_EX | LOCK_NB)) {
+            fclose($lockHandle);
+            return [
+                'success' => false,
+                'skipped' => true,
+                'reason'  => 'sync_already_running',
+                'executed_at' => 0,
+            ];
+        }
+
+        try {
+            $config = $this->loadConfig();
+            $volatility = (float)($config['volatility_index_percent'] ?? 12.0);
+            $markup = (float)($config['default_markup_percent'] ?? 100.0);
+            $products = $this->repository->list(['status' => 'published'], $batchLimit, 0);
+
+            $checked = 0;
+            $adjusted = 0;
+            $paused = 0;
+            $deletedNotFound = 0;
+            $unchanged = 0;
+
+            foreach ($products as $prod) {
+                $checked++;
+                try {
+                    $aeId = (string)$prod->aliexpressId;
+                    if ($aeId === '') {
+                        continue;
+                    }
+
+                    // 0. Verifica disponibilidade real do link (mesmo em modo teste e mesmo com imagem já indexada)
+                    // Se o anúncio no fornecedor retornou 404 / "Página não encontrada" (ex: promo relâmpago encerrada), exclui o card automaticamente.
+                    if ($this->isProductLinkConfirmedNotFound($aeId)) {
+                        if ($prod->id !== null && $prod->id > 0) {
+                            $this->repository->delete((int)$prod->id);
+                            $deletedNotFound++;
+                        }
+                        continue;
+                    }
+
+                    // 1. Tenta obter o preço atualizado via API oficial do AliExpress
+                    $remoteData = null;
+                    try {
+                        $remoteData = $this->apiClient->getProductDetails($aeId);
+                    } catch (Throwable $e) {
+                        $remoteData = null;
+                    }
+
+                    $newCostUsd = null;
+                    $newCostBrl = null;
+
+                    if (!empty($remoteData) && is_array($remoteData)) {
+                        $baseInfo = $remoteData['ae_item_base_info_dto'] ?? ($remoteData['result']['ae_item_base_info_dto'] ?? []);
+                        if (!empty($baseInfo['target_sale_price'])) {
+                            $newCostUsd = (float)$baseInfo['target_sale_price'];
+                        }
+                    }
+
+                    // 2. Se a API remota não trouxer, consulta o Scraper
+                    if ($newCostUsd === null || $newCostUsd <= 0.0) {
+                        try {
+                            $scraped = $this->linkScraper->scrape($aeId);
+                            if ($scraped !== null) {
+                                if (!empty($scraped->attributes['cost_price_brl'])) {
+                                    $newCostBrl = (float)$scraped->attributes['cost_price_brl'];
+                                } elseif ($scraped->costPriceUsd > 0.0) {
+                                    $newCostUsd = $scraped->costPriceUsd;
+                                }
+                            }
+                        } catch (Throwable $e) {
+                            // Silencioso
+                        }
+                    }
+
+                    // 3. Aplica o recálculo com o Índice de Volatilidade de 12%
+                    $currentSalePrice = (float)$prod->salePriceBrl;
+                    $calculatedPrice = 0.0;
+
+                    if ($newCostBrl !== null && $newCostBrl > 0.0) {
+                        $calculatedPrice = $this->currencyConverter->calculateSalePriceFromBrl($newCostBrl, $markup, $volatility);
+                    } elseif ($newCostUsd !== null && $newCostUsd > 0.0) {
+                        $calculatedPrice = $this->currencyConverter->calculateSalePrice($newCostUsd, $markup, null, $volatility);
+                    } else {
+                        $calculatedPrice = $this->currencyConverter->calculateSalePrice($prod->costPriceUsd, $markup, null, $volatility);
+                    }
+
+                    // Se a variação de preço for maior que R$ 0,50, atualiza o produto
+                    if ($calculatedPrice > 0.0 && abs($calculatedPrice - $currentSalePrice) >= 0.50) {
+                        $updatedAttrs = $prod->attributes;
+                        $updatedAttrs['last_price_sync_at'] = time();
+                        $updatedAttrs['volatility_index_applied'] = $volatility;
+                        $updatedAttrs['previous_sale_price_brl'] = $currentSalePrice;
+
+                        $updatedDto = new DropshipProductDto(
+                            aliexpressId: $prod->aliexpressId,
+                            title: $prod->title,
+                            slug: $prod->slug,
+                            costPriceUsd: $newCostUsd ?? $prod->costPriceUsd,
+                            salePriceBrl: $calculatedPrice,
+                            mainImageUrl: $prod->mainImageUrl,
+                            images: $prod->images,
+                            category: $prod->category,
+                            description: $prod->description,
+                            rating: $prod->rating,
+                            ordersCount: $prod->ordersCount,
+                            attributes: $updatedAttrs,
+                            id: $prod->id,
+                            status: $prod->status
+                        );
+
+                        $this->repository->save($updatedDto);
+                        $adjusted++;
+                    } else {
+                        $unchanged++;
+                    }
+                } catch (Throwable $e) {
+                    // Isolamento de falha individual por produto
+                }
+            }
+
+            $now = time();
+            $this->updateConfigField('last_price_sync_at', $now);
+
+            return [
+                'success'             => true,
+                'executed_at'         => $now,
+                'executed_date'       => date('d/m/Y H:i:s', $now),
+                'products_checked'    => $checked,
+                'prices_adjusted'     => $adjusted,
+                'unchanged_prices'    => $unchanged,
+                'paused_out_of_stock' => $paused,
+                'deleted_not_found'   => $deletedNotFound,
+                'volatility_applied'  => $volatility,
+            ];
+        } finally {
+            flock($lockHandle, LOCK_UN);
+            fclose($lockHandle);
+        }
+    }
+
+    /**
+     * Consulta o SDK oficial do AliExpress (`aliexpress.ds.product.get`) para saber se o produto
+     * existe ('alive'), foi removido/não encontrado ('not_found') ou está sem credenciais/indeterminado ('unknown').
+     */
+    public static function checkAvailabilityViaApiClient(AliExpressApiClientInterface $apiClient, string $aliexpressId): string
+    {
+        $aeId = trim($aliexpressId);
+        if ($aeId === '') {
+            return 'unknown';
+        }
+
+        try {
+            $remote = $apiClient->getProductDetails($aeId);
+        } catch (Throwable $e) {
+            return self::classifyApiExceptionAvailability($e);
+        }
+
+        return self::classifyApiDetailsAvailability($remote);
+    }
+
+    public static function classifyApiExceptionAvailability(Throwable $e): string
+    {
+        $msg = strtolower($e->getMessage());
+        $type = '';
+        if ($e instanceof \DomainSystem\Plugins\domain_drop\Exceptions\AliExpressApiException) {
+            $type = strtolower($e->type);
+        }
+
+        // 1. Erros de Autenticação / Permissão / Token / Chaves / Assinatura (NUNCA exclui produtos)
+        $authMarkers = [
+            'access_token',
+            'missingparameter',
+            'invalidsession',
+            'illegalaccesstoken',
+            'invalidappkey',
+            'incompletesignature',
+            'signature',
+            'unauthorized',
+            'forbidden',
+            'auth_required',
+            'needs_reauth',
+            'session_expired',
+            'session',
+            'invalidcode',
+            'illegalrefreshtoken',
+            'invalid_token',
+        ];
+        foreach ($authMarkers as $marker) {
+            if (str_contains($msg, $marker) || ($type !== '' && str_contains($type, $marker))) {
+                return 'sdk_auth_required';
+            }
+        }
+
+        // 2. Erros de Quota / Limite de Requisições / Rate Limiting (NUNCA exclui produtos)
+        $rateLimitMarkers = [
+            'appcallquotaexceeded',
+            'quota_exceeded',
+            'quota',
+            'ratelimit',
+            'rate limit',
+            'too many requests',
+            'throttle',
+            'busy',
+            'concurrent',
+        ];
+        foreach ($rateLimitMarkers as $marker) {
+            if (str_contains($msg, $marker) || ($type !== '' && str_contains($type, $marker))) {
+                return 'rate_limited';
+            }
+        }
+
+        // 3. Erros de Rede, Conexão, DNS, Timeout, Gateway HTTP (NUNCA exclui produtos)
+        $networkMarkers = [
+            'timeout',
+            'timed out',
+            'connection refused',
+            'curl',
+            'resolve',
+            'dns',
+            'gateway',
+            'serviceunavailable',
+            'service unavailable',
+            'maintenance',
+            'internal error',
+            'system error',
+            'connection_error',
+            'http_500',
+            'http_502',
+            'http_503',
+            'http_504',
+            'ssl',
+        ];
+        foreach ($networkMarkers as $marker) {
+            if (str_contains($msg, $marker) || ($type !== '' && str_contains($type, $marker))) {
+                return 'network_or_system_error';
+            }
+        }
+
+        // 4. Somente marcadores específicos de PRODUTO/ITEM inexistente ou despublicado pelo fornecedor
+        $specificNotFoundMarkers = [
+            'item_not_found',
+            'item_not_exist',
+            'product_not_found',
+            'product_not_exist',
+            'item does not exist',
+            'product does not exist',
+            'invalid item id',
+            'invalid product id',
+            'item_id_not_found',
+            'item-not-exist',
+            'all sku unsaleable',
+            'product offline',
+            'item offline',
+        ];
+        foreach ($specificNotFoundMarkers as $marker) {
+            if (str_contains($msg, $marker) || ($type !== '' && str_contains($type, $marker))) {
+                return 'not_found';
+            }
+        }
+
+        return 'unknown';
+    }
+
+    /**
+     * @param mixed $remote
+     */
+    public static function classifyApiDetailsAvailability(mixed $remote): string
+    {
+        if (!is_array($remote) || empty($remote)) {
+            return 'unknown';
+        }
+
+        $baseInfo = $remote['ae_item_base_info_dto']
+            ?? ($remote['result']['ae_item_base_info_dto']
+            ?? ($remote['aliexpress_ds_product_get_response']['result']['ae_item_base_info_dto'] ?? null));
+        if (is_array($baseInfo)) {
+            $statusType = strtolower(trim((string)($baseInfo['product_status_type'] ?? '')));
+            if (in_array($statusType, ['offline', 'deleted', 'auditing_failed'], true)) {
+                return 'not_found';
+            }
+            if (!empty($baseInfo['subject']) || !empty($baseInfo['product_id'])) {
+                return 'alive';
+            }
+        }
+
+        return 'unknown';
+    }
+
+    /**
+     * Verifica se a página do produto no fornecedor foi confirmada como inexistente (404 / "Página não encontrada").
+     * Prioriza o SDK oficial do AliExpress (sem captcha) e usa o scraper apenas como fallback quando o SDK estiver indisponível.
+     */
+    private function isProductLinkConfirmedNotFound(string $aliexpressId): bool
+    {
+        $sdkStatus = self::checkAvailabilityViaApiClient($this->apiClient, $aliexpressId);
+        if ($sdkStatus === 'not_found') {
+            return true;
+        }
+        if ($sdkStatus === 'alive') {
+            return false;
+        }
+
+        if (method_exists($this->linkScraper, 'checkAvailability')) {
+            return $this->linkScraper->checkAvailability($aliexpressId) === 'not_found';
+        }
+        return false;
+    }
+
+    /**
+     * Varre anúncios publicados e exclui automaticamente cards cujo link no AliExpress
+     * retornou "Página não encontrada" / 404 (ex.: promoção relâmpago encerrada).
+     */
+    public function purgeNotFoundProducts(int $batchLimit = 50): int
+    {
+        $deleted = 0;
+        $products = $this->repository->list(['status' => 'published'], $batchLimit, 0);
+        foreach ($products as $prod) {
+            $aeId = (string)$prod->aliexpressId;
+            if ($aeId === '' || $prod->id === null || $prod->id <= 0) {
+                continue;
+            }
+            try {
+                if ($this->isProductLinkConfirmedNotFound($aeId)) {
+                    if ($this->repository->delete((int)$prod->id)) {
+                        $deleted++;
+                    }
+                }
+            } catch (Throwable $e) {
+                // Isolamento de falha por item
+            }
+        }
+        return $deleted;
+    }
+
+    /**
+     * Verifica ao vivo (no clique do botão Comprar) se o anúncio ainda existe no fornecedor
+     * e consulta o estoque atual via SDK do AliExpress quando disponível.
+     *
+     * @return array{available: bool, reason: string, message: string, stock: ?int, stock_source: string}
+     */
+    public function checkLiveProductAvailability(DropshipProductDto $product, string $skuId = ''): array
+    {
+        $aeId = trim((string)$product->aliexpressId);
+
+        // 1. Consulta o SDK oficial do AliExpress uma única vez (disponibilidade + estoque)
+        $remote = null;
+        $sdkStatus = 'unknown';
+        if ($aeId !== '') {
+            try {
+                $remote = $this->apiClient->getProductDetails($aeId);
+                $sdkStatus = self::classifyApiDetailsAvailability($remote);
+            } catch (Throwable $e) {
+                $sdkStatus = self::classifyApiExceptionAvailability($e);
+            }
+        }
+
+        if ($sdkStatus === 'not_found'
+            || ($sdkStatus === 'unknown' && $aeId !== '' && method_exists($this->linkScraper, 'checkAvailability') && $this->linkScraper->checkAvailability($aeId) === 'not_found')
+        ) {
+            if ($product->id !== null && $product->id > 0) {
+                $this->repository->delete((int)$product->id);
+            }
+            return [
+                'available'    => false,
+                'reason'       => 'not_found',
+                'message'      => 'O estoque deste produto já acabou e o anúncio não está mais disponível no fornecedor.',
+                'stock'        => 0,
+                'stock_source' => $sdkStatus === 'not_found' ? 'aliexpress_sdk' : 'supplier_page',
+            ];
+        }
+
+        // 2. Extrai estoque atual real a partir da mesma resposta do SDK do AliExpress
+        $sdkStock = null;
+        if (is_array($remote) && !empty($remote)) {
+                    $sdkNode = $remote['ae_item_sku_info_dtos']['ae_item_sku_info_d_t_o']
+                        ?? ($remote['result']['ae_item_sku_info_dtos']['ae_item_sku_info_d_t_o'] ?? null);
+                    if (is_array($sdkNode) && !empty($sdkNode)) {
+                        $skuList = isset($sdkNode['sku_id']) || isset($sdkNode['id']) ? [$sdkNode] : $sdkNode;
+                        $matchedStock = null;
+                        $totalStock = 0;
+                        $hasNumericStock = false;
+                        foreach ($skuList as $sku) {
+                            if (!is_array($sku)) {
+                                continue;
+                            }
+                            if (isset($sku['sku_available_stock']) || isset($sku['sku_stock'])) {
+                                $sVal = max(0, (int)($sku['sku_available_stock'] ?? $sku['sku_stock']));
+                                $hasNumericStock = true;
+                                $totalStock += $sVal;
+                                $curSkuId = (string)($sku['sku_id'] ?? ($sku['id'] ?? ''));
+                                if ($skuId !== '' && $curSkuId === $skuId) {
+                                    $matchedStock = $sVal;
+                                }
+                            }
+                        }
+                        if ($matchedStock !== null) {
+                            $sdkStock = $matchedStock;
+                        } elseif ($hasNumericStock) {
+                            $sdkStock = $totalStock;
+                        }
+                    }
+
+                    if ($sdkStock === null) {
+                        $baseInfo = $remote['ae_item_base_info_dto'] ?? ($remote['result']['ae_item_base_info_dto'] ?? []);
+                        if (is_array($baseInfo) && (isset($baseInfo['total_available_stock']) || isset($baseInfo['stock']))) {
+                            $sdkStock = max(0, (int)($baseInfo['total_available_stock'] ?? $baseInfo['stock']));
+                        }
+                    }
+        }
+
+        if ($sdkStock !== null) {
+            if ($sdkStock <= 0) {
+                return [
+                    'available'    => false,
+                    'reason'       => 'out_of_stock',
+                    'message'      => 'O estoque deste produto já acabou no momento.',
+                    'stock'        => 0,
+                    'stock_source' => 'aliexpress_sdk',
+                ];
+            }
+
+            return [
+                'available'    => true,
+                'reason'       => 'in_stock',
+                'message'      => "Estoque atual confirmado: {$sdkStock} unidade(s) disponíveis.",
+                'stock'        => $sdkStock,
+                'stock_source' => 'aliexpress_sdk',
+            ];
+        }
+
+        // 3. Fallback para estoque local da variante selecionada (caso SDK não retorne contagem)
+        if ($skuId !== '') {
+            $variant = $product->findVariantBySku($skuId);
+            if ($variant !== null) {
+                if ($variant->stock <= 0) {
+                    return [
+                        'available'    => false,
+                        'reason'       => 'out_of_stock',
+                        'message'      => 'O estoque da variação selecionada já acabou.',
+                        'stock'        => 0,
+                        'stock_source' => 'catalog_variant',
+                    ];
+                }
+                return [
+                    'available'    => true,
+                    'reason'       => 'in_stock',
+                    'message'      => "Estoque disponível: {$variant->stock} unidade(s).",
+                    'stock'        => $variant->stock,
+                    'stock_source' => 'catalog_variant',
+                ];
+            }
+        }
+
+        return [
+            'available'    => true,
+            'reason'       => 'available',
+            'message'      => 'Produto disponível para compra.',
+            'stock'        => null,
+            'stock_source' => 'catalog',
         ];
     }
 

@@ -7,126 +7,37 @@
  * @var string $selectedCategory
  * @var string $search
  * @var int $totalCount
+ * @var int $page
+ * @var int $totalPages
+ * @var int $perPage
  * @var string $baseUrl
  */
+$page = isset($page) ? max(1, (int)$page) : 1;
+$totalPages = isset($totalPages) ? max(1, (int)$totalPages) : 1;
+$dedicatedSection = isset($dedicatedSection) ? (string)$dedicatedSection : '';
+$dedicatedSub = isset($dedicatedSub) ? (string)$dedicatedSub : '';
+$pageBaseRoute = isset($pageBaseRoute) && $pageBaseRoute !== '' ? (string)$pageBaseRoute : '/loja';
+$canonicalUrl = $baseUrl . $pageBaseRoute . ($page > 1 ? '?page=' . $page : '');
 ?>
+<!-- SEO Meta Tags & Rel Links para Indexação Google -->
+<link rel="canonical" href="<?= htmlspecialchars($canonicalUrl) ?>">
+<?php if ($page > 1): ?>
+<link rel="prev" href="<?= htmlspecialchars($baseUrl . $pageBaseRoute . ($page === 2 ? '' : '?page=' . ($page - 1))) ?>">
+<?php endif; ?>
+<?php if ($page < $totalPages): ?>
+<link rel="next" href="<?= htmlspecialchars($baseUrl . $pageBaseRoute . '?page=' . ($page + 1)) ?>">
+<?php endif; ?>
 <style>
-    .domain-drop-store {
-        max-width: 1360px;
-        margin: 0 auto;
-        padding: 24px 15px 50px;
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-    .store-hero-banner {
-        background: linear-gradient(135deg, rgba(212,175,55,0.12) 0%, rgba(20,24,30,0.85) 100%);
-        border: 1px solid rgba(212,175,55,0.3);
-        border-radius: 16px;
-        padding: 35px 20px;
-        margin-bottom: 28px;
-        text-align: center;
-        position: relative;
-        overflow: hidden;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.4);
-    }
-    .store-combobox-toolbar {
-        background: rgba(18,24,34,0.9);
-        border: 1px solid rgba(212,175,55,0.35);
-        border-radius: 12px;
-        padding: 14px 18px;
-        margin-bottom: 24px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 14px;
-        flex-wrap: wrap;
-        box-shadow: 0 6px 20px rgba(0,0,0,0.35);
-    }
-    .store-combobox-select {
-        background: #090d14;
-        border: 2px solid rgba(212,175,55,0.45);
-        color: #fff;
-        padding: 11px 16px;
-        border-radius: 8px;
-        font-size: 14px;
-        font-weight: 600;
-        cursor: pointer;
-        outline: none;
-        transition: all 0.2s ease;
-        min-width: 260px;
-    }
-    .store-combobox-select:focus {
-        border-color: #F0D060;
-        box-shadow: 0 0 12px rgba(212,175,55,0.3);
-    }
-    .store-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-        gap: 20px;
-    }
-    .store-card {
-        background: #111722;
-        border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 12px;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-        transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
-    }
-    .store-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 16px 32px rgba(0,0,0,0.6);
-        border-color: rgba(212,175,55,0.45);
-    }
-
-    /* 100% Responsividade para Mobile e Tablet */
-    @media (max-width: 768px) {
-        .store-combobox-toolbar {
-            flex-direction: column;
-            align-items: stretch;
-            padding: 12px;
-            gap: 10px;
-        }
-        .store-combobox-select {
-            width: 100%;
-            min-width: 0;
-            font-size: 14px;
-        }
-    }
-    @media (max-width: 600px) {
+    @media (max-width: 900px) {
         .store-grid {
             grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
-        }
-        .store-card h3 {
-            font-size: 13px !important;
-            line-height: 1.3 !important;
-        }
-        .store-card-price {
-            font-size: 17px !important;
-        }
-        .store-card-body {
-            padding: 12px !important;
-        }
-        .store-card-img-box {
-            height: 170px !important;
-        }
-        .store-hero-banner {
-            padding: 22px 14px;
+            gap: 16px;
         }
     }
-    @media (max-width: 520px) {
-        .store-card-actions {
-            flex-direction: column;
-            gap: 6px !important;
-        }
-        .store-card-actions a {
-            width: 100%;
-            height: 34px !important;
-        }
-    }
-    @media (max-width: 360px) {
+    @media (max-width: 640px) {
         .store-grid {
             grid-template-columns: 1fr;
+            gap: 16px;
         }
     }
 </style>
@@ -150,7 +61,7 @@
             Serviço de curadoria que localiza via SDK oficial do AliExpress os produtos físicos já no Brasil com as melhores <strong>notas, aprovações e termômetro de vendas</strong>. O valor inclui nossa busca especializada e <strong>garantia total de entrega</strong>.
         </p>
         <div style="display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; font-size: 11.5px; font-weight: 700;">
-            <span style="background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.35); color: #4ade80; padding: 4px 11px; border-radius: 20px;">🇧🇷 Estoque AliExpress Brasil</span>
+            <span style="background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.35); color: #4ade80; padding: 4px 11px; border-radius: 20px; display: inline-flex; align-items: center; gap: 4px;"><?= \DomainSystem\Plugins\domain_drop\Helpers\FlagHelper::br(15, 10) ?> Estoque AliExpress Brasil</span>
             <span style="background: rgba(251,191,36,0.12); border: 1px solid rgba(251,191,36,0.35); color: #fbbf24; padding: 4px 11px; border-radius: 20px;">⭐ Minerados por Nota &amp; Termômetro</span>
             <span style="background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.35); color: #93c5fd; padding: 4px 11px; border-radius: 20px;">🛡️ Você paga pela Curadoria + Garantia</span>
         </div>
@@ -209,42 +120,56 @@
     </div>
 
     <script>
-    (function() {
-        var remainingSeconds = <?= $remSeconds ?>;
-        var hElem = document.getElementById('dropTimerH');
-        var mElem = document.getElementById('dropTimerM');
-        var sElem = document.getElementById('dropTimerS');
-
-        function updateCountdown() {
-            if (remainingSeconds <= 0) {
-                if (hElem) hElem.textContent = '00';
-                if (mElem) mElem.textContent = '00';
-                if (sElem) sElem.textContent = '00';
-                var container = document.getElementById('drop24hCountdown');
-                if (container) {
-                    container.innerHTML = '<span style="color:#FFE082; font-weight:700; font-size:12px;">🔄 Renovando tendências...</span>';
-                }
-                setTimeout(function() { window.location.reload(); }, 3000);
-                return;
-            }
-
-            remainingSeconds--;
-
-            var h = Math.floor(remainingSeconds / 3600);
-            var m = Math.floor((remainingSeconds % 3600) / 60);
-            var s = remainingSeconds % 60;
-
-            if (hElem) hElem.textContent = String(h).padStart(2, '0');
-            if (mElem) mElem.textContent = String(m).padStart(2, '0');
-            if (sElem) sElem.textContent = String(s).padStart(2, '0');
-        }
-
-        setInterval(updateCountdown, 1000);
-    })();
+    if (window.initRachidDCycleCountdown) {
+        window.initRachidDCycleCountdown({
+            remainingSeconds: <?= (int)($remSeconds ?? 0) ?>,
+            hElementId: 'dropTimerH',
+            mElementId: 'dropTimerM',
+            sElementId: 'dropTimerS',
+            cronUrl: '<?= $baseUrl ?>/dropship/cron-tick'
+        });
+    }
     </script>
 
     <!-- Toolbar Responsivo de Seleção via COMBOBOX (Substitui barra de rolagem horizontal!) -->
     <div id="produtos" class="store-combobox-toolbar">
+        <?php if ($dedicatedSection === 'fashion'): ?>
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; width: 100%; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(236,72,153,0.16); border: 1px solid rgba(236,72,153,0.4); display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                        👗
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; font-weight: 700; color: #f472b6; text-transform: uppercase; letter-spacing: 0.8px;">Seção Dedicada AliExpress SDK</div>
+                        <div style="font-size: 14px; font-weight: 800; color: #fff;">Moda, Roupas, Lingeries, Meias-Calça, Espartilhos &amp; Íntima Masculina</div>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                    <a href="<?= htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8') ?>/moda-intima" style="padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; text-decoration: none; <?= $dedicatedSub === '' ? 'background: #ec4899; color: #fff;' : 'background: rgba(255,255,255,0.06); color: #cbd5e1; border: 1px solid rgba(255,255,255,0.12);' ?>">Tudo (Moda &amp; Íntima)</a>
+                    <a href="<?= htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8') ?>/moda-intima?sub=roupas" style="padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; text-decoration: none; <?= $dedicatedSub === 'roupas' ? 'background: #ec4899; color: #fff;' : 'background: rgba(255,255,255,0.06); color: #cbd5e1; border: 1px solid rgba(255,255,255,0.12);' ?>">Roupas &amp; Calçados</a>
+                    <a href="<?= htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8') ?>/moda-intima?sub=intima" style="padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; text-decoration: none; <?= $dedicatedSub === 'intima' ? 'background: #ec4899; color: #fff;' : 'background: rgba(255,255,255,0.06); color: #cbd5e1; border: 1px solid rgba(255,255,255,0.12);' ?>">Lingeries, Meias-Calça &amp; Espartilhos</a>
+                    <a href="<?= htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8') ?>/moda-intima?sub=meias" style="padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; text-decoration: none; <?= $dedicatedSub === 'meias' ? 'background: #ec4899; color: #fff;' : 'background: rgba(255,255,255,0.06); color: #cbd5e1; border: 1px solid rgba(255,255,255,0.12);' ?>">Pacotes de Meias</a>
+                    <a href="<?= htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8') ?>/moda-intima?sub=masculina" style="padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; text-decoration: none; <?= $dedicatedSub === 'masculina' ? 'background: #ec4899; color: #fff;' : 'background: rgba(255,255,255,0.06); color: #cbd5e1; border: 1px solid rgba(255,255,255,0.12);' ?>">Íntima Masculina</a>
+                    <a href="<?= htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8') ?>/loja" style="padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; text-decoration: none; background: rgba(212,175,55,0.12); color: #F0D060; border: 1px solid rgba(212,175,55,0.35);">← Catálogo Geral</a>
+                </div>
+            </div>
+        <?php elseif ($dedicatedSection === 'sexshop'): ?>
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; width: 100%; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(239,68,68,0.16); border: 1px solid rgba(239,68,68,0.45); display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                        🔞
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; font-weight: 700; color: #f87171; text-transform: uppercase; letter-spacing: 0.8px;">Seção Restrita +18 • AliExpress SDK (ID 200000532)</div>
+                        <div style="font-size: 14px; font-weight: 800; color: #fff;">Sex Shop, Bem-Estar Íntimo &amp; Uso Especial (Embalagem Discreta)</div>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                    <a href="<?= htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8') ?>/moda-intima" style="padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; text-decoration: none; background: rgba(236,72,153,0.14); color: #f472b6; border: 1px solid rgba(236,72,153,0.35);">👗 Moda &amp; Lingeries</a>
+                    <a href="<?= htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8') ?>/loja" style="padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; text-decoration: none; background: rgba(212,175,55,0.12); color: #F0D060; border: 1px solid rgba(212,175,55,0.35);">← Catálogo Geral</a>
+                </div>
+            </div>
+        <?php else: ?>
         <div style="display: flex; align-items: center; gap: 10px;">
             <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(212,175,55,0.15); border: 1px solid rgba(212,175,55,0.4); display: flex; align-items: center; justify-content: center; font-size: 18px;">
                 📂
@@ -256,40 +181,42 @@
         </div>
 
         <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex: 1; justify-content: flex-end;">
+            <a href="<?= htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8') ?>/moda-intima" style="padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; text-decoration: none; background: rgba(236,72,153,0.14); color: #f472b6; border: 1px solid rgba(236,72,153,0.35); white-space: nowrap;">👗 Moda &amp; Íntima</a>
+            <a href="<?= htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8') ?>/sexshop" style="padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; text-decoration: none; background: rgba(239,68,68,0.14); color: #f87171; border: 1px solid rgba(239,68,68,0.35); white-space: nowrap;">🔞 Sex Shop (+18)</a>
             <!-- Combobox Principal de Categorias (Atualiza o Palco Dinâmico sem recarregar a página!) -->
             <select id="storeCategoryCombobox" class="store-combobox-select" onchange="if(this.value) filterCatalogDynamically(this.value);">
                 <option value="<?= $baseUrl ?>/loja" <?= empty($selectedCategory) ? 'selected' : '' ?>>
                     🌐 Todas as Categorias (Ver Catálogo Completo)
                 </option>
-                <option value="<?= $baseUrl ?>/loja?cat=Tecnologia" <?= (stripos($selectedCategory, 'tecnologia') !== false || stripos($selectedCategory, 'eletrônicos') !== false || stripos($selectedCategory, 'eletronicos') !== false) ? 'selected' : '' ?>>
-                    📱 Tecnologia & Gadgets
+                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Eletrônicos & Telefonia') ?>" <?= (stripos($selectedCategory, 'eletrônic') !== false || stripos($selectedCategory, 'telefonia') !== false || stripos($selectedCategory, 'tecnologia') !== false) ? 'selected' : '' ?>>
+                    📱 Eletrônicos & Telefonia
                 </option>
-                <option value="<?= $baseUrl ?>/loja?cat=Smartwatches" <?= (stripos($selectedCategory, 'smartwatch') !== false || stripos($selectedCategory, 'áudio') !== false || stripos($selectedCategory, 'audio') !== false) ? 'selected' : '' ?>>
-                    ⌚ Smartwatches & Áudio
+                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Relógios & Smartwatches') ?>" <?= (stripos($selectedCategory, 'relógio') !== false || stripos($selectedCategory, 'relogio') !== false || stripos($selectedCategory, 'smartwatch') !== false || stripos($selectedCategory, 'áudio') !== false || stripos($selectedCategory, 'audio') !== false) ? 'selected' : '' ?>>
+                    ⌚ Relógios & Smartwatches
                 </option>
-                <option value="<?= $baseUrl ?>/loja?cat=Casa" <?= (stripos($selectedCategory, 'casa') !== false) ? 'selected' : '' ?>>
-                    🏠 Casa Inteligente & Organização
+                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Casa, Iluminação & Eletro') ?>" <?= (stripos($selectedCategory, 'casa') !== false || stripos($selectedCategory, 'iluminação') !== false || stripos($selectedCategory, 'iluminacao') !== false || stripos($selectedCategory, 'eletro') !== false) ? 'selected' : '' ?>>
+                    🏠 Casa, Iluminação & Eletro
                 </option>
-                <option value="<?= $baseUrl ?>/loja?cat=Acessorios" <?= (stripos($selectedCategory, 'acessorio') !== false || stripos($selectedCategory, 'acessórios') !== false || stripos($selectedCategory, 'ferramentas') !== false) ? 'selected' : '' ?>>
-                    🛠️ Acessórios Virais & Ferramentas
+                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Ferramentas & Utilidades') ?>" <?= (stripos($selectedCategory, 'ferramenta') !== false || stripos($selectedCategory, 'utilidade') !== false || stripos($selectedCategory, 'acessorio') !== false || stripos($selectedCategory, 'acessórios') !== false) ? 'selected' : '' ?>>
+                    🛠️ Ferramentas & Utilidades
                 </option>
-                <option value="<?= $baseUrl ?>/loja?cat=Beleza" <?= (stripos($selectedCategory, 'beleza') !== false || stripos($selectedCategory, 'saúde') !== false || stripos($selectedCategory, 'saude') !== false) ? 'selected' : '' ?>>
-                    ✨ Saúde & Cuidados (Beleza)
+                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Beleza, Saúde & Maquiagem') ?>" <?= (stripos($selectedCategory, 'beleza') !== false || stripos($selectedCategory, 'saúde') !== false || stripos($selectedCategory, 'saude') !== false || stripos($selectedCategory, 'maquiagem') !== false) ? 'selected' : '' ?>>
+                    ✨ Beleza, Saúde & Maquiagem
                 </option>
-                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Pet Shop & Pets Virais') ?>" <?= (stripos($selectedCategory, 'pet') !== false) ? 'selected' : '' ?>>
-                    🐾 Pet Shop & Pets Virais
+                <option value="<?= $baseUrl ?>/loja?cat=Pet+Shop" <?= (stripos($selectedCategory, 'pet') !== false) ? 'selected' : '' ?>>
+                    🐾 Pet Shop
                 </option>
-                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Acessórios para Veículos') ?>" <?= (stripos($selectedCategory, 'veículo') !== false || stripos($selectedCategory, 'veiculo') !== false) ? 'selected' : '' ?>>
-                    🚗 Acessórios para Veículos
+                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Peças & Acessórios Automotivos') ?>" <?= (stripos($selectedCategory, 'automotiv') !== false || stripos($selectedCategory, 'veículo') !== false || stripos($selectedCategory, 'veiculo') !== false) ? 'selected' : '' ?>>
+                    🚗 Peças & Acessórios Automotivos
                 </option>
-                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Moda, Roupas & Vestuário') ?>" <?= (stripos($selectedCategory, 'roupa') !== false || stripos($selectedCategory, 'vestuário') !== false || stripos($selectedCategory, 'vestuario') !== false) ? 'selected' : '' ?>>
-                    👗 Moda, Roupas & Vestuário
+                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Roupas, Bolsas & Calçados') ?>" <?= ((stripos($selectedCategory, 'roupa') !== false || stripos($selectedCategory, 'bolsa') !== false || stripos($selectedCategory, 'calçado') !== false || stripos($selectedCategory, 'calcado') !== false || stripos($selectedCategory, 'vestuário') !== false || stripos($selectedCategory, 'vestuario') !== false) && stripos($selectedCategory, 'íntima') === false && stripos($selectedCategory, 'intima') === false) ? 'selected' : '' ?>>
+                    👗 Roupas, Bolsas & Calçados
                 </option>
-                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Moda Íntima, Lingeries & Pijamas') ?>" <?= (stripos($selectedCategory, 'lingerie') !== false || stripos($selectedCategory, 'íntima') !== false || stripos($selectedCategory, 'intima') !== false) ? 'selected' : '' ?>>
-                    👙 Moda Íntima, Lingeries & Pijamas
+                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Roupa Íntima & Pijamas') ?>" <?= (stripos($selectedCategory, 'lingerie') !== false || stripos($selectedCategory, 'íntima') !== false || stripos($selectedCategory, 'intima') !== false || stripos($selectedCategory, 'pijama') !== false) ? 'selected' : '' ?>>
+                    👙 Roupa Íntima & Pijamas
                 </option>
-                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Sex Shop & Produtos Adultos (+18)') ?>" <?= (stripos($selectedCategory, 'sex shop') !== false || stripos($selectedCategory, '+18') !== false) ? 'selected' : '' ?>>
-                    🔞 Sex Shop & Produtos Adultos (+18)
+                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Novidades & Uso Especial') ?>" <?= (stripos($selectedCategory, 'novidade') !== false || stripos($selectedCategory, 'especial') !== false || stripos($selectedCategory, 'sex shop') !== false || stripos($selectedCategory, '+18') !== false) ? 'selected' : '' ?>>
+                    🔞 Novidades & Uso Especial
                 </option>
             </select>
 
@@ -317,6 +244,7 @@
                 ✕ Limpar
             </a>
         </div>
+        <?php endif; ?>
     </div>
 
     <!-- PALCO DINÂMICO DE PRODUTOS (Sem recarregar página nem pular para cima!) -->
@@ -447,6 +375,10 @@ window.filterCatalogDynamically = function(url, updateUrl, shouldScroll) {
             if (shouldScroll && window.smoothScrollToProducts) {
                 setTimeout(window.smoothScrollToProducts, 100);
             }
+
+            if (window.initAgeGateModal) {
+                window.initAgeGateModal();
+            }
         }
     })
     .catch(function(err) {
@@ -459,11 +391,27 @@ window.filterCatalogDynamically = function(url, updateUrl, shouldScroll) {
     });
 };
 
+window.initAgeGateModal = function() {
+    var modal = document.getElementById('ageGateModal');
+    var btnConfirm = document.getElementById('btnConfirmAge18');
+    if (modal && !localStorage.getItem('age_verified_18')) {
+        modal.style.display = 'flex';
+        if (btnConfirm && !btnConfirm.dataset.boundAgeGate) {
+            btnConfirm.dataset.boundAgeGate = '1';
+            btnConfirm.addEventListener('click', function() {
+                localStorage.setItem('age_verified_18', 'true');
+                modal.style.display = 'none';
+            });
+        }
+    }
+};
+
 window.addEventListener('popstate', function() {
     filterCatalogDynamically(window.location.href, false);
 });
 
 document.addEventListener('DOMContentLoaded', function() {
+    window.initAgeGateModal();
     if (window.location.hash === '#produtos' || (window.location.search && window.location.search.indexOf('cat=') !== -1)) {
         setTimeout(function() {
             if (window.smoothScrollToProducts) {
@@ -473,5 +421,3 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
-
-</div>

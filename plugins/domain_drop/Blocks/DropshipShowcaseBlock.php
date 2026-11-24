@@ -64,7 +64,7 @@ class DropshipShowcaseBlock implements BlockInterface, StylableElementInterface
 
     public function getAllowedPartTypes(): array
     {
-        return [ThemePartInterface::TYPE_SECTION, ThemePartInterface::TYPE_PAGE, ThemePartInterface::TYPE_FOOTER];
+        return [ThemePartInterface::TYPE_SECTION, ThemePartInterface::TYPE_FOOTER];
     }
 
     public function getSchema(): array
@@ -234,6 +234,7 @@ class DropshipShowcaseBlock implements BlockInterface, StylableElementInterface
                 <div class="drop-grid">
                     <?php foreach ($products as $p): ?>
                         <?php
+                        $productUrl = !empty($p->slug) ? $baseUrl . '/produto/' . urlencode($p->slug) : $baseUrl . '/produto/' . (int)$p->id;
                         $checkoutUrl = $baseUrl . '/checkout/produto/' . (int)$p->id;
                         $costRef = $p->salePriceBrl * 1.35; // Preço original tachado simulado
                         ?>
@@ -255,8 +256,13 @@ class DropshipShowcaseBlock implements BlockInterface, StylableElementInterface
                                 <?php endif; ?>
 
                                 <?php if ($showRating && $p->rating > 0): ?>
-                                    <span style="position: absolute; bottom: 12px; left: 12px; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); color: #fbbf24; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
-                                        ★ <?= number_format($p->rating, 1) ?>
+                                    <?php
+                                    $bStarsCount = (int)max(1, min(5, round((float)$p->rating)));
+                                    $bStarsEmoji = str_repeat('⭐', $bStarsCount);
+                                    ?>
+                                    <span style="position: absolute; bottom: 12px; left: 12px; background: rgba(0,0,0,0.85); border: 1px solid rgba(251,191,36,0.3); backdrop-filter: blur(4px); color: #fbbf24; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+                                        <span><?= $bStarsEmoji ?></span>
+                                        <span style="color: #fff; font-family: monospace;"><?= number_format($p->rating, 1) ?></span>
                                     </span>
                                 <?php endif; ?>
 
@@ -268,9 +274,29 @@ class DropshipShowcaseBlock implements BlockInterface, StylableElementInterface
                             <!-- Content -->
                             <div style="padding: 18px; flex: 1; display: flex; flex-direction: column; justify-content: space-between;">
                                 <div>
-                                    <h3 style="margin: 0 0 12px 0; font-size: 15px; font-weight: 600; color: #fff; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;" title="<?= htmlspecialchars($p->title) ?>">
+                                    <h3 style="margin: 0 0 8px 0; font-size: 15px; font-weight: 600; color: #fff; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;" title="<?= htmlspecialchars($p->title) ?>">
                                         <?= htmlspecialchars($p->title) ?>
                                     </h3>
+
+                                    <?php
+                                    $cardRating = (float)($p->rating ?? 4.8);
+                                    $starCount = (int)max(1, min(5, round($cardRating > 0 ? $cardRating : 4.8)));
+                                    $starsEmoji = str_repeat('⭐', $starCount);
+                                    $ordersCount = (int)($p->ordersCount ?? 0);
+                                    $salesInformed = (string)($p->attributes['Vendas_Informadas'] ?? '');
+                                    $reviewsCount = (int)($p->attributes['reviews_count'] ?? 0);
+                                    ?>
+                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; font-size: 11.5px;">
+                                        <span style="letter-spacing: 1px; font-size: 12px;"><?= $starsEmoji ?></span>
+                                        <strong style="color: #fbbf24; font-family: monospace; font-size: 12px;"><?= number_format($cardRating > 0 ? $cardRating : 4.8, 1) ?></strong>
+                                        <?php if ($ordersCount > 0 && $salesInformed !== 'nao'): ?>
+                                            <span style="color: #94a3b8; font-size: 11px;">• <strong style="color: #e2e8f0;"><?= number_format($ordersCount, 0, ',', '.') ?></strong> vendidos</span>
+                                        <?php elseif ($reviewsCount > 0): ?>
+                                            <span style="color: #94a3b8; font-size: 11px;">• <strong style="color: #e2e8f0;"><?= $reviewsCount ?></strong> avaliações</span>
+                                        <?php else: ?>
+                                            <span style="color: #94a3b8; font-size: 11px;">• <strong style="color: #e2e8f0;">Destaque</strong> em vendas</span>
+                                        <?php endif; ?>
+                                    </div>
 
                                     <!-- Pricing Box -->
                                     <div style="margin-bottom: 16px;">
@@ -280,17 +306,24 @@ class DropshipShowcaseBlock implements BlockInterface, StylableElementInterface
                                         <div style="font-size: 20px; font-weight: 700; color: #5cd67d; font-family: monospace;">
                                             R$ <?= number_format($p->salePriceBrl, 2, ',', '.') ?>
                                         </div>
-                                        <div style="font-size: 11px; color: var(--text-muted, #94a3b8); margin-top: 2px;">
-                                            em até 12x no cartão ou Pix
+                                        <?php $isNational = (!empty($p->attributes['origem_brasil']) || (isset($p->attributes['ship_from']) && $p->attributes['ship_from'] === 'BR')); ?>
+                                        <div style="font-size: 11px; color: <?= $isNational ? '#4ade80' : 'var(--text-muted, #94a3b8)' ?>; margin-top: 2px; font-weight: <?= $isNational ? '600' : 'normal' ?>; display: flex; align-items: center; flex-wrap: wrap;">
+                                            <?= $isNational ? (\DomainSystem\Plugins\domain_drop\Helpers\FlagHelper::br(15, 10) . ' Estoque no Brasil • Envio 3 a 7 dias') : 'em até 12x no cartão ou Pix' ?>
                                         </div>
                                     </div>
                                 </div>
 
-                                <!-- CTA Buy Button -->
-                                <a href="<?= htmlspecialchars($checkoutUrl) ?>" style="display: flex; align-items: center; justify-content: center; gap: 8px; background: linear-gradient(135deg, #ff4747 0%, #e02424 100%); color: #fff; text-decoration: none; padding: 11px 16px; border-radius: 8px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 4px 14px rgba(255, 71, 71, 0.3); transition: filter 0.2s ease;">
-                                    <span><?= htmlspecialchars($btnText) ?></span>
-                                    <span>➔</span>
-                                </a>
+                                <!-- Action Buttons: Ver Detalhes e Comprar -->
+                                <div style="display: flex; gap: 8px; margin-top: 4px;">
+                                    <a href="<?= htmlspecialchars($productUrl) ?>" style="flex: 1; background: rgba(255,255,255,0.06); border: 1.5px solid rgba(255,255,255,0.18); color: #fff; text-decoration: none; padding: 0 6px; height: 38px; border-radius: 8px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 4px; box-sizing: border-box; transition: all 0.2s ease;">
+                                        <span>🔍</span>
+                                        <span>Ver Detalhes</span>
+                                    </a>
+                                    <a href="<?= htmlspecialchars($checkoutUrl) ?>" style="flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: linear-gradient(135deg, #ff4747 0%, #e02424 100%); color: #fff; text-decoration: none; padding: 0 8px; height: 38px; border-radius: 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 4px 14px rgba(255, 71, 71, 0.3); transition: filter 0.2s ease; box-sizing: border-box;">
+                                        <span><?= htmlspecialchars($btnText) ?></span>
+                                        <span>➔</span>
+                                    </a>
+                                </div>
                             </div>
                         </article>
                     <?php endforeach; ?>

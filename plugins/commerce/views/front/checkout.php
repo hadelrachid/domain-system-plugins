@@ -18,6 +18,17 @@ $csrfToken = htmlspecialchars((string)($csrfToken ?? ''), ENT_QUOTES, 'UTF-8');
 $userName = htmlspecialchars((string)($userName ?? 'Aluno'), ENT_QUOTES, 'UTF-8');
 $userEmail = htmlspecialchars((string)($userEmail ?? ''), ENT_QUOTES, 'UTF-8');
 $userCpf = htmlspecialchars((string)($userCpf ?? ''), ENT_QUOTES, 'UTF-8');
+$userPhone = htmlspecialchars((string)($userPhone ?? ''), ENT_QUOTES, 'UTF-8');
+$savedCustomerAddress = is_array($savedCustomerAddress ?? null) ? $savedCustomerAddress : [];
+$savedZip = htmlspecialchars((string)($savedCustomerAddress['zip'] ?? ''), ENT_QUOTES, 'UTF-8');
+$savedStreet = htmlspecialchars((string)($savedCustomerAddress['street'] ?? ''), ENT_QUOTES, 'UTF-8');
+$savedNumber = htmlspecialchars((string)($savedCustomerAddress['number'] ?? ''), ENT_QUOTES, 'UTF-8');
+$savedComplement = htmlspecialchars((string)($savedCustomerAddress['complement'] ?? ''), ENT_QUOTES, 'UTF-8');
+$savedNeighborhood = htmlspecialchars((string)($savedCustomerAddress['neighborhood'] ?? ''), ENT_QUOTES, 'UTF-8');
+$savedCity = htmlspecialchars((string)($savedCustomerAddress['city'] ?? ''), ENT_QUOTES, 'UTF-8');
+$savedState = htmlspecialchars((string)($savedCustomerAddress['state'] ?? ''), ENT_QUOTES, 'UTF-8');
+$savedPhone = htmlspecialchars((string)($savedCustomerAddress['phone'] ?? $userPhone), ENT_QUOTES, 'UTF-8');
+$hasSavedAddr = ($savedZip !== '' || $savedStreet !== '');
 $courseTitle = htmlspecialchars((string)($course['title'] ?? 'Curso Academy'), ENT_QUOTES, 'UTF-8');
 $courseId = (int)($course['id'] ?? 0);
 $courseImage = $courseImage ?? '';
@@ -110,7 +121,14 @@ $effectiveThumb = !empty($courseImage) ? $courseImage : $fallbackThumb;
     </style>
     <div class="ds-checkout-container">
         <div class="ds-checkout-breadcrumb">
-            <a href="<?= $baseUrl ?>/loja">← Voltar para a vitrine RachidD.com</a>
+            <?php if ($isPhysicalOrDropship): ?>
+                <a href="<?= $baseUrl ?>/loja">← Voltar para a vitrine RachidD.com</a>
+            <?php else: ?>
+                <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+                    <a href="<?= $baseUrl ?>/cursos<?= !empty($course['slug']) ? '/' . htmlspecialchars((string)$course['slug'], ENT_QUOTES, 'UTF-8') : '' ?>">← Voltar para a Página do Curso</a>
+                    <a href="<?= $baseUrl ?>/aluno/painel" style="color: #45f3ff;">🎓 Minha Área de Estudos (Meus Cursos)</a>
+                </div>
+            <?php endif; ?>
             <span class="ds-checkout-site-pill">🛡️ Ambiente Oficial RachidD.com</span>
         </div>
         <header class="ds-checkout-header">
@@ -172,7 +190,7 @@ $effectiveThumb = !empty($courseImage) ? $courseImage : $fallbackThumb;
 
                         <div class="ds-order-item" style="color: var(--text-muted); font-size: 0.84rem;">
                             <span>Frete com Rastreamento Oficial</span>
-                            <span style="color: var(--accent-green); font-weight: 700;">GRÁTIS (Promoção)</span>
+                            <span id="checkout_shipping_line_val" style="color: var(--accent-green); font-weight: 700;">GRÁTIS (Padrão)</span>
                         </div>
                         <div class="ds-order-item" style="color: var(--text-muted); font-size: 0.84rem;">
                             <span>Curadoria &amp; Busca AliExpress Brasil</span>
@@ -232,8 +250,31 @@ $effectiveThumb = !empty($courseImage) ? $courseImage : $fallbackThumb;
 
             <!-- Meios de Pagamento e Entrega -->
             <div class="ds-card">
-                <h2 class="ds-card-title"><?= $isPhysicalOrDropship ? '📦 Dados de Entrega &amp; Pagamento' : '💳 Escolha a Forma de Pagamento' ?></h2>
+                <h2 class="ds-card-title"><?= $isPhysicalOrDropship ? '📦 Dados de Entrega &amp; Pagamento' : '💳 Matrícula &amp; Forma de Pagamento' ?></h2>
                 <form id="checkout_form" onsubmit="handlePaymentSubmit(event)">
+                    <input type="hidden" id="item_sku" name="sku" value="<?= htmlspecialchars((string)($_GET['sku'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                    <?php if (!$isPhysicalOrDropship): ?>
+                    <!-- Conta do Aluno na Área de Estudos (Estilo Udemy) -->
+                    <div style="background: rgba(69,243,255,0.05); border: 1px solid rgba(69,243,255,0.28); border-radius: 10px; padding: 14px 16px; margin-bottom: 18px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+                            <span style="font-size: 0.86rem; font-weight: 800; color: #45f3ff; display: inline-flex; align-items: center; gap: 6px;">
+                                <span>🎓</span> 1. Conta da Área de Estudos (Sala de Aula)
+                            </span>
+                            <a href="<?= $baseUrl ?>/aluno/login?logged_out=1&amp;redirect=<?= urlencode($baseUrl . '/checkout/curso/' . $courseId) ?>" style="font-size: 0.76rem; color: #F0D060; text-decoration: none; font-weight: 700;">
+                                🔄 Trocar de conta
+                            </a>
+                        </div>
+                        <div style="font-size: 0.85rem; color: #e2e8f0; line-height: 1.55;">
+                            <div>Aluno(a): <strong style="color: #fff;"><?= $userName ?></strong><?php if (!empty($userUsername)): ?> <span style="color: #45f3ff;">(@<?= htmlspecialchars((string)$userUsername, ENT_QUOTES, 'UTF-8') ?>)</span><?php endif; ?></div>
+                            <div>E-mail de Acesso: <strong style="color: #00d284;"><?= $userEmail ?></strong></div>
+                        </div>
+                        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 0.76rem; color: var(--text-muted); line-height: 1.4;">
+                            ✅ Assim que o pagamento for confirmado, este curso será liberado automaticamente na sua <a href="<?= $baseUrl ?>/aluno/painel" style="color: #45f3ff; font-weight: 700; text-decoration: none;">Área de Estudos</a> vinculada a esta conta.
+                        </div>
+                        <input type="hidden" id="payer_name" name="payer_name" value="<?= $userName ?>">
+                        <input type="hidden" id="payer_email" name="payer_email" value="<?= $userEmail ?>">
+                    </div>
+                    <?php endif; ?>
                     <?php if ($isPhysicalOrDropship): ?>
                     <!-- Dados do Comprador -->
                     <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
@@ -251,53 +292,110 @@ $effectiveThumb = !empty($courseImage) ? $courseImage : $fallbackThumb;
                             </div>
                             <div>
                                 <label for="payer_phone" class="ds-field-label">WhatsApp / Telefone</label>
-                                <input type="tel" id="payer_phone" name="payer_phone" placeholder="(11) 99999-9999" class="ds-field-input">
+                                <input type="tel" id="payer_phone" name="payer_phone" value="<?= !empty($savedPhone) ? $savedPhone : $userPhone ?>" inputmode="tel" maxlength="15" placeholder="(11) 99999-9999" oninput="formatPhoneInput(this)" class="ds-field-input">
                             </div>
                         </div>
                     </div>
 
                     <!-- Endereço de Entrega com ViaCEP -->
                     <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
-                        <h3 style="font-size: 0.92rem; font-weight: 700; color: #fff; margin: 0 0 12px 0; display: flex; align-items: center; gap: 8px;">
-                            <span>🚚</span> 2. Endereço de Entrega
-                        </h3>
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+                            <h3 style="font-size: 0.92rem; font-weight: 700; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px;">
+                                <span>🚚</span> 2. Endereço de Entrega
+                            </h3>
+                            <?php if ($hasSavedAddr): ?>
+                                <span style="font-size: 0.72rem; color: #6ee7b7; background: rgba(0,210,132,0.15); border: 1px solid rgba(0,210,132,0.35); padding: 2px 8px; border-radius: 99px; font-weight: 700;">
+                                    ● Endereço Salvo na Conta
+                                </span>
+                            <?php endif; ?>
+                        </div>
+
+                        <?php if ($hasSavedAddr): ?>
+                            <div style="background: rgba(0,210,132,0.08); border: 1px solid rgba(0,210,132,0.28); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-size: 0.8rem; color: #cbd5e1; line-height: 1.45;">
+                                <strong style="color: #6ee7b7;">📍 Dados preenchidos da sua conta:</strong>
+                                <div style="color: #fff; margin-top: 2px;">
+                                    <?= $savedStreet . ($savedNumber !== '' ? ', Nº ' . $savedNumber : '') . ($savedComplement !== '' ? ' (' . $savedComplement . ')' : '') ?> — <?= $savedNeighborhood ?>, <?= $savedCity ?>/<?= $savedState ?> (CEP: <?= $savedZip ?>)
+                                </div>
+                            </div>
+                        <?php endif; ?>
+
                         <div class="ds-field-group">
                             <label for="shipping_zip" class="ds-field-label">CEP (Busca automática)</label>
-                            <input type="text" id="shipping_zip" name="shipping_zip" placeholder="00000-000" maxlength="9" oninput="formatCepAndSearch(this)" class="ds-field-input ds-field-input-cep" required>
+                            <input type="text" id="shipping_zip" name="shipping_zip" value="<?= $savedZip ?>" placeholder="00000-000" maxlength="9" oninput="formatCepAndSearch(this)" class="ds-field-input ds-field-input-cep" required>
                         </div>
                         <div class="ds-field-group">
                             <label for="shipping_address" class="ds-field-label">Rua / Logradouro</label>
-                            <input type="text" id="shipping_address" name="shipping_address" placeholder="Av. / Rua..." class="ds-field-input" required>
+                            <input type="text" id="shipping_address" name="shipping_address" value="<?= $savedStreet ?>" placeholder="Av. / Rua..." class="ds-field-input" required>
                         </div>
                         <div class="ds-field-row ds-field-row-num">
                             <div>
                                 <label for="shipping_number" class="ds-field-label">Número</label>
-                                <input type="text" id="shipping_number" name="shipping_number" placeholder="123" class="ds-field-input" required>
+                                <input type="text" id="shipping_number" name="shipping_number" value="<?= $savedNumber ?>" placeholder="123" class="ds-field-input" required>
                             </div>
                             <div>
                                 <label for="shipping_complement" class="ds-field-label">Complemento</label>
-                                <input type="text" id="shipping_complement" name="shipping_complement" placeholder="Apto, Bloco..." class="ds-field-input">
+                                <input type="text" id="shipping_complement" name="shipping_complement" value="<?= $savedComplement ?>" placeholder="Apto, Bloco..." class="ds-field-input">
                             </div>
                         </div>
                         <div class="ds-field-group">
                             <label for="shipping_neighborhood" class="ds-field-label">Bairro</label>
-                            <input type="text" id="shipping_neighborhood" name="shipping_neighborhood" placeholder="Bairro" class="ds-field-input" required>
+                            <input type="text" id="shipping_neighborhood" name="shipping_neighborhood" value="<?= $savedNeighborhood ?>" placeholder="Bairro" class="ds-field-input" required>
                         </div>
                         <div class="ds-field-row ds-field-row-city">
                             <div>
                                 <label for="shipping_city" class="ds-field-label">Cidade</label>
-                                <input type="text" id="shipping_city" name="shipping_city" placeholder="Cidade" class="ds-field-input" required>
+                                <input type="text" id="shipping_city" name="shipping_city" value="<?= $savedCity ?>" placeholder="Cidade" class="ds-field-input" required>
                             </div>
                             <div>
                                 <label for="shipping_state" class="ds-field-label">UF</label>
-                                <input type="text" id="shipping_state" name="shipping_state" placeholder="SP" maxlength="2" class="ds-field-input" style="text-transform: uppercase; text-align: center;" required>
+                                <input type="text" id="shipping_state" name="shipping_state" value="<?= $savedState ?>" placeholder="SP" maxlength="2" class="ds-field-input" style="text-transform: uppercase; text-align: center;" required>
                             </div>
                         </div>
+
+                        <!-- Checkbox para Salvar Endereço na Conta -->
+                        <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed rgba(255,255,255,0.08); display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="save_address_to_account" name="save_address_to_account" value="1" checked style="width: 16px; height: 16px; cursor: pointer; accent-color: #00d284;">
+                            <label for="save_address_to_account" style="font-size: 0.8rem; color: #cbd5e1; cursor: pointer; user-select: none;">
+                                💾 Salvar/atualizar este endereço na minha conta para compras futuras
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Opções de Envio / Frete -->
+                    <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                        <h3 style="font-size: 0.92rem; font-weight: 700; color: #fff; margin: 0 0 12px 0; display: flex; align-items: center; gap: 8px;">
+                            <span>📦</span> 3. Opção de Envio
+                        </h3>
+                        <label id="label_shipping_standard" class="ds-shipping-choice" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border: 1.5px solid #00d284; border-radius: 8px; margin-bottom: 8px; cursor: pointer; background: rgba(0,210,132,0.06); transition: all 0.2s;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <input type="radio" name="shipping_method_radio" value="standard" checked onchange="if(this.checked) updateShippingMethod('standard')" style="accent-color: #00d284; transform: scale(1.15);">
+                                <div>
+                                    <div style="font-weight: 700; color: #fff; font-size: 0.88rem;">Frete Padrão com Rastreamento</div>
+                                    <div style="font-size: 0.76rem; color: #94a3b8;">Entrega em 3 a 7 dias úteis (Estoque Brasil) ou 15 a 25 dias (Internacional)</div>
+                                </div>
+                            </div>
+                            <span style="font-weight: 800; color: #00d284; font-size: 0.92rem;">GRÁTIS</span>
+                        </label>
+                        <label id="label_shipping_express" class="ds-shipping-choice" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border: 1.5px solid rgba(255,255,255,0.12); border-radius: 8px; cursor: pointer; background: rgba(255,255,255,0.02); transition: all 0.2s;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <input type="radio" name="shipping_method_radio" value="express" onchange="if(this.checked) updateShippingMethod('express')" style="accent-color: #00d284; transform: scale(1.15);">
+                                <div>
+                                    <div style="font-weight: 700; color: #fff; font-size: 0.88rem;">⚡ Envio Expresso Prioritário (Sedex)</div>
+                                    <div style="font-size: 0.76rem; color: #94a3b8;">
+                                        Despacho prioritário imediato + seguro de transporte
+                                        <span id="checkout_weight_badge" style="display: inline-block; padding: 1px 6px; border-radius: 4px; background: rgba(69,243,255,0.12); color: #45f3ff; font-weight: 600; font-size: 0.72rem; margin-left: 4px;">
+                                            <?= (int)($productWeightInGrams ?? 200) ?>g
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <span id="checkout_express_price_badge" style="font-weight: 800; color: #45f3ff; font-size: 0.92rem;">+ R$ <?= number_format($expressShippingBasePrice ?? 19.90, 2, ',', '.') ?></span>
+                        </label>
                     </div>
                     <?php endif; ?>
 
                     <h3 style="font-size: 0.92rem; font-weight: 700; color: #fff; margin: 16px 0 12px 0; display: flex; align-items: center; gap: 8px;">
-                        <span>💳</span> <?= $isPhysicalOrDropship ? '3. Meio de Pagamento' : 'Escolha a Forma de Pagamento' ?>
+                        <span>💳</span> <?= $isPhysicalOrDropship ? '4. Meio de Pagamento' : 'Escolha a Forma de Pagamento' ?>
                     </h3>
                     <?php if (!$hasMercadoPago && !$hasStripe && !$hasPayPal): ?>
                         <div style="background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #ef4444; padding: 14px 16px; border-radius: 8px; font-size: 0.9rem; margin-bottom: 16px;">
@@ -306,8 +404,8 @@ $effectiveThumb = !empty($courseImage) ? $courseImage : $fallbackThumb;
                     <?php endif; ?>
 
                     <?php if ($hasPayPal): ?>
-                    <label class="ds-method-option <?= ($coursePlatform === 'paypal' || (!$hasMercadoPago && !$hasStripe)) ? 'active' : '' ?>" onclick="selectPaymentMethod('paypal', 'paypal')">
-                        <input type="radio" name="payment_method" value="paypal" <?= ($coursePlatform === 'paypal' || (!$hasMercadoPago && !$hasStripe)) ? 'checked' : '' ?>>
+                    <label class="ds-method-option <?= ($coursePlatform === 'paypal' || (!$hasMercadoPago && !$hasStripe)) ? 'active' : '' ?>">
+                        <input type="radio" name="payment_method" value="paypal" onchange="if(this.checked) selectPaymentMethod('paypal', 'paypal')" <?= ($coursePlatform === 'paypal' || (!$hasMercadoPago && !$hasStripe)) ? 'checked' : '' ?>>
                         <div style="flex:1;">
                             <strong style="color: #fff; display: block; font-size: 0.95rem;">🅿️ PayPal (Saldo PayPal &amp; Cartão Internacional)</strong>
                             <span style="font-size: 0.8rem; color: #38bdf8;">Ambiente oficial global do PayPal com conversão de moeda e proteção ao comprador</span>
@@ -316,16 +414,16 @@ $effectiveThumb = !empty($courseImage) ? $courseImage : $fallbackThumb;
                     <?php endif; ?>
 
                     <?php if ($hasMercadoPago): ?>
-                    <label class="ds-method-option <?= ($hasMercadoPago && $coursePlatform !== 'paypal' && $coursePlatform !== 'stripe') ? 'active' : '' ?>" onclick="selectPaymentMethod('pix', 'mercadopago')">
-                        <input type="radio" name="payment_method" value="pix" <?= ($hasMercadoPago && $coursePlatform !== 'paypal' && $coursePlatform !== 'stripe') ? 'checked' : '' ?>>
+                    <label class="ds-method-option <?= ($hasMercadoPago && $coursePlatform !== 'paypal' && $coursePlatform !== 'stripe') ? 'active' : '' ?>">
+                        <input type="radio" name="payment_method" value="pix" onchange="if(this.checked) selectPaymentMethod('pix', 'mercadopago')" <?= ($hasMercadoPago && $coursePlatform !== 'paypal' && $coursePlatform !== 'stripe') ? 'checked' : '' ?>>
                         <div style="flex:1;">
                             <strong style="color: #fff; display: block; font-size: 0.95rem;">⚡ Pix Instantâneo (QR Code na Tela)</strong>
                             <span style="font-size: 0.8rem; color: var(--accent-cyan);">Aprovação em segundos e liberação imediata no seu painel</span>
                         </div>
                     </label>
 
-                    <label class="ds-method-option" onclick="selectPaymentMethod('checkout_pro', 'mercadopago')">
-                        <input type="radio" name="payment_method" value="checkout_pro">
+                    <label class="ds-method-option">
+                        <input type="radio" name="payment_method" value="checkout_pro" onchange="if(this.checked) selectPaymentMethod('checkout_pro', 'mercadopago')">
                         <div style="flex:1;">
                             <strong style="color: #fff; display: block; font-size: 0.95rem;">💳 Cartão até 12x, Dois Cartões, Boleto ou Saldo</strong>
                             <span style="font-size: 0.8rem; color: var(--text-muted);">Pague no ambiente seguro oficial do Mercado Pago com todas as opções liberadas</span>
@@ -334,8 +432,8 @@ $effectiveThumb = !empty($courseImage) ? $courseImage : $fallbackThumb;
                     <?php endif; ?>
 
                     <?php if ($hasStripe): ?>
-                    <label class="ds-method-option <?= ($coursePlatform === 'stripe' || (!$hasMercadoPago && !$hasPayPal)) ? 'active' : '' ?>" onclick="selectPaymentMethod('stripe', 'stripe')">
-                        <input type="radio" name="payment_method" value="stripe" <?= ($coursePlatform === 'stripe' || (!$hasMercadoPago && !$hasPayPal)) ? 'checked' : '' ?>>
+                    <label class="ds-method-option <?= ($coursePlatform === 'stripe' || (!$hasMercadoPago && !$hasPayPal)) ? 'active' : '' ?>">
+                        <input type="radio" name="payment_method" value="stripe" onchange="if(this.checked) selectPaymentMethod('stripe', 'stripe')" <?= ($coursePlatform === 'stripe' || (!$hasMercadoPago && !$hasPayPal)) ? 'checked' : '' ?>>
                         <div style="flex:1;">
                             <strong style="color: #fff; display: block; font-size: 0.95rem;">🌐 Cartão de Crédito Global / Apple Pay (Stripe)</strong>
                             <span style="font-size: 0.8rem; color: #c084fc;">Checkout seguro oficial do Stripe para cartões nacionais e internacionais</span>
@@ -349,7 +447,7 @@ $effectiveThumb = !empty($courseImage) ? $courseImage : $fallbackThumb;
                             <span>🆔 CPF do Pagador</span>
                             <span id="cpf_required_badge" style="color: var(--accent-cyan); font-size: 0.76rem; font-weight: 600;">(Obrigatório para Pix)</span>
                         </label>
-                        <input type="text" id="payer_cpf" name="payer_cpf" value="<?= $userCpf ?>" placeholder="000.000.000-00" maxlength="14" style="width: 100%; padding: 12px 14px; background: #06090e; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff; font-size: 1rem; font-family: monospace; outline: none; transition: border-color 0.2s;" oninput="formatCpfInput(this)">
+                        <input type="text" id="payer_cpf" name="payer_cpf" value="<?= $userCpf ?>" inputmode="numeric" placeholder="000.000.000-00" maxlength="14" style="width: 100%; padding: 12px 14px; background: #06090e; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff; font-size: 1rem; font-family: monospace; outline: none; transition: border-color 0.2s;" oninput="formatCpfInput(this)">
                         <span style="display: block; font-size: 0.76rem; color: var(--text-muted); margin-top: 6px;">
                             Exigência do Banco Central do Brasil para emissão e liquidação instantânea de Pix.
                         </span>
@@ -387,25 +485,112 @@ $effectiveThumb = !empty($courseImage) ? $courseImage : $fallbackThumb;
         var courseId = <?= (int)$courseId ?>;
         var unitPrice = <?= json_encode((float)$unitPrice) ?>;
         var currentQty = <?= (int)$quantity ?>;
+        var unitWeightInGrams = <?= (int)($productWeightInGrams ?? 200) ?>;
         var isItemRemoved = false;
         var hasAvailableGateway = <?= ($hasMercadoPago || $hasStripe || $hasPayPal) ? 'true' : 'false' ?>;
         var selectedMethod = 'pix';
+        var shippingExtraPrice = 0.0;
+        var selectedShippingMethod = 'standard';
+
+        function calcExpressShippingForQty(qty) {
+            var totalWeight = unitWeightInGrams * Math.max(1, qty);
+            if (totalWeight <= 300) return 19.90;
+            if (totalWeight <= 1000) return 29.90;
+            if (totalWeight <= 2000) return 39.90;
+            var extraKg = Math.ceil((totalWeight - 2000) / 1000);
+            return Math.round((39.90 + (extraKg * 10.00)) * 100) / 100;
+        }
+
+        function getFormattedWeightForQty(qty) {
+            var totalGrams = unitWeightInGrams * Math.max(1, qty);
+            if (totalGrams >= 1000) {
+                var kg = totalGrams / 1000;
+                return (totalGrams % 1000 === 0 ? kg.toFixed(0) : kg.toFixed(1)).replace('.', ',') + ' kg';
+            }
+            return totalGrams + 'g';
+        }
+
+        function updateShippingMethod(method) {
+            selectedShippingMethod = method;
+            var currentExpressPrice = calcExpressShippingForQty(currentQty);
+            shippingExtraPrice = (method === 'express') ? currentExpressPrice : 0.0;
+
+            var stdLabel = document.getElementById('label_shipping_standard');
+            var expLabel = document.getElementById('label_shipping_express');
+            var stdRadio = document.querySelector('input[name="shipping_method_radio"][value="standard"]');
+            var expRadio = document.querySelector('input[name="shipping_method_radio"][value="express"]');
+
+            if (method === 'express') {
+                if (expRadio) expRadio.checked = true;
+                if (expLabel) {
+                    expLabel.style.borderColor = '#45f3ff';
+                    expLabel.style.background = 'rgba(69,243,255,0.08)';
+                }
+                if (stdLabel) {
+                    stdLabel.style.borderColor = 'rgba(255,255,255,0.12)';
+                    stdLabel.style.background = 'rgba(255,255,255,0.02)';
+                }
+            } else {
+                if (stdRadio) stdRadio.checked = true;
+                if (stdLabel) {
+                    stdLabel.style.borderColor = '#00d284';
+                    stdLabel.style.background = 'rgba(0,210,132,0.06)';
+                }
+                if (expLabel) {
+                    expLabel.style.borderColor = 'rgba(255,255,255,0.12)';
+                    expLabel.style.background = 'rgba(255,255,255,0.02)';
+                }
+            }
+
+            var shippingLineVal = document.getElementById('checkout_shipping_line_val');
+            if (shippingLineVal) {
+                if (shippingExtraPrice > 0) {
+                    shippingLineVal.textContent = '+ R$ ' + formatBrlAmount(shippingExtraPrice) + ' (Sedex - ' + getFormattedWeightForQty(currentQty) + ')';
+                    shippingLineVal.style.color = '#45f3ff';
+                } else {
+                    shippingLineVal.textContent = 'GRÁTIS (Padrão)';
+                    shippingLineVal.style.color = 'var(--accent-green)';
+                }
+            }
+
+            var expBadge = document.getElementById('checkout_express_price_badge');
+            var totalGrams = unitWeightInGrams * currentQty;
+            var extraNote = '';
+            if (totalGrams > 2000) {
+                var extraKg = Math.ceil((totalGrams - 2000) / 1000);
+                extraNote = ' (+' + extraKg + 'kg extra)';
+            }
+            if (expBadge) {
+                expBadge.textContent = '+ R$ ' + formatBrlAmount(currentExpressPrice) + extraNote;
+            }
+            var weightBadge = document.getElementById('checkout_weight_badge');
+            if (weightBadge) {
+                if (currentQty > 1) {
+                    weightBadge.textContent = currentQty + 'x ' + unitWeightInGrams + 'g (' + getFormattedWeightForQty(currentQty) + ')';
+                } else {
+                    weightBadge.textContent = getFormattedWeightForQty(currentQty);
+                }
+            }
+
+            updateOrderTotalsUI();
+        }
 
         function formatBrlAmount(val) {
             return Number(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
 
         function getCurrentFormattedTotal() {
-            return formatBrlAmount(unitPrice * currentQty);
+            return formatBrlAmount((unitPrice * currentQty) + shippingExtraPrice);
         }
 
         function updateOrderTotalsUI() {
             var formatted = getCurrentFormattedTotal();
+            var subtotalFormatted = formatBrlAmount(unitPrice * currentQty);
             var qtyEl = document.getElementById('checkout_qty_display');
             var subEl = document.getElementById('checkout_subtotal_val');
             var totEl = document.getElementById('checkout_total_val');
             if (qtyEl) qtyEl.textContent = String(currentQty);
-            if (subEl) subEl.textContent = 'R$ ' + formatted;
+            if (subEl) subEl.textContent = 'R$ ' + subtotalFormatted;
             if (totEl) totEl.textContent = 'R$ ' + formatted;
             selectPaymentMethod(selectedMethod, selectedGateway);
         }
@@ -419,7 +604,11 @@ $effectiveThumb = !empty($courseImage) ? $courseImage : $fallbackThumb;
             }
             if (nextQty > 99) nextQty = 99;
             currentQty = nextQty;
-            updateOrderTotalsUI();
+            if (selectedShippingMethod === 'express') {
+                updateShippingMethod('express');
+            } else {
+                updateShippingMethod('standard');
+            }
         }
 
         function removeCheckoutItem() {
@@ -468,6 +657,21 @@ $effectiveThumb = !empty($courseImage) ? $courseImage : $fallbackThumb;
                 el.value = v.replace(/(\d{3})(\d{1,3})/, '$1.$2');
             } else {
                 el.value = v;
+            }
+        }
+
+        function formatPhoneInput(el) {
+            var v = el.value.replace(/\D/g, '').slice(0, 11);
+            if (v.length > 10) {
+                el.value = v.replace(/(\d{2})(\d{5})(\d{1,4})/, '($1) $2-$3');
+            } else if (v.length > 6) {
+                el.value = v.replace(/(\d{2})(\d{4})(\d{1,4})/, '($1) $2-$3');
+            } else if (v.length > 2) {
+                el.value = v.replace(/(\d{2})(\d{1,5})/, '($1) $2');
+            } else if (v.length > 0) {
+                el.value = '(' + v;
+            } else {
+                el.value = '';
             }
         }
 
@@ -537,6 +741,23 @@ $effectiveThumb = !empty($courseImage) ? $courseImage : $fallbackThumb;
             var cpfEl = document.getElementById('payer_cpf');
             if (cpfEl && cpfEl.value) {
                 formatCpfInput(cpfEl);
+            }
+            var phoneEl = document.getElementById('payer_phone');
+            if (phoneEl && phoneEl.value) {
+                formatPhoneInput(phoneEl);
+            }
+
+            // Pré-carrega o CEP se foi passado na URL ou salvo no simulador da página do produto (caso o campo ainda esteja vazio)
+            var zipInput = document.getElementById('shipping_zip');
+            var urlCep = <?= json_encode((string)($_GET['shipping_zip'] ?? '')) ?>;
+            try {
+                if (!urlCep) {
+                    urlCep = localStorage.getItem('rachidd_user_shipping_cep') || '';
+                }
+            } catch(e) {}
+            if (zipInput && (!zipInput.value.trim() || <?= json_encode(!empty($_GET['shipping_zip'])) ?>) && urlCep) {
+                zipInput.value = urlCep;
+                formatCepAndSearch(zipInput);
             }
             <?php if ($hasPayPal && ($coursePlatform === 'paypal' || (!$hasMercadoPago && !$hasStripe))): ?>
             selectPaymentMethod('paypal', 'paypal');
@@ -650,12 +871,14 @@ $effectiveThumb = !empty($courseImage) ? $courseImage : $fallbackThumb;
             var payload = {
                 csrf_token: csrfToken,
                 course_id: courseId,
+                item_type: <?= json_encode((string)($course['type'] ?? ($isPhysicalOrDropship ? 'dropship_product' : 'course'))) ?>,
+                sku: document.getElementById('item_sku') ? document.getElementById('item_sku').value : '',
                 quantity: currentQty,
                 gateway: gateway,
                 payment_method: selectedMethod,
                 payer_cpf: rawCpf,
-                payer_name: payerNameEl ? payerNameEl.value.trim() : '',
-                payer_email: payerEmailEl ? payerEmailEl.value.trim() : '',
+                payer_name: (payerNameEl && payerNameEl.value.trim()) ? payerNameEl.value.trim() : <?= json_encode(html_entity_decode($userName, ENT_QUOTES, 'UTF-8'), JSON_UNESCAPED_UNICODE) ?>,
+                payer_email: (payerEmailEl && payerEmailEl.value.trim()) ? payerEmailEl.value.trim() : <?= json_encode(html_entity_decode($userEmail, ENT_QUOTES, 'UTF-8'), JSON_UNESCAPED_UNICODE) ?>,
                 payer_phone: payerPhoneEl ? payerPhoneEl.value.trim() : '',
                 shipping_zip: shipZipEl ? shipZipEl.value.trim() : '',
                 shipping_address: shipAddrEl ? shipAddrEl.value.trim() : '',
@@ -663,7 +886,10 @@ $effectiveThumb = !empty($courseImage) ? $courseImage : $fallbackThumb;
                 shipping_complement: shipCompEl ? shipCompEl.value.trim() : '',
                 shipping_neighborhood: shipNeighEl ? shipNeighEl.value.trim() : '',
                 shipping_city: shipCityEl ? shipCityEl.value.trim() : '',
-                shipping_state: shipStateEl ? shipStateEl.value.trim() : ''
+                shipping_state: shipStateEl ? shipStateEl.value.trim() : '',
+                shipping_method: selectedShippingMethod,
+                shipping_price: shippingExtraPrice,
+                save_address_to_account: document.getElementById('save_address_to_account') ? document.getElementById('save_address_to_account').checked : true
             };
 
             fetch(baseUrl + '/checkout/process', {
@@ -703,7 +929,13 @@ $effectiveThumb = !empty($courseImage) ? $courseImage : $fallbackThumb;
                         document.getElementById('pix_copia_cola_text').value = data.pix_copia_e_cola;
                         
                         var qrImgUrl = data.pix_qr_code || ('https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=' + encodeURIComponent(data.pix_copia_e_cola));
-                        document.getElementById('pix_qr_image_wrap').innerHTML = '<img src="' + qrImgUrl + '" alt="QR Code Pix" style="max-width:210px; border-radius:10px; border:2px solid rgba(69,243,255,0.4); padding:8px; background:#fff; box-shadow:0 6px 20px rgba(0,0,0,0.5); display:inline-block;">';
+                        var qrWrap = document.getElementById('pix_qr_image_wrap');
+                        qrWrap.innerHTML = '';
+                        var qrImg = document.createElement('img');
+                        qrImg.src = qrImgUrl;
+                        qrImg.alt = 'QR Code Pix';
+                        qrImg.style.cssText = 'max-width:210px; border-radius:10px; border:2px solid rgba(69,243,255,0.4); padding:8px; background:#fff; box-shadow:0 6px 20px rgba(0,0,0,0.5); display:inline-block;';
+                        qrWrap.appendChild(qrImg);
                         
                         box.scrollIntoView({ behavior: 'smooth' });
                         if (data.order_ref) {
