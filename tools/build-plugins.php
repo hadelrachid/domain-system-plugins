@@ -96,7 +96,7 @@ foreach ($entries as $entry) {
             continue;
         }
 
-        $zip->addFile($filePath, $relativeName);
+        $zip->addFile($filePath, $slug . '/' . $relativeName);
     }
 
     $zip->close();
