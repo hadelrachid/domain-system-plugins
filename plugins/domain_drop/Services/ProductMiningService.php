@@ -16,6 +16,7 @@ use DomainSystem\Plugins\domain_drop\DTO\DropshipProductDto;
 use DomainSystem\Plugins\domain_drop\DTO\ScrapedProductDto;
 use DomainSystem\Plugins\domain_drop\Services\CategoryTaxonomyService;
 use DomainSystem\Plugins\domain_drop\Services\CuratedCatalogProvider;
+use DomainSystem\Plugins\domain_drop\Services\Validation\MiningValidationHub;
 use RuntimeException;
 use Throwable;
 
@@ -42,6 +43,7 @@ class ProductMiningService implements ProductMiningServiceInterface
     private ?string $configFilePath;
     private ?\DomainSystem\Plugins\domain_drop\Contracts\DemandMetricsRepositoryInterface $demandMetricsRepo;
     private CuratedCatalogProviderInterface $catalogProvider;
+    private MiningValidationHub $validationHub;
 
     public function __construct(
         private readonly AliExpressApiClientInterface $apiClient,
@@ -52,13 +54,20 @@ class ProductMiningService implements ProductMiningServiceInterface
         ?string $configFilePath = null,
         ?\DomainSystem\Plugins\domain_drop\Contracts\DemandMetricsRepositoryInterface $demandMetricsRepo = null,
         ?CategoryTaxonomyInterface $taxonomy = null,
-        ?CuratedCatalogProviderInterface $catalogProvider = null
+        ?CuratedCatalogProviderInterface $catalogProvider = null,
+        ?MiningValidationHub $validationHub = null
     ) {
         $this->taxonomy = $taxonomy ?? new CategoryTaxonomyService();
         $this->linkScraper = $linkScraper ?? new AliExpressLinkScraperService($this->taxonomy);
         $this->configFilePath = $configFilePath;
         $this->demandMetricsRepo = $demandMetricsRepo;
         $this->catalogProvider = $catalogProvider ?? new CuratedCatalogProvider();
+        $this->validationHub = $validationHub ?? new MiningValidationHub();
+    }
+
+    public function getValidationHub(): MiningValidationHub
+    {
+        return $this->validationHub;
     }
 
     /**
@@ -134,6 +143,17 @@ class ProductMiningService implements ProductMiningServiceInterface
             $rawProducts = $this->getCuratedTrendingFallback($category, $limit, $sort);
         } else {
             $rawProducts = self::scoreAndSortByReputation($rawProducts, $sort, 4.5, 50, $limit);
+        }
+
+        // Ingestão no Container e Execução do Pipeline de Validação Contratual (Elimina 404s, Preços Isca e Restrições)
+        $validatedBatch = $this->validationHub->ingestAndValidateBatch($rawProducts);
+        $rawProducts = array_values($validatedBatch['valid_items']);
+
+        // Se todos os produtos externos falharem na validação, ativa o pool curado oficial verificado
+        if (empty($rawProducts)) {
+            $curatedFallback = $this->getCuratedTrendingFallback($category, $limit, $sort);
+            $validatedCurated = $this->validationHub->ingestAndValidateBatch($curatedFallback);
+            $rawProducts = array_values($validatedCurated['valid_items']);
         }
 
         $mined = [];
@@ -292,6 +312,14 @@ class ProductMiningService implements ProductMiningServiceInterface
             ?? ($initData['mods']['itemList']['content'] ?? []);
 
         if (empty($itemList) || !is_array($itemList)) {
+            return [];
+        }
+
+        // Ingestão no Container e Validação Contratual dos itens obtidos ao vivo
+        $validatedLiveBatch = $this->validationHub->ingestAndValidateBatch($itemList);
+        $itemList = array_values($validatedLiveBatch['valid_items']);
+
+        if (empty($itemList)) {
             return [];
         }
 
