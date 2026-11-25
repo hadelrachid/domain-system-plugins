@@ -118,16 +118,20 @@ class CurrencyConverterService implements CurrencyConverterInterface
 
         $rate = $this->getExchangeRate('USD', 'BRL');
         $rawCostBrl = $costUsd * $rate;
-        $effectiveCostBrl = $volatilityPercent > 0.0 ? $this->applyVolatilityBuffer($rawCostBrl, $volatilityPercent) : $rawCostBrl;
-
         $markup = $customMarkupPercent ?? $this->defaultMarkupPercent;
-        $minProfit = $minProfitBrl ?? $this->minProfitBrl;
+        if ($markup <= 0.0 && $volatilityPercent <= 0.0) {
+            return round($rawCostBrl, 2);
+        }
+
+        $effectiveCostBrl = $volatilityPercent > 0.0 ? $this->applyVolatilityBuffer($rawCostBrl, $volatilityPercent) : $rawCostBrl;
+        $configuredMinProfit = $minProfitBrl ?? $this->minProfitBrl;
 
         // Calcula com o markup sobre o custo corrigido pela volatilidade
         $calculatedSalePrice = $effectiveCostBrl * (1 + ($markup / 100.0));
 
-        // Assegura que o lucro líquido em Reais seja no mínimo o configurado
+        // Assegura piso mínimo
         $profit = $calculatedSalePrice - $rawCostBrl;
+        $minProfit = $minProfitBrl ?? $this->minProfitBrl;
         if ($profit < $minProfit) {
             $calculatedSalePrice = $rawCostBrl + $minProfit;
         }
@@ -148,13 +152,18 @@ class CurrencyConverterService implements CurrencyConverterInterface
         }
 
         $markup = $customMarkupPercent ?? $this->defaultMarkupPercent;
+        if ($markup <= 0.0 && $volatilityPercent <= 0.0) {
+            return round($costBrl, 2);
+        }
+
         $effectiveCostBrl = $volatilityPercent > 0.0 ? $this->applyVolatilityBuffer($costBrl, $volatilityPercent) : $costBrl;
         $calculatedSalePrice = $effectiveCostBrl * (1 + ($markup / 100.0));
 
-        // Assegura piso mínimo
+        // Assegura piso mínimo proporcional (evita distorcer produtos de baixo custo)
         $profit = $calculatedSalePrice - $costBrl;
-        if ($profit < $this->minProfitBrl) {
-            $calculatedSalePrice = $costBrl + $this->minProfitBrl;
+        $proportionalMinProfit = min($this->minProfitBrl, max(2.0, round($costBrl * 0.25, 2)));
+        if ($profit < $proportionalMinProfit && $markup > 0.0) {
+            $calculatedSalePrice = $costBrl + $proportionalMinProfit;
         }
 
         return round($calculatedSalePrice, 2);

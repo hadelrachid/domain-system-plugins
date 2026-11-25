@@ -204,7 +204,7 @@ class AliExpressApiClient implements AliExpressApiClientInterface
             'sortBy'      => $mappedSort,
             'pageSize'    => (string)($filters['page_size'] ?? ($filters['pageSize'] ?? '20')),
             'pageIndex'   => (string)($filters['page_index'] ?? ($filters['pageIndex'] ?? ($filters['page_no'] ?? '1'))),
-            'currency'    => (string)($filters['currency'] ?? 'USD'),
+            'currency'    => (string)($filters['currency'] ?? 'BRL'),
         ];
 
         $keyword = trim((string)($filters['keyWord'] ?? ($filters['keyword'] ?? ($filters['query'] ?? ($filters['key_word'] ?? '')))));
@@ -222,8 +222,19 @@ class AliExpressApiClient implements AliExpressApiClientInterface
             $this->lastError = null;
             return $response;
         } catch (Throwable $e) {
-            $this->lastError = $e->getMessage();
-            error_log("[AliExpressApiClient] textSearch falhou: " . $e->getMessage());
+            // Se falhar com token de sessão inválido, tenta sem token (aliexpress.ds.text.search é público no dropshiper.docx)
+            if ($this->accessToken !== null && $this->accessToken !== '') {
+                try {
+                    $response = $this->execute('aliexpress.ds.text.search', $params, null);
+                    $this->lastError = null;
+                    return $response;
+                } catch (Throwable $e2) {
+                    $this->lastError = $e2->getMessage();
+                }
+            } else {
+                $this->lastError = $e->getMessage();
+            }
+            error_log("[AliExpressApiClient] textSearch falhou: " . $this->lastError);
             return [];
         }
     }
@@ -334,7 +345,7 @@ class AliExpressApiClient implements AliExpressApiClientInterface
                     $pId = (string)($p['itemId'] ?? ($p['item_id'] ?? ($p['product_id'] ?? ($p['productId'] ?? ''))));
                     if ($pId !== '' && is_numeric($pId)) {
                         try {
-                            $details = $this->getProductDetails($pId, 'pt', 'USD');
+                            $details = $this->getProductDetails($pId, 'pt', 'BRL');
                             $unwrappedDetails = \DomainSystem\Plugins\domain_drop\ValueObjects\AliExpressToken::unwrapPayload($details);
                             $productData = $unwrappedDetails['result'] ?? ($details['result'] ?? $unwrappedDetails);
                             if (!empty($productData) && is_array($productData) && (isset($productData['ae_item_base_info_dto']) || isset($productData['ae_multimedia_info_dto']))) {
@@ -368,7 +379,7 @@ class AliExpressApiClient implements AliExpressApiClientInterface
             $feedProducts = [];
             foreach (array_slice($feedRes['products'], 0, $pageSize) as $pId) {
                 try {
-                    $details = $this->getProductDetails((string)$pId, 'pt', 'USD');
+                    $details = $this->getProductDetails((string)$pId, 'pt', 'BRL');
                     $unwrappedDetails = \DomainSystem\Plugins\domain_drop\ValueObjects\AliExpressToken::unwrapPayload($details);
                     $productData = $unwrappedDetails['result'] ?? ($details['result'] ?? $unwrappedDetails);
                     if (!empty($productData) && is_array($productData)) {
@@ -383,44 +394,7 @@ class AliExpressApiClient implements AliExpressApiClientInterface
             }
         }
 
-        $sort = (string)($filters['sort'] ?? 'volume_desc');
-        $mappedSort = match ($sort) {
-            'evaluate_rate_desc', 'rating' => 'DSRratingDesc',
-            'price_asc'                    => 'priceAsc',
-            'price_desc'                   => 'priceDesc',
-            default                        => 'volumeDesc',
-        };
-
-        $params = [
-            'feed_name'       => (string)($filters['feed_name'] ?? 'DS bestseller'),
-            'target_language' => 'pt',
-            'target_currency' => 'USD',
-            'country'         => (string)($filters['country'] ?? ($filters['ship_to_country'] ?? 'BR')),
-            'page_size'       => (string)($filters['page_size'] ?? '20'),
-            'page_no'         => (string)($filters['page_no'] ?? '1'),
-            'sort'            => $mappedSort,
-        ];
-
-        if (!empty($filters['category_id'])) {
-            $params['category_id'] = (string)$filters['category_id'];
-        }
-
-        try {
-            $response = $this->execute('aliexpress.ds.recommend.feed.get', $params, $this->accessToken);
-            $this->lastError = null;
-        } catch (Throwable $e) {
-            $this->lastError = $e->getMessage();
-            error_log("[AliExpressApiClient] searchProducts falhou: " . $e->getMessage());
-            return [];
-        }
-
-        // Normaliza diferentes formatos de payload do IOP SDK (feed ou busca de produtos)
-        $products = $response['result']['products']['traffic_product_d_t_o']
-            ?? ($response['result']['products']['product'] ?? null)
-            ?? ($response['aliexpress_ds_recommend_feed_get_response']['result']['products']['traffic_product_d_t_o'] ?? null)
-            ?? ($response['aliexpress_ds_recommend_feed_get_response']['result']['products'] ?? []);
-
-        return is_array($products) ? $products : [];
+        return [];
     }
 
     public function queryTrackingInfo(

@@ -21,11 +21,11 @@ final class PricingConfigUpdater
     public function updateFromRequest(array $config, Request $request): array
     {
         if ($request->input('default_markup_percent') !== null) {
-            $config['default_markup_percent'] = max(10.0, (float)$request->input('default_markup_percent', 100.0));
+            $config['default_markup_percent'] = max(0.0, (float)$request->input('default_markup_percent', 30.0));
         }
 
         if ($request->input('min_profit_margin_brl') !== null) {
-            $config['min_profit_margin_brl'] = max(0.0, (float)$request->input('min_profit_margin_brl', 30.0));
+            $config['min_profit_margin_brl'] = max(0.0, (float)$request->input('min_profit_margin_brl', 10.0));
         }
 
         if ($request->input('price_sync_interval_hours') !== null) {

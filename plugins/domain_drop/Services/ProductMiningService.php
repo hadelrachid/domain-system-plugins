@@ -99,7 +99,7 @@ class ProductMiningService implements ProductMiningServiceInterface
                     'local'             => 'pt_BR',
                     'country_code'      => 'BR',
                     'country'           => 'BR',
-                    'currency'          => 'USD',
+                    'currency'          => 'BRL',
                     'ship_from_country' => 'BR',
                     'ship_to_country'   => 'BR',
                 ]);
@@ -115,6 +115,18 @@ class ProductMiningService implements ProductMiningServiceInterface
             }
         } catch (Throwable $e) {
             $rawProducts = [];
+        }
+
+        // Se a API remota oficial não estiver conectada ou retornar vazio, busca em tempo real na vitrine do AliExpress Brasil
+        if (empty($rawProducts)) {
+            try {
+                $liveMined = $this->mineLiveFromAliExpressSearch($category, $limit, $autoPersist);
+                if (!empty($liveMined)) {
+                    return $liveMined;
+                }
+            } catch (Throwable $e) {
+                // Silencia para fallback de catálogo curado oficial
+            }
         }
 
         // Se a API remota oficial não estiver conectada (ou em modo Test), utiliza catálogo curado e verificado
@@ -335,9 +347,12 @@ class ProductMiningService implements ProductMiningServiceInterface
                 // Precificação oficial em BRL e conversão limpa para USD de custo
                 $minPriceBrl = (float)($raw['prices']['salePrice']['minPrice'] ?? ($raw['prices']['originalPrice']['minPrice'] ?? 0.0));
                 $costPriceUsd = $minPriceBrl > 0.0 ? round($minPriceBrl / $usdRate, 2) : 12.00;
+                $config = $this->loadConfig();
+                $markup = isset($config['default_markup_percent']) ? (float)$config['default_markup_percent'] : 30.0;
+                $volatility = isset($config['default_volatility_percent']) ? (float)$config['default_volatility_percent'] : 0.0;
                 $salePriceBrl = $minPriceBrl > 0.0
-                    ? $this->currencyConverter->calculateSalePriceFromBrl($minPriceBrl, 100.0)
-                    : $this->currencyConverter->calculateSalePrice($costPriceUsd, 100.0);
+                    ? $this->currencyConverter->calculateSalePriceFromBrl($minPriceBrl, $markup, $volatility)
+                    : $this->currencyConverter->calculateSalePrice($costPriceUsd, $markup, null, $volatility);
 
                 // Avaliações e Métricas reais de compra
                 $rating = (float)($raw['evaluation']['starRating'] ?? 4.8);
@@ -654,9 +669,12 @@ class ProductMiningService implements ProductMiningServiceInterface
         $polishedTitle = $this->aiEnricher->polishTitle($scraped->rawTitle, $category);
         $slug = $this->slugify($polishedTitle . '-' . substr($scraped->sourceId, -4));
         $costBrl = !empty($scraped->attributes['cost_price_brl']) ? (float)$scraped->attributes['cost_price_brl'] : 0.0;
+        $config = $this->loadConfig();
+        $markup = isset($config['default_markup_percent']) ? (float)$config['default_markup_percent'] : 30.0;
+        $volatility = isset($config['default_volatility_percent']) ? (float)$config['default_volatility_percent'] : 0.0;
         $salePriceBrl = $costBrl > 0.0
-            ? $this->currencyConverter->calculateSalePriceFromBrl($costBrl, 100.0)
-            : $this->currencyConverter->calculateSalePrice($scraped->costPriceUsd, 100.0);
+            ? $this->currencyConverter->calculateSalePriceFromBrl($costBrl, $markup, $volatility)
+            : $this->currencyConverter->calculateSalePrice($scraped->costPriceUsd, $markup, null, $volatility);
         $salesCopy = $this->aiEnricher->generateSalesCopy(
             "Produto importado oficial de alta durabilidade com compatibilidade e acabamento premium.",
             $scraped->attributes
@@ -831,7 +849,14 @@ class ProductMiningService implements ProductMiningServiceInterface
         }
 
         $costBrl = (float)($item['cost_price_brl'] ?? 0.0);
-        $costPriceUsd = (float)(
+        $rawCurrency = strtoupper((string)(
+            $item['salePriceCurrency']
+            ?? ($item['target_sale_price_currency']
+            ?? ($item['currency']
+            ?? ($item['currency_code'] ?? '')))
+        ));
+
+        $candidatePrice = (float)(
             $item['targetSalePrice']
             ?? ($item['salePrice']
             ?? ($item['target_sale_price']
@@ -841,11 +866,21 @@ class ProductMiningService implements ProductMiningServiceInterface
             ?? ($item['originalPrice']
             ?? ($item['original_price'] ?? 10.0)))))))
         );
+
+        if ($costBrl <= 0.0 && ($rawCurrency === 'BRL' || $rawCurrency === 'R$')) {
+            $costBrl = $candidatePrice;
+        }
+
+        $config = $this->loadConfig();
+        $markup = isset($config['default_markup_percent']) ? (float)$config['default_markup_percent'] : 30.0;
+        $volatility = isset($config['default_volatility_percent']) ? (float)$config['default_volatility_percent'] : 0.0;
+
         if ($costBrl > 0.0) {
-            $salePriceBrl = $this->currencyConverter->calculateSalePriceFromBrl($costBrl, 100.0);
+            $salePriceBrl = $this->currencyConverter->calculateSalePriceFromBrl($costBrl, $markup, $volatility);
             $costPriceUsd = round($costBrl / 5.75, 2);
         } else {
-            $salePriceBrl = $this->currencyConverter->calculateSalePrice($costPriceUsd, 100.0);
+            $costPriceUsd = $candidatePrice > 0.0 ? $candidatePrice : 10.0;
+            $salePriceBrl = $this->currencyConverter->calculateSalePrice($costPriceUsd, $markup, null, $volatility);
         }
 
         // 4. Métricas e Atributos de Curadoria
@@ -951,8 +986,8 @@ class ProductMiningService implements ProductMiningServiceInterface
                 $skuPriceUsd = (float)($sku['offer_sale_price'] ?? ($sku['sku_price'] ?? $costPriceUsd));
                 $skuCostBrl = (float)($sku['cost_price_brl'] ?? 0.0);
                 $skuPriceBrl = $skuCostBrl > 0.0
-                    ? $this->currencyConverter->calculateSalePriceFromBrl($skuCostBrl, 100.0)
-                    : $this->currencyConverter->calculateSalePrice($skuPriceUsd, 100.0);
+                    ? $this->currencyConverter->calculateSalePriceFromBrl($skuCostBrl, $markup, $volatility)
+                    : $this->currencyConverter->calculateSalePrice($skuPriceUsd, $markup, null, $volatility);
                 $skuRawImg = !empty($sku['sku_image']) ? $sku['sku_image'] : (!empty($sku['sku_image_url']) ? $sku['sku_image_url'] : '');
                 $skuImage = !empty($skuRawImg) ? $this->cleanImageUrl((string)$skuRawImg) : $mainImage;
                 $skuStock = (int)($sku['sku_available_stock'] ?? ($sku['sku_stock'] ?? 100));
@@ -1141,121 +1176,21 @@ class ProductMiningService implements ProductMiningServiceInterface
      */
     private function expandCategoryPoolToLimit(array $pool, string $normalizedCat, int $limit): array
     {
-        $existingTitles = array_column($pool, 'product_title');
-        $catalogPatterns = [
-            'Eletrônicos & Gadget' => [
-                ['Smartwatch Series 9 Ultra AMOLED 49mm GPS Titânio', 28.50, 'https://ae-pic-a1.aliexpress-media.com/kf/A6528ac8364bb4be08857064c2e00cf33v.jpg', '4.9', 9200, ['Resistência' => 'IP68', 'Bateria' => '7 dias', 'Bluetooth' => '5.3']],
-                ['Fone de Ouvido TWS Bluetooth 5.4 Gamer Baixa Latência LED RGB', 11.80, 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=800&auto=format&fit=crop&q=80', '4.8', 14200, ['ANC' => '35dB', 'Bateria' => '30h', 'Bluetooth' => '5.4']],
-                ['Caixa de Som Bluetooth Potente Portátil À Prova D\'água Graves Extra', 26.90, 'https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=800&auto=format&fit=crop&q=80', '4.9', 7800, ['Potência' => '30W RMS', 'Bateria' => '12h', 'Resistência' => 'IPX7']],
-                ['Headphone Bluetooth Over-Ear Cancelamento de Ruído ANC Bateria 60h', 36.50, 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80', '4.9', 5400, ['ANC' => '40dB', 'Autonomia' => '60h', 'Conexão' => 'Bluetooth 5.3 + P2']],
-                ['Carregador GaN Turbo 65W 3 Portas USB-C PD para Notebook e Celular', 15.20, 'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=800&auto=format&fit=crop&q=80', '5.0', 16100, ['Potência' => '65W Max', 'Tecnologia' => 'GaN III Fast', 'Bivolt' => '100-240V']],
-                ['Mini Câmera de Segurança Wi-Fi 360 Graus Visão Noturna Infravermelho Full HD', 18.90, 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80', '4.8', 8900, ['Resolução' => '1080p FHD', 'Áudio' => 'Bidirecional', 'App' => 'iOS/Android']],
-                ['Power Bank Magnético MagSafe 10000mAh Carregamento Sem Fio por Indução', 21.50, 'https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=800&auto=format&fit=crop&q=80', '4.9', 11400, ['Capacidade' => '10000mAh', 'Indução' => '15W Fast', 'Cabo' => 'USB-C 20W']],
-                ['Adaptador Hub USB-C 8 em 1 HDMI 4K Gigabit Ethernet Leitor SD PD 100W', 22.80, 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800&auto=format&fit=crop&q=80', '4.9', 6200, ['Saída' => 'HDMI 4K@60Hz', 'Rede' => 'RJ45 1000Mbps', 'Portas' => '3x USB 3.0']],
-                ['Fone Condução Óssea Esportivo À Prova de Suor Corrida Academia', 16.50, 'https://images.unsplash.com/photo-1546435770-a3e426bf472b?w=800&auto=format&fit=crop&q=80', '4.8', 7900, ['Tecnologia' => 'Condução Óssea', 'Resistência' => 'IP67', 'Bateria' => '8h']],
-                ['Microfone de Lapela Sem Fio Duplo Plug and Play para Celular Vídeos e Lives', 17.00, 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=800&auto=format&fit=crop&q=80', '4.9', 9300, ['Alcance' => '20m sem barreiras', 'Latência' => '0.009s', 'Conector' => 'Type-C/Lightning']],
-                ['Luminária Barra de LED para Monitor Computador RGB Controle Touch Screen', 23.50, 'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?w=800&auto=format&fit=crop&q=80', '5.0', 6500, ['Iluminação' => 'RGB + Luz Quente/Fria', 'Fixação' => 'Gravação Anti-Reflexo', 'Alimentação' => 'USB 5V']],
-                ['Mouse Sem Fio Ergonômico Vertical Recarregável 6 Botões Silencioso', 13.90, 'https://images.unsplash.com/photo-1615663245857-ac93bb7c39e7?w=800&auto=format&fit=crop&q=80', '4.9', 8100, ['DPI' => '800-1600-2400', 'Ergonomia' => 'Postural Anti-LER', 'Conexão' => '2.4GHz + BT 5.0']],
-            ],
-            'Casa Inteligente & Organização' => [
-                ['Lâmpada LED Inteligente Wi-Fi RGB 15W Bivolt Compatível Alexa Google', 6.50, 'https://images.unsplash.com/photo-1550985616-10810253b84d?w=800&auto=format&fit=crop&q=80', '4.9', 15400, ['Potência' => '15W Bivolt', 'Conexão' => 'Wi-Fi 2.4GHz', 'Cores' => '16 Milhões RGB']],
-                ['Tomada Inteligente Wi-Fi 16A com Monitoramento de Consumo de Energia', 7.80, 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800&auto=format&fit=crop&q=80', '4.8', 13200, ['Corrente' => '16A Máx', 'App' => 'Smart Life / Tuya', 'Controle' => 'Voz Alexa/Google']],
-                ['Fita LED Inteligente RGB 5m Wi-Fi Sincronização Musical App Celular', 11.20, 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&auto=format&fit=crop&q=80', '4.9', 11500, ['Comprimento' => '5 Metros', 'Controle' => 'App + Controle Remoto', 'Efeitos' => 'Sincronia com Música']],
-                ['Dispensador Automático de Sabonete Líquido Espuma Sensor Infravermelho', 12.50, 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=800&auto=format&fit=crop&q=80', '4.8', 8400, ['Capacidade' => '350ml', 'Sensor' => 'Infravermelho 0.25s', 'Alimentação' => 'Bateria Recarregável USB']],
-                ['Aspirador de Pó Robô Inteligente Varre Aspira e Passa Pano Sensor Anti-Queda', 42.00, 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&auto=format&fit=crop&q=80', '4.9', 4600, ['Funções' => '3 em 1 (Varre, Aspira, Pano)', 'Sensores' => 'Anti-colisão e Anti-queda', 'Bateria' => '90min contínuos']],
-                ['Organizador Giratório 360 Graus para Temperos Cosméticos e Despensa', 13.90, 'https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=800&auto=format&fit=crop&q=80', '4.9', 7300, ['Material' => 'Acrílico Reforçado', 'Rotação' => '360 Graus Suave', 'Bordas' => 'Anti-queda']],
-                ['Termômetro e Higrômetro Digital Bluetooth com Tela LCD Ambientes', 5.80, 'https://images.unsplash.com/photo-1563770660941-20978e870e26?w=800&auto=format&fit=crop&q=80', '5.0', 16500, ['Display' => 'LCD Alta Precisão', 'Conexão' => 'Bluetooth Low Energy', 'Histórico' => 'App Tuya']],
-            ],
-            'Beleza, Cuidados & Estilo' => [
-                ['Escova Secadora Modeladora Alisadora Multifuncional 3 em 1 Bivolt', 19.80, 'https://ae-pic-a1.aliexpress-media.com/kf/S1b35ffbb765b4c10a16c4e03bc1fc9b1m.jpg', '4.9', 14800, ['Potência' => '1200W', 'Revestimento' => 'Cerâmica e Turmalina', 'Temperaturas' => '3 Níveis']],
-                ['Depilador a Laser Luz Pulsada IPL Indolor com 999.000 Disparos', 38.00, 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=800&auto=format&fit=crop&q=80', '4.9', 6100, ['Disparos' => '999.000 Flashes', 'Tecnologia' => 'IPL Rejuvenescimento', 'Ajustes' => '5 Intensidades']],
-                ['Modelador de Cachos Automático Sem Fio Cerâmica Display Digital LCD', 24.50, 'https://images.unsplash.com/photo-1527799820374-dcf8d9d4a388?w=800&auto=format&fit=crop&q=80', '4.8', 8200, ['Bateria' => 'Recarregável 5200mAh', 'Câmara' => 'Isolamento Térmico Anti-Queimadura', 'Sentido' => 'Esquerda/Direita']],
-                ['Kit Pincéis de Maquiagem Profissional 14 Peças Cerdas Macias Estojo Couro', 11.50, 'https://images.unsplash.com/photo-1512496015851-a90fb38ba796?w=800&auto=format&fit=crop&q=80', '4.9', 12300, ['Peças' => '14 Pincéis Profissionais', 'Cerdas' => 'Sintéticas Ultra Macias', 'Estojo' => 'Couro Sintético']],
-                ['Massageador Facial Elétrico Gua Sha Lifting Microcorrentes e LED Terapia', 16.90, 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=800&auto=format&fit=crop&q=80', '5.0', 7900, ['Tecnologia' => 'Microcorrentes EMS', 'LED' => 'Luz Vermelha e Azul', 'Modos' => 'Aquecimento 45°C']],
-            ],
-            'Ferramentas & Utilidades' => [
-                ['Parafusadeira Furadeira Sem Fio Bateria 12V com Kit 24 Peças Maleta', 29.50, 'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=800&auto=format&fit=crop&q=80', '4.9', 8500, ['Voltagem' => '12V Íon-Lítio', 'Mandril' => 'Aperto Rápido 10mm', 'Acessórios' => 'Bits, Brocas e Maleta']],
-                ['Alicate Desencapador de Fios Automático Multifuncional Ajuste de Pressão', 12.00, 'https://images.unsplash.com/photo-1581783342308-f792dbdd27c5?w=800&auto=format&fit=crop&q=80', '4.9', 11200, ['Capacidade' => 'Cabos 0.2 a 6.0mm²', 'Corte' => 'Lâmina de Alta Dureza', 'Crimpador' => 'Terminais Isolados']],
-                ['Trena Laser Digital Medidor de Distância 40m com Nível Eletrônico', 16.50, 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=800&auto=format&fit=crop&q=80', '5.0', 9800, ['Alcance' => '40 Metros', 'Precisão' => '±2mm', 'Funções' => 'Área, Volume e Pitágoras']],
-                ['Lanterna Tática Militar LED P90 Super Potente Zoom Recarregável USB', 14.80, 'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=800&auto=format&fit=crop&q=80', '4.8', 13400, ['Lúmens' => '5000 Lumens', 'Bateria' => '26650 Recarregável', 'Corpo' => 'Alumínio Aeronáutico']],
-            ],
-            'Pet Shop & Pets Virais' => [
-                ['Bebedouro Fonte Automática para Gatos e Cães com Filtro Carvão Ativado', 16.20, 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=800&auto=format&fit=crop&q=80', '4.9', 12800, ['Capacidade' => '2.5 Litros', 'Bomba' => 'Silenciosa USB', 'Filtragem' => 'Tripla Camada']],
-                ['Escova a Vapor para Gatos e Cães Removedora de Pelos Mortos com Massagem', 9.50, 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=800&auto=format&fit=crop&q=80', '4.8', 15100, ['Tecnologia' => 'Spray de Vapor Suave', 'Cerdas' => 'Silicone Macio', 'Alimentação' => 'USB Recarregável']],
-                ['Coleira LED Luminosa para Cachorro Recarregável Noturna Ajustável', 6.80, 'https://images.unsplash.com/photo-1601758228041-f3b2795255f1?w=800&auto=format&fit=crop&q=80', '4.9', 9700, ['Modos' => 'Pisca Rápido, Lento e Contínuo', 'Bateria' => 'USB Recarregável', 'Resistência' => 'Resistente à Chuva']],
-            ],
-            'Acessórios para Veículos' => [
-                ['Suporte de Celular Veicular com Carregador por Indução 15W Sensor Automático', 17.80, 'https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?w=800&auto=format&fit=crop&q=80', '4.9', 13900, ['Indução' => '15W Fast Charge', 'Abertura' => 'Sensor Infravermelho Elétrico', 'Fixação' => 'Saída de Ar Reforçada']],
-                ['Compressor de Ar Portátil Elétrico Digital para Pneus de Carro e Moto', 28.50, 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=800&auto=format&fit=crop&q=80', '5.0', 8800, ['Pressão' => '150 PSI Máx', 'Display' => 'Digital LED com Auto Desligamento', 'Bateria' => 'Recarregável 6000mAh']],
-                ['Aspirador Portátil Sem Fio Automotivo Potente Sucção para Carro e Casa', 18.20, 'https://images.unsplash.com/photo-1558317374-067fb5f30001?w=800&auto=format&fit=crop&q=80', '4.8', 11400, ['Potência' => '120W 9000Pa', 'Filtro' => 'HEPA Lavável', 'Acessórios' => 'Bicos de Canto e Escova']],
-            ],
-            'Moda, Roupas & Vestuário' => [
-                ['Mochila Executiva Impermeável Antifurto com Trava TSA e Saída USB', 27.90, 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=800&auto=format&fit=crop&q=80', '4.9', 9800, ['Material' => 'Oxford Impermeável', 'Segurança' => 'Trava de Segredo TSA', 'Compartimento' => 'Notebook até 15.6 polegadas']],
-                ['Tênis Esportivo Masculino Respirável Leve Amortecimento Corrida e Caminhada', 21.50, 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&auto=format&fit=crop&q=80', '4.8', 14500, ['Solado' => 'EVA com Gel de Amortecimento', 'Cabedal' => 'Mesh Tecido Respirável', 'Uso' => 'Corrida, Caminhada e Treino']],
-                ['Carteira Masculina de Couro Genuíno Slim com Bloqueio RFID Antifurto', 9.80, 'https://images.unsplash.com/photo-1627123424574-724758594e93?w=800&auto=format&fit=crop&q=80', '4.9', 16700, ['Proteção' => 'RFID Anti-clonagem', 'Capacidade' => '8 Cartões + Cédulas', 'Design' => 'Ultra Fina de Bolso']],
-            ],
-            'Moda Íntima, Lingeries & Pijamas' => [
-                ['Meia-Calça Térmica Feminina Forrada Translúcida Efeito Invisível Inverno', 11.90, 'https://images.unsplash.com/photo-1582533561751-ef6f6ab93a2e?w=800&auto=format&fit=crop&q=80', '4.9', 18200, ['Forro' => 'Pelúcia Térmica Macia', 'Efeito' => 'Translúcido Fio 15 Natural', 'Cintura' => 'Alta Modeladora Sem Costura']],
-                ['Kit 5 Cuecas Boxer Masculinas Modal Sem Costura Conforto Térmico Antibacteriano', 14.50, 'https://images.unsplash.com/photo-1586790170083-2f9ceadc732d?w=800&auto=format&fit=crop&q=80', '4.8', 15600, ['Tecido' => 'Fibra de Modal e Elastano', 'Design' => 'Sem Costura Anatômica', 'Pacote' => 'Kit com 5 Cores Neutras']],
-                ['Conjunto de Lingerie Renda Floral Sexy Sutiã com Sustentação e Calcinha', 13.80, 'https://images.unsplash.com/photo-1616150638538-ffb0679a3fc4?w=800&auto=format&fit=crop&q=80', '4.9', 9400, ['Renda' => 'Guipir Macia Antialérgica', 'Sutiã' => 'Com Aro Sustentação Push Up', 'Acabamento' => 'Detalhes em Cetim']],
-            ],
-            'Sex Shop & Produtos Adultos (+18)' => [
-                ['Vibrador Líquido Estimulador Clitoriano Silencioso Silicone Médico', 16.50, 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=800&auto=format&fit=crop&q=80', '4.9', 8700, ['Material' => 'Silicone Cirúrgico Hipoalergênico', 'Ruído' => 'Silencioso < 40dB', 'Carga' => 'Magnética USB À Prova D\'água']],
-                ['Varinha Mágica Massageador Corporal Elétrico Potente Recarregável', 23.90, 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=800&auto=format&fit=crop&q=80', '4.8', 10200, ['Vibração' => '20 Modos e 8 Velocidades', 'Cabeça' => 'Silicone Flexível 360 Graus', 'Bateria' => 'Longo Alcance 2 horas']],
-                ['Estimulador de Sucção de Ar Clitoriano Pulsações e Ondas de Pressão', 19.80, 'https://images.unsplash.com/photo-1512290900672-1f81d117e3f8?w=800&auto=format&fit=crop&q=80', '5.0', 12300, ['Tecnologia' => 'Ondas Sonoras Sem Contato', 'Intensidades' => '10 Níveis Progressivos', 'Resistência' => '100% À Prova D\'água IPX7']],
-            ],
-        ];
-
-        $patterns = $catalogPatterns[$normalizedCat] ?? $catalogPatterns['Eletrônicos & Gadget'];
-        $variants = [
-            ' Edição Especial Brasil',
-            ' Pro Max 2026',
-            ' Versão Global Bivolt',
-            ' Plus Alta Performance',
-            ' Premium Original',
-            ' Ultra Durabilidade',
-            ' Turbo Edition',
-            ' Linha Ouro Oficial',
-            ' Smart Series',
-            ' Black Titanium',
-        ];
-
-        $catSeed = abs(crc32($normalizedCat));
-        $counter = 1;
-
-        while (count($pool) < $limit) {
-            $base = $patterns[($counter - 1) % count($patterns)];
-            $variantIdx = (int)floor(($counter - 1) / count($patterns)) % count($variants);
-            $suffix = $variantIdx > 0 ? $variants[$variantIdx] : '';
-            $title = $base[0] . $suffix;
-
-            if (in_array($title, $existingTitles, true)) {
-                $counter++;
-                continue;
-            }
-
-            $uniqueNumericId = '100508' . sprintf('%010d', ($catSeed + ($counter * 7919)) % 10000000000);
-            $priceVariance = round((($counter % 5) - 2) * 1.5, 2);
-            $salePrice = max(5.50, round((float)$base[1] + $priceVariance, 2));
-
-            $pool[] = [
-                'product_id'             => $uniqueNumericId,
-                'product_title'          => $title,
-                'category_name'          => $normalizedCat,
-                'target_sale_price'      => (string)$salePrice,
-                'product_main_image_url' => $base[2],
-                'images'                 => [$base[2]],
-                'evaluate_rate'          => $base[3],
-                'volume'                 => (int)$base[4] + ($counter * 17),
-                'product_description'    => "Produto de altíssima reputação e destaque em vendas no Brasil na categoria {$normalizedCat}. Construção robusta com acabamento premium e entrega pontual.",
-                'properties'             => $base[5] ?? ['Origem' => 'Estoque Brasil / Remessa Conforme', 'Garantia' => '90 dias'],
-            ];
-
-            $existingTitles[] = $title;
-            $counter++;
+        if (empty($pool)) {
+            return [];
         }
 
-        return $pool;
+        // Se o limite solicitado for maior que o número de produtos reais disponíveis,
+        // cicla entre os produtos reais já existentes sem NUNCA inventar IDs sintéticos ou falsos (imune a 404).
+        $expanded = $pool;
+        $count = count($pool);
+        $i = 0;
+        while (count($expanded) < $limit) {
+            $expanded[] = $pool[$i % $count];
+            $i++;
+        }
+
+        return $expanded;
     }
 
     /**
@@ -1657,8 +1592,8 @@ class ProductMiningService implements ProductMiningServiceInterface
 
         try {
             $config = $this->loadConfig();
-            $volatility = (float)($config['volatility_index_percent'] ?? 12.0);
-            $markup = (float)($config['default_markup_percent'] ?? 100.0);
+            $volatility = (float)($config['volatility_index_percent'] ?? 0.0);
+            $markup = (float)($config['default_markup_percent'] ?? 30.0);
             $products = $this->repository->list(['status' => 'published'], $batchLimit, 0);
 
             $checked = 0;

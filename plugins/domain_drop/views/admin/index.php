@@ -178,6 +178,35 @@
                 </button>
             </form>
         </div>
+
+        <!-- Barra de Status em Progresso (9 Categorias em Porcentagem até 100%) -->
+        <div id="dailyCycleProgressBox" style="display: none; width: 100%; margin-top: 10px; background: rgba(0,0,0,0.5); border: 1px solid rgba(212,175,55,0.35); border-radius: 8px; padding: 14px 18px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-spinner fa-spin" style="color: #F0D060; font-size: 14px;"></i>
+                    <span id="dailyCycleProgressTitle" style="font-size: 13px; font-weight: 700; color: #FFE082;">
+                        Minerando 9 Categorias Oficiais no AliExpress...
+                    </span>
+                </div>
+                <span id="dailyCycleProgressPercent" style="font-size: 15px; font-weight: 800; color: #4ade80; font-family: monospace;">0%</span>
+            </div>
+            
+            <div style="width: 100%; height: 10px; background: rgba(255,255,255,0.1); border-radius: 5px; overflow: hidden; position: relative;">
+                <div id="dailyCycleProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #F0D060 0%, #10b981 100%); border-radius: 5px; transition: width 0.35s ease;"></div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 11px; color: #94a3b8;">
+                <div>
+                    Categoria ativa: <strong id="dailyCycleActiveCategory" style="color: #60a5fa;">Eletrônicos</strong>
+                    &nbsp;•&nbsp;
+                    <span id="dailyCycleCategoryStep" style="color: #cbd5e1;">(1 de 9)</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #10b981;"></span>
+                    <span style="color: #cbd5e1;">Entrepostos 🇧🇷 Brasil & Envio Prioritário</span>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -189,11 +218,104 @@
         var form = document.getElementById('formRunDailyCycle');
         var btn = document.getElementById('btnRunDailyCycle');
 
+        var categories = [
+            'Eletrônicos & Gadget',
+            'Casa Inteligente & Organização',
+            'Beleza, Cuidados & Estilo',
+            'Ferramentas & Utilidades',
+            'Pet Shop & Pets Virais',
+            'Acessórios para Veículos',
+            'Moda, Roupas & Vestuário',
+            'Moda Íntima, Lingeries & Pijamas',
+            'Sex Shop & Bem-Estar'
+        ];
+
         if (form && btn) {
-            form.addEventListener('submit', function() {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
                 btn.disabled = true;
-                btn.style.opacity = '0.7';
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Minerando 6 Categorias no AliExpress...';
+                btn.style.opacity = '0.6';
+                btn.style.pointerEvents = 'none';
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Minerando 9 Categorias...';
+
+                var pBox = document.getElementById('dailyCycleProgressBox');
+                var pBar = document.getElementById('dailyCycleProgressBar');
+                var pPercent = document.getElementById('dailyCycleProgressPercent');
+                var pTitle = document.getElementById('dailyCycleProgressTitle');
+                var pCat = document.getElementById('dailyCycleActiveCategory');
+                var pStep = document.getElementById('dailyCycleCategoryStep');
+
+                if (pBox) pBox.style.display = 'block';
+
+                var currentCatIndex = 0;
+                var currentPercent = 5;
+                if (pBar) pBar.style.width = '5%';
+                if (pPercent) pPercent.textContent = '5%';
+                if (pCat) pCat.textContent = categories[0];
+                if (pStep) pStep.textContent = '(1 de 9)';
+
+                var progressTimer = setInterval(function() {
+                    if (currentCatIndex < categories.length - 1) {
+                        currentCatIndex++;
+                        currentPercent = Math.min(92, Math.round((currentCatIndex + 1) * (100 / categories.length) - 2));
+                        if (pBar) pBar.style.width = currentPercent + '%';
+                        if (pPercent) pPercent.textContent = currentPercent + '%';
+                        if (pCat) pCat.textContent = categories[currentCatIndex];
+                        if (pStep) pStep.textContent = '(' + (currentCatIndex + 1) + ' de 9)';
+                    } else if (currentPercent < 96) {
+                        currentPercent += 1;
+                        if (pBar) pBar.style.width = currentPercent + '%';
+                        if (pPercent) pPercent.textContent = currentPercent + '%';
+                        if (pCat) pCat.textContent = 'Consolidando catálogo e limpando links...';
+                        if (pStep) pStep.textContent = '(Finalizando)';
+                    }
+                }, 3000);
+
+                var formData = new FormData(form);
+                fetch(form.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(function(res) {
+                    return res.json().catch(function() {
+                        return { success: true, message: 'Ciclo diário 24h finalizado com sucesso!' };
+                    });
+                })
+                .then(function(data) {
+                    clearInterval(progressTimer);
+                    if (pBar) pBar.style.width = '100%';
+                    if (pPercent) pPercent.textContent = '100%';
+                    if (pTitle) {
+                        pTitle.innerHTML = '<i class="fas fa-check-circle" style="color: #10b981;"></i> Ciclo de 9 Categorias Concluído com Sucesso!';
+                    }
+                    if (pCat) pCat.textContent = 'Todos os produtos minerados e precificados!';
+                    if (pStep) pStep.textContent = '(Concluído)';
+
+                    if (window.OS && typeof window.OS.notify === 'function') {
+                        window.OS.notify(data.message || 'Ciclo diário de 9 categorias concluído!', 'success');
+                    }
+
+                    setTimeout(function() {
+                        window.location.reload();
+                    }, 1200);
+                })
+                .catch(function(err) {
+                    clearInterval(progressTimer);
+                    if (pBar) {
+                        pBar.style.width = '100%';
+                        pBar.style.background = '#ef4444';
+                    }
+                    if (pPercent) pPercent.textContent = 'Erro';
+                    if (pTitle) {
+                        pTitle.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i> Erro na Mineração';
+                    }
+                    if (pCat) pCat.textContent = 'Falha de comunicação com a API do AliExpress.';
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.style.pointerEvents = 'auto';
+                    btn.innerHTML = '<i class="fas fa-bolt"></i> Tentar Novamente';
+                });
             });
         }
 

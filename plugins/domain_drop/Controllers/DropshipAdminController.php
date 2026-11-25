@@ -1463,8 +1463,8 @@ class DropshipAdminController
         return [
             'app_key' => '558628',
             'app_secret' => '',
-            'default_markup_percent' => 100.0,
-            'min_profit_margin_brl' => 30.0,
+            'default_markup_percent' => 30.0,
+            'min_profit_margin_brl' => 10.0,
         ];
     }
 
