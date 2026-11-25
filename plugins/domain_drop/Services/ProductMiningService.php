@@ -2601,9 +2601,27 @@ class ProductMiningService implements ProductMiningServiceInterface
                     $newCostBrl = null;
 
                     if (!empty($remoteData) && is_array($remoteData)) {
-                        $baseInfo = $remoteData['ae_item_base_info_dto'] ?? ($remoteData['result']['ae_item_base_info_dto'] ?? []);
-                        if (!empty($baseInfo['target_sale_price'])) {
+                        $root = $remoteData['result'] ?? $remoteData;
+                        $baseInfo = $root['ae_item_base_info_dto'] ?? [];
+                        $skuDtos = $root['ae_item_sku_info_dtos']['ae_item_sku_info_d_t_o'] ?? ($root['ae_item_sku_info_dtos'] ?? []);
+                        $minSkuCost = null;
+                        if (is_array($skuDtos)) {
+                            $skuList = (isset($skuDtos['sku_id']) || isset($skuDtos['id']) || isset($skuDtos['offer_sale_price'])) ? [$skuDtos] : $skuDtos;
+                            foreach ($skuList as $sku) {
+                                if (is_array($sku)) {
+                                    $p = (float)($sku['offer_sale_price'] ?? ($sku['sku_price'] ?? 0.0));
+                                    if ($p > 0.0 && ($minSkuCost === null || $p < $minSkuCost)) {
+                                        $minSkuCost = $p;
+                                    }
+                                }
+                            }
+                        }
+                        if (!empty($baseInfo['offer_sale_price'])) {
+                            $newCostUsd = (float)$baseInfo['offer_sale_price'];
+                        } elseif (!empty($baseInfo['target_sale_price'])) {
                             $newCostUsd = (float)$baseInfo['target_sale_price'];
+                        } elseif ($minSkuCost !== null && $minSkuCost > 0.0) {
+                            $newCostUsd = $minSkuCost;
                         }
                     }
 
