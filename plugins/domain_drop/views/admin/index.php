@@ -523,6 +523,15 @@
                                 <i class="fas fa-star"></i> <?= number_format($prod->rating, 1) ?>
                             </div>
                         <?php endif; ?>
+
+                        <?php 
+                        $isNational = (!empty($prod->attributes['origem_brasil']) || (isset($prod->attributes['ship_from']) && $prod->attributes['ship_from'] === 'BR'));
+                        ?>
+                        <?php if ($isNational): ?>
+                            <div style="position: absolute; bottom: 10px; right: 10px; background: rgba(16, 185, 129, 0.9); backdrop-filter: blur(4px); color: #fff; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; display: flex; align-items: center; gap: 4px;" title="Produto em Entreposto no Brasil / Envio Nacional">
+                                <span>🇧🇷</span> BR
+                            </div>
+                        <?php endif; ?>
                     </div>
 
                     <!-- Content -->

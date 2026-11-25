@@ -186,11 +186,18 @@ class ProductMiningService implements ProductMiningServiceInterface
             $orders = (int)($item['volume'] ?? ($item['orders_count'] ?? ($item['lastest_volume'] ?? 0)));
             $thermometer = self::calculateThermometerScore($rating, $orders);
 
+            $isBr = (!empty($item['properties']['origem_brasil'])
+                || !empty($item['properties']['entreposto_brasil'])
+                || ($item['ship_from'] ?? '') === 'BR'
+                || ($item['send_goods_country_code'] ?? '') === 'BR'
+                || (($item['ae_store_info']['store_country_code'] ?? '') === 'BR'));
+
             $scored[] = [
                 'item'        => $item,
                 'rating'      => $rating,
                 'orders'      => $orders,
                 'thermometer' => $thermometer,
+                'is_br'       => $isBr ? 1 : 0,
                 'qualified'   => ($rating === 0.0 || $rating >= $minRating) && ($orders === 0 || $orders >= $minOrders),
             ];
         }
@@ -199,6 +206,10 @@ class ProductMiningService implements ProductMiningServiceInterface
         $pool = !empty($qualified) ? $qualified : $scored;
 
         usort($pool, static function (array $a, array $b) use ($sort): int {
+            // Prioridade para produtos com estoque em entrepostos do Brasil
+            if ($a['is_br'] !== $b['is_br']) {
+                return $b['is_br'] <=> $a['is_br'];
+            }
             return match ($sort) {
                 'evaluate_rate_desc' => ($b['rating'] <=> $a['rating'])
                     ?: ($b['thermometer'] <=> $a['thermometer'])
@@ -845,13 +856,30 @@ class ProductMiningService implements ProductMiningServiceInterface
         $props = is_array($item['properties'] ?? null) ? $item['properties'] : [];
         $props['curadoria_nota'] = number_format($effectiveRating, 1) . ' ★';
         $props['termometro_demanda'] = $thermometer . '%';
-        if (!isset($props['ship_from'])) {
+
+        // Detecção de Estoque em Entrepostos no Brasil
+        $isBrWarehouse = false;
+        $storeInfo = $item['ae_store_info'] ?? ($item['store_info'] ?? []);
+        if (!empty($storeInfo['store_country_code']) && strtoupper((string)$storeInfo['store_country_code']) === 'BR') {
+            $isBrWarehouse = true;
+        }
+        if (!empty($item['ship_from']) && in_array(strtoupper((string)$item['ship_from']), ['BR', 'BRAZIL', 'BRASIL'], true)) {
+            $isBrWarehouse = true;
+        }
+        if (!empty($item['send_goods_country_code']) && strtoupper((string)$item['send_goods_country_code']) === 'BR') {
+            $isBrWarehouse = true;
+        }
+
+        if (!isset($props['ship_from']) || $isBrWarehouse) {
             $props['ship_from'] = 'BR';
             $props['origem_brasil'] = true;
         }
+        if ($isBrWarehouse) {
+            $props['entreposto_brasil'] = true;
+            $props['despacho_nacional'] = 'Estoque no Brasil (Entreposto Nacional)';
+        }
 
         // Metadados do Vendedor Oficial AliExpress (ae_store_info)
-        $storeInfo = $item['ae_store_info'] ?? ($item['store_info'] ?? []);
         if (!empty($storeInfo) && is_array($storeInfo)) {
             if (!empty($storeInfo['store_name'])) {
                 $props['store_name'] = (string)$storeInfo['store_name'];
@@ -957,6 +985,15 @@ class ProductMiningService implements ProductMiningServiceInterface
                             $propName = 'Modelo';
                         }
                         $propVal = trim((string)($rp['property_value_definition_name'] ?? ($rp['sku_property_value'] ?? ($rp['property_value'] ?? ''))));
+                        if (in_array($lowerProp, ['ships from', 'enviado de', 'origem', 'despachado de', 'local de envio', 'país de envio'], true)) {
+                            $lowerVal = mb_strtolower($propVal, 'UTF-8');
+                            if (in_array($lowerVal, ['br', 'brazil', 'brasil', 'são paulo', 'sp'], true)) {
+                                $props['ship_from'] = 'BR';
+                                $props['origem_brasil'] = true;
+                                $props['entreposto_brasil'] = true;
+                                $props['despacho_nacional'] = 'Estoque no Brasil (Entreposto Nacional)';
+                            }
+                        }
                         if ($propName !== '' && $propVal !== '') {
                             $options[$propName] = $propVal;
                             if (!isset($variationAxes[$propName])) {
