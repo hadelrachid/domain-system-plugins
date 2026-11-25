@@ -78,9 +78,15 @@ class ProductMiningService implements ProductMiningServiceInterface
         return (new CategoryTaxonomyService())->normalizeCategory($category);
     }
 
-    public function mineTrendingProducts(string $category = 'Eletrônicos & Gadget', int $limit = 10, bool $autoPersist = true, string $sort = 'volume_desc'): array
-    {
+    public function mineTrendingProducts(
+        string $category = 'Eletrônicos & Gadget',
+        int $limit = 10,
+        bool $autoPersist = true,
+        string $sort = 'volume_desc',
+        string $warehouseOrigin = 'ALL'
+    ): array {
         $category = self::normalizeCategory($category);
+        $warehouseOrigin = strtoupper(trim($warehouseOrigin)) ?: 'ALL';
         $rawProducts = [];
         $candidateTarget = min(60, max(25, $limit * 3));
         try {
@@ -104,7 +110,7 @@ class ProductMiningService implements ProductMiningServiceInterface
                     break;
                 }
                 try {
-                    $batch = $this->apiClient->searchProducts([
+                    $searchPayload = [
                         'keyword'           => $term,
                         'keyWord'           => $term,
                         'query'             => $term,
@@ -120,9 +126,17 @@ class ProductMiningService implements ProductMiningServiceInterface
                         'country_code'      => 'BR',
                         'country'           => 'BR',
                         'currency'          => 'BRL',
-                        'ship_from_country' => 'BR',
                         'ship_to_country'   => 'BR',
-                    ]);
+                    ];
+
+                    if ($warehouseOrigin === 'BR') {
+                        $searchPayload['ship_from_country'] = 'BR';
+                    } elseif ($warehouseOrigin === 'CN') {
+                        $searchPayload['ship_from_country'] = 'CN';
+                    }
+                    // Se 'ALL' (Global), não restringe ship_from_country para permitir entrepostos da China e do Brasil
+
+                    $batch = $this->apiClient->searchProducts($searchPayload);
 
                     if (is_array($batch) && !empty($batch)) {
                         foreach ($batch as $bItem) {
@@ -161,7 +175,7 @@ class ProductMiningService implements ProductMiningServiceInterface
         if (empty($rawProducts)) {
             $rawProducts = $this->getCuratedTrendingFallback($category, $candidateTarget, $sort);
         } else {
-            $rawProducts = self::scoreAndSortByReputation($rawProducts, $sort, 4.0, 10, $candidateTarget);
+            $rawProducts = self::scoreAndSortByReputation($rawProducts, $sort, 4.0, 10, $candidateTarget, $warehouseOrigin);
         }
 
         // Ingestão no Container e Execução do Pipeline de Validação Contratual (Elimina 404s, Preços Isca e Restrições)
@@ -239,8 +253,10 @@ class ProductMiningService implements ProductMiningServiceInterface
         string $sort = 'volume_desc',
         float $minRating = 4.5,
         int $minOrders = 50,
-        int $limit = 20
+        int $limit = 20,
+        string $warehouseOrigin = 'ALL'
     ): array {
+        $warehouseOrigin = strtoupper(trim($warehouseOrigin)) ?: 'ALL';
         $scored = [];
         foreach ($items as $item) {
             if (!is_array($item)) {
@@ -257,6 +273,14 @@ class ProductMiningService implements ProductMiningServiceInterface
                 || ($item['send_goods_country_code'] ?? '') === 'BR'
                 || (($item['ae_store_info']['store_country_code'] ?? '') === 'BR'));
 
+            // Filtro estrito de entreposto quando solicitado
+            if ($warehouseOrigin === 'BR' && !$isBr) {
+                continue;
+            }
+            if ($warehouseOrigin === 'CN' && $isBr) {
+                continue;
+            }
+
             $scored[] = [
                 'item'        => $item,
                 'rating'      => $rating,
@@ -270,9 +294,9 @@ class ProductMiningService implements ProductMiningServiceInterface
         $qualified = array_values(array_filter($scored, static fn($row) => $row['qualified']));
         $pool = !empty($qualified) ? $qualified : $scored;
 
-        usort($pool, static function (array $a, array $b) use ($sort): int {
-            // Prioridade para produtos com estoque em entrepostos do Brasil
-            if ($a['is_br'] !== $b['is_br']) {
+        usort($pool, static function (array $a, array $b) use ($sort, $warehouseOrigin): int {
+            // Prioridade para produtos com estoque em entrepostos do Brasil se especificado
+            if ($warehouseOrigin === 'BR' && $a['is_br'] !== $b['is_br']) {
                 return $b['is_br'] <=> $a['is_br'];
             }
             return match ($sort) {
@@ -973,13 +997,17 @@ class ProductMiningService implements ProductMiningServiceInterface
             $isBrWarehouse = true;
         }
 
-        if (!isset($props['ship_from']) || $isBrWarehouse) {
+        if ($isBrWarehouse) {
             $props['ship_from'] = 'BR';
             $props['origem_brasil'] = true;
-        }
-        if ($isBrWarehouse) {
             $props['entreposto_brasil'] = true;
             $props['despacho_nacional'] = 'Estoque no Brasil (Entreposto Nacional)';
+        } else {
+            $props['ship_from'] = 'CN';
+            $props['origem_china'] = true;
+            $props['entreposto_china'] = true;
+            $props['despacho_origem'] = 'Entreposto Central AliExpress (China)';
+            $props['remessa_conforme'] = 'Importação Oficial com DDP e Rastreamento';
         }
 
         // Metadados do Vendedor Oficial AliExpress (ae_store_info)
@@ -1415,9 +1443,14 @@ class ProductMiningService implements ProductMiningServiceInterface
      * @param int $itemsPerCategory Quantidade de novos produtos minerados por categoria (padrão 10 = ~90 a 100 no ciclo diário de 24h)
      * @return array<string, mixed> Resumo da rodada executada
      */
-    public function runDailyAutomatedRotation(int $itemsPerCategory = 10): array
+    public function runDailyAutomatedRotation(int $itemsPerCategory = 10, ?string $warehouseOrigin = null): array
     {
         $config = $this->loadConfig();
+        if ($warehouseOrigin === null) {
+            $warehouseOrigin = (string)($config['mining_warehouse_origin'] ?? 'ALL');
+        }
+        $warehouseOrigin = strtoupper(trim($warehouseOrigin)) ?: 'ALL';
+
         if (isset($config['daily_items_per_category']) && is_numeric($config['daily_items_per_category'])) {
             $itemsPerCategory = max(1, min(20, (int)$config['daily_items_per_category']));
         }
@@ -1466,7 +1499,7 @@ class ProductMiningService implements ProductMiningServiceInterface
                         if ($term !== '') {
                             $targetCat = self::normalizeCategory($cat);
                             try {
-                                $priorityMined = $this->mineTrendingProducts(category: $targetCat, limit: 1, autoPersist: true, sort: 'volume_desc');
+                                $priorityMined = $this->mineTrendingProducts(category: $targetCat, limit: 1, autoPersist: true, sort: 'volume_desc', warehouseOrigin: $warehouseOrigin);
                                 if (!empty($priorityMined)) {
                                     $priorityTermsPreserved[] = $term;
                                     $totalProducts += count($priorityMined);
@@ -1482,7 +1515,7 @@ class ProductMiningService implements ProductMiningServiceInterface
             // 2. Rotação das 9 Categorias Oficiais
             foreach (self::OFFICIAL_CATEGORIES as $cat) {
                 try {
-                    $mined = $this->mineTrendingProducts(category: $cat, limit: $itemsPerCategory, autoPersist: true);
+                    $mined = $this->mineTrendingProducts(category: $cat, limit: $itemsPerCategory, autoPersist: true, sort: 'volume_desc', warehouseOrigin: $warehouseOrigin);
                     $count = count($mined);
                     $results[$cat] = $count;
                     $totalProducts += $count;

@@ -217,6 +217,11 @@ class AliExpressApiClient implements AliExpressApiClientInterface
             $params['categoryId'] = (string)$categoryId;
         }
 
+        if (!empty($filters['ship_from_country'])) {
+            $params['ship_from_country'] = (string)$filters['ship_from_country'];
+            $params['shipFrom'] = (string)$filters['ship_from_country'];
+        }
+
         try {
             $response = $this->execute('aliexpress.ds.text.search', $params, $this->accessToken);
             $this->lastError = null;

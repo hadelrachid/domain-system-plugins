@@ -19,9 +19,10 @@ interface ProductMiningServiceInterface
      * @param int $limit Quantidade de produtos para minerar
      * @param bool $autoPersist Se deve persistir automaticamente no catálogo
      * @param string $sort Critério de ordenação ('volume_desc', 'price_asc', etc.)
+     * @param string $warehouseOrigin Origem dos estoques ('ALL' = Global China + Brasil, 'BR' = Apenas Brasil, 'CN' = Apenas China)
      * @return array<int, DropshipProductDto>
      */
-    public function mineTrendingProducts(string $category = 'Eletrônicos', int $limit = 10, bool $autoPersist = true, string $sort = 'volume_desc'): array;
+    public function mineTrendingProducts(string $category = 'Eletrônicos', int $limit = 10, bool $autoPersist = true, string $sort = 'volume_desc', string $warehouseOrigin = 'ALL'): array;
 
     /**
      * Importa um produto específico através da URL ou ID do AliExpress.

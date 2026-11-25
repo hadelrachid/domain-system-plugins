@@ -171,8 +171,20 @@
             </div>
 
             <!-- Manual Trigger Form -->
-            <form action="<?= $baseUrl ?>/admin/dropship/run-daily-cycle" method="POST" id="formRunDailyCycle" style="margin: 0;">
+            <form action="<?= $baseUrl ?>/admin/dropship/run-daily-cycle" method="POST" id="formRunDailyCycle" style="margin: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+
+                <div style="display: flex; align-items: center; gap: 6px; background: rgba(0,0,0,0.5); padding: 5px 12px; border-radius: 6px; border: 1px solid rgba(212,175,55,0.35);">
+                    <label for="dailyCycleWarehouseOrigin" style="font-size: 11px; font-weight: 700; color: #FFE082; text-transform: uppercase; display: flex; align-items: center; gap: 4px;">
+                        <i class="fas fa-warehouse"></i> Entrepostos:
+                    </label>
+                    <select name="warehouse_origin" id="dailyCycleWarehouseOrigin" style="background: transparent; border: none; color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; outline: none;">
+                        <option value="ALL" <?= (($config['mining_warehouse_origin'] ?? 'ALL') === 'ALL') ? 'selected' : '' ?> style="background: #1d2327; color: #fff;">🌐 Global (China + Brasil) [Recomendado]</option>
+                        <option value="BR" <?= (($config['mining_warehouse_origin'] ?? '') === 'BR') ? 'selected' : '' ?> style="background: #1d2327; color: #fff;">🇧🇷 Apenas Brasil (Nacional)</option>
+                        <option value="CN" <?= (($config['mining_warehouse_origin'] ?? '') === 'CN') ? 'selected' : '' ?> style="background: #1d2327; color: #fff;">🇨🇳 Apenas China (Importação)</option>
+                    </select>
+                </div>
+
                 <button type="submit" id="btnRunDailyCycle" style="background: linear-gradient(135deg, #F0D060 0%, #D4AF37 100%); color: #0b0f17; border: none; padding: 11px 20px; border-radius: 6px; font-weight: 700; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(212,175,55,0.3); transition: transform 0.2s ease;">
                     <i class="fas fa-bolt"></i> Rodar Ciclo Diário 24h Agora
                 </button>
@@ -203,7 +215,7 @@
                 </div>
                 <div style="display: flex; align-items: center; gap: 6px;">
                     <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #10b981;"></span>
-                    <span style="color: #cbd5e1;">Entrepostos 🇧🇷 Brasil & Envio Prioritário</span>
+                    <span id="dailyCycleWarehouseBadge" style="color: #cbd5e1;">Entrepostos 🌐 Global (China + Brasil) & Envio Rastreável</span>
                 </div>
             </div>
         </div>
@@ -234,8 +246,21 @@
             options = options || {};
             var replaceCatalog = !!options.replaceCatalog;
             var itemsPerCategory = options.itemsPerCategory || 10;
+            var originSelect = document.getElementById('dailyCycleWarehouseOrigin');
+            var warehouseOrigin = options.warehouseOrigin || (originSelect ? originSelect.value : 'ALL');
             var csrfToken = <?= json_encode($csrfToken) ?>;
             var baseUrl = <?= json_encode($baseUrl) ?>;
+
+            var badgeElem = document.getElementById('dailyCycleWarehouseBadge');
+            if (badgeElem) {
+                if (warehouseOrigin === 'BR') {
+                    badgeElem.innerHTML = 'Entrepostos 🇧🇷 Brasil (Estoque Nacional)';
+                } else if (warehouseOrigin === 'CN') {
+                    badgeElem.innerHTML = 'Entrepostos 🇨🇳 China (Importação Direta)';
+                } else {
+                    badgeElem.innerHTML = 'Entrepostos 🌐 Global (China + Brasil) & Envio Rastreável';
+                }
+            }
 
             // Fechar modal de aquisição caso esteja aberto
             var modal = document.getElementById('modalAcquireNew');
@@ -310,6 +335,7 @@
                 stepData.append('csrf_token', csrfToken);
                 stepData.append('category', catName);
                 stepData.append('items_per_category', itemsPerCategory);
+                stepData.append('warehouse_origin', warehouseOrigin);
                 if (isFirst) {
                     stepData.append('replace_catalog', '1');
                 }
@@ -343,7 +369,9 @@
         if (form && btn) {
             form.addEventListener('submit', function(e) {
                 e.preventDefault();
-                window.runProgressiveMiningCycle({ replaceCatalog: false, itemsPerCategory: 10 });
+                var originSelect = document.getElementById('dailyCycleWarehouseOrigin');
+                var wOrigin = originSelect ? originSelect.value : 'ALL';
+                window.runProgressiveMiningCycle({ replaceCatalog: false, itemsPerCategory: 10, warehouseOrigin: wOrigin });
             });
         }
 
@@ -400,7 +428,7 @@
             <form action="<?= $baseUrl ?>/admin/dropship/mine" method="POST" style="display: flex; flex-direction: column; gap: 12px;">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
                 
-                <div style="display: grid; grid-template-columns: 1.5fr 1fr 1.5fr; gap: 10px;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px;">
                     <div>
                         <label style="display: block; font-size: 12px; color: var(--text-muted, #94a3b8); margin-bottom: 4px;">Nicho / Categoria</label>
                         <select name="category" style="width: 100%; background: rgba(0,0,0,0.25); border: 1px solid var(--border, rgba(255,255,255,0.15)); color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 13px;">
@@ -433,6 +461,14 @@
                             <option value="volume_desc" selected>🏆 Mais Vendidos (Best Sellers)</option>
                             <option value="evaluate_rate_desc">⭐ Melhor Avaliados (4.8★ - 5.0★)</option>
                             <option value="choice_desc">⚡ Lojas Oficiais &amp; Choice</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; color: var(--text-muted, #94a3b8); margin-bottom: 4px;">Entreposto / Estoque</label>
+                        <select name="warehouse_origin" style="width: 100%; background: rgba(0,0,0,0.25); border: 1px solid var(--border, rgba(255,255,255,0.15)); color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 13px;">
+                            <option value="ALL" <?= (($config['mining_warehouse_origin'] ?? 'ALL') === 'ALL') ? 'selected' : '' ?>>🌐 Global (China + Brasil)</option>
+                            <option value="BR" <?= (($config['mining_warehouse_origin'] ?? '') === 'BR') ? 'selected' : '' ?>>🇧🇷 Apenas Brasil (Nacional)</option>
+                            <option value="CN" <?= (($config['mining_warehouse_origin'] ?? '') === 'CN') ? 'selected' : '' ?>>🇨🇳 Apenas China (Importação)</option>
                         </select>
                     </div>
                 </div>
@@ -678,8 +714,12 @@
                         $isNational = (!empty($prod->attributes['origem_brasil']) || (isset($prod->attributes['ship_from']) && $prod->attributes['ship_from'] === 'BR'));
                         ?>
                         <?php if ($isNational): ?>
-                            <div style="position: absolute; bottom: 10px; right: 10px; background: rgba(16, 185, 129, 0.9); backdrop-filter: blur(4px); color: #fff; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; display: flex; align-items: center; gap: 4px;" title="Produto em Entreposto no Brasil / Envio Nacional">
+                            <div style="position: absolute; bottom: 10px; right: 10px; background: rgba(16, 185, 129, 0.9); backdrop-filter: blur(4px); color: #fff; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; display: flex; align-items: center; gap: 4px;" title="Produto em Entreposto no Brasil / Envio Nacional (3 a 7 dias)">
                                 <span>🇧🇷</span> BR
+                            </div>
+                        <?php else: ?>
+                            <div style="position: absolute; bottom: 10px; right: 10px; background: rgba(59, 130, 246, 0.9); backdrop-filter: blur(4px); color: #fff; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; display: flex; align-items: center; gap: 4px;" title="Importação Direta / Entreposto Central AliExpress (China) Remessa Conforme DDP">
+                                <span>🇨🇳</span> CN
                             </div>
                         <?php endif; ?>
                     </div>
@@ -1806,10 +1846,18 @@
                 <div style="margin-bottom: 18px;">
                     <label style="display: block; color: #94a3b8; font-size: 13px; margin-bottom: 6px;">Produtos por Categoria Oficial:</label>
                     <select name="items_per_category" style="width: 100%; background: #0c0f12; border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 10px 12px; border-radius: 6px; font-size: 14px;">
-                        <option value="10" selected>10 itens / categoria (100 produtos no total - Recomendado)</option>
-                        <option value="5">5 itens / categoria (50 produtos no total)</option>
-                        <option value="15">15 itens / categoria (150 produtos no total)</option>
-                        <option value="20">20 itens / categoria (200 produtos no total)</option>
+                        <option value="10" selected>10 itens / categoria (90 a 100 produtos no total - Recomendado)</option>
+                        <option value="5">5 itens / categoria (45 a 50 produtos no total)</option>
+                        <option value="15">15 itens / categoria (135 a 150 produtos no total)</option>
+                        <option value="20">20 itens / categoria (180 a 200 produtos no total)</option>
+                    </select>
+                </div>
+                <div style="margin-bottom: 18px;">
+                    <label style="display: block; color: #94a3b8; font-size: 13px; margin-bottom: 6px;">Origem dos Entrepostos de Estoque:</label>
+                    <select name="warehouse_origin" style="width: 100%; background: #0c0f12; border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 10px 12px; border-radius: 6px; font-size: 14px;">
+                        <option value="ALL" <?= (($config['mining_warehouse_origin'] ?? 'ALL') === 'ALL') ? 'selected' : '' ?>>🌐 Global: China (CN) + Brasil (BR) [Recomendado — Máxima Variedade]</option>
+                        <option value="BR" <?= (($config['mining_warehouse_origin'] ?? '') === 'BR') ? 'selected' : '' ?>>🇧🇷 Apenas Estoque no Brasil (Nacional — Envio em 3 a 7 dias)</option>
+                        <option value="CN" <?= (($config['mining_warehouse_origin'] ?? '') === 'CN') ? 'selected' : '' ?>>🇨🇳 Apenas Entrepostos na China (Importação Direta DDP)</option>
                     </select>
                 </div>
                 <div style="background: rgba(212,175,55,0.08); border: 1px solid rgba(212,175,55,0.25); border-radius: 8px; padding: 14px; margin-bottom: 24px;">
@@ -1835,10 +1883,12 @@
         var form = document.getElementById('formAcquireNew');
         var rep = form.querySelector('input[name="replace_catalog"]')?.checked;
         var items = form.querySelector('select[name="items_per_category"]')?.value || 10;
+        var origin = form.querySelector('select[name="warehouse_origin"]')?.value || 'ALL';
         if (typeof window.runProgressiveMiningCycle === 'function') {
             window.runProgressiveMiningCycle({
                 replaceCatalog: !!rep,
-                itemsPerCategory: parseInt(items, 10)
+                itemsPerCategory: parseInt(items, 10),
+                warehouseOrigin: origin
             });
         }
     });

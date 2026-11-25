@@ -307,6 +307,20 @@
             </span>
         </div>
 
+        <div style="margin-bottom: 24px;">
+            <label style="display: block; font-size: 13px; font-weight: 500; color: #fff; margin-bottom: 6px;">
+                <i class="fas fa-warehouse" style="color: #F0D060; margin-right: 4px;"></i> Entreposto Padrão para Mineração &amp; Rotação 24h
+            </label>
+            <select name="mining_warehouse_origin" style="width: 100%; background: rgba(0,0,0,0.25); border: 1px solid var(--border, rgba(255,255,255,0.15)); color: #fff; padding: 10px 14px; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+                <option value="ALL" <?= (($config['mining_warehouse_origin'] ?? 'ALL') === 'ALL') ? 'selected' : '' ?>>🌐 Global: China (CN) + Brasil (BR) [Recomendado — Máxima Variedade]</option>
+                <option value="BR" <?= (($config['mining_warehouse_origin'] ?? '') === 'BR') ? 'selected' : '' ?>>🇧🇷 Apenas Estoque no Brasil (Nacional — Entrega Rápida 3 a 7 dias)</option>
+                <option value="CN" <?= (($config['mining_warehouse_origin'] ?? '') === 'CN') ? 'selected' : '' ?>>🇨🇳 Apenas Entrepostos na China (Importação Direta DDP Remessa Conforme)</option>
+            </select>
+            <span style="font-size: 11px; color: var(--text-muted, #94a3b8); display: block; margin-top: 4px;">
+                Define a política padrão de origem de mercadorias. Quando "Global" estiver selecionado, a inteligência de mineração conecta tanto fornecedores centrais da China quanto estoques locais no Brasil, com rota 100% elegível e rastreada para o país.
+            </span>
+        </div>
+
         <!-- Card de Redirecionamento da Estratégia de Precificação -->
         <div style="margin: 28px 0 20px 0; background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(6, 78, 59, 0.15) 100%); border: 1.5px solid rgba(16, 185, 129, 0.35); border-radius: 8px; padding: 20px 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
             <div style="display: flex; align-items: center; gap: 14px; max-width: 580px;">

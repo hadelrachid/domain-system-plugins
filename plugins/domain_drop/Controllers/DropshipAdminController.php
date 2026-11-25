@@ -109,12 +109,16 @@ class DropshipAdminController
         $limit = max(1, min(100, (int)$request->input('limit', 10)));
         $sort = (string)$request->input('sort', 'volume_desc');
         $replaceCatalog = (bool)$request->input('replace_catalog', false);
+        $warehouseOrigin = strtoupper(trim((string)$request->input('warehouse_origin', 'ALL')));
+        if (!in_array($warehouseOrigin, ['ALL', 'BR', 'CN'], true)) {
+            $warehouseOrigin = 'ALL';
+        }
 
         try {
             if ($replaceCatalog) {
                 $this->catalogRepo->clearAll(preserveOrdered: true);
             }
-            $mined = $this->miningService->mineTrendingProducts($category, $limit, true, $sort);
+            $mined = $this->miningService->mineTrendingProducts($category, $limit, true, $sort, $warehouseOrigin);
             $this->catalogRepo->publishAll();
             $count = count($mined);
             $this->session->setFlash('success', "🚀 Mineração concluída com sucesso! {$count} produtos com alta reputação minerados e ativos para venda.");
@@ -222,6 +226,11 @@ class DropshipAdminController
         $updater = $this->pricingUpdater ?? new \DomainSystem\Plugins\domain_drop\Services\PricingConfigUpdater();
         $config = $updater->updateFromRequest($config, $request);
 
+        $originInput = strtoupper(trim((string)$request->input('mining_warehouse_origin', '')));
+        if (in_array($originInput, ['ALL', 'BR', 'CN'], true)) {
+            $config['mining_warehouse_origin'] = $originInput;
+        }
+
         $this->saveConfig($config);
         $this->session->setFlash('success', 'Configurações da API salvas com sucesso!');
 
@@ -240,6 +249,11 @@ class DropshipAdminController
         $config = $this->loadConfig();
         $updater = $this->pricingUpdater ?? new \DomainSystem\Plugins\domain_drop\Services\PricingConfigUpdater();
         $config = $updater->updateFromRequest($config, $request);
+
+        $originInput = strtoupper(trim((string)$request->input('mining_warehouse_origin', '')));
+        if (in_array($originInput, ['ALL', 'BR', 'CN'], true)) {
+            $config['mining_warehouse_origin'] = $originInput;
+        }
 
         $this->saveConfig($config);
         $this->session->setFlash('success', 'Estratégia de precificação e Sentinela de Volatilidade salvas com sucesso!');
@@ -1172,7 +1186,11 @@ class DropshipAdminController
 
         try {
             $itemsPerCategory = max(1, min(20, (int)$request->input('items_per_category', 10)));
-            $result = $this->miningService->runDailyAutomatedRotation($itemsPerCategory);
+            $warehouseOrigin = strtoupper(trim((string)$request->input('warehouse_origin', 'ALL')));
+            if (!in_array($warehouseOrigin, ['ALL', 'BR', 'CN'], true)) {
+                $warehouseOrigin = 'ALL';
+            }
+            $result = $this->miningService->runDailyAutomatedRotation($itemsPerCategory, $warehouseOrigin);
             $cycleInfo = $this->miningService->getDailyCycleInfo();
 
             if ($this->isAjaxOrJson($request)) {
@@ -1250,6 +1268,10 @@ class DropshipAdminController
 
         $replaceCatalog = (bool)$request->input('replace_catalog', true);
         $itemsPerCategory = max(1, min(20, (int)$request->input('items_per_category', 10)));
+        $warehouseOrigin = strtoupper(trim((string)$request->input('warehouse_origin', 'ALL')));
+        if (!in_array($warehouseOrigin, ['ALL', 'BR', 'CN'], true)) {
+            $warehouseOrigin = 'ALL';
+        }
 
         try {
             $purgedCount = 0;
@@ -1257,7 +1279,7 @@ class DropshipAdminController
                 $purgedCount = $this->catalogRepo->clearAll(preserveOrdered: true);
             }
 
-            $result = $this->miningService->runDailyAutomatedRotation($itemsPerCategory);
+            $result = $this->miningService->runDailyAutomatedRotation($itemsPerCategory, $warehouseOrigin);
 
             // Garante que todos os produtos minerados estejam 100% ativos para venda
             $this->catalogRepo->publishAll();
@@ -1289,14 +1311,24 @@ class DropshipAdminController
             $category = trim((string)$request->input('category', 'Eletrônicos & Gadget'));
             $itemsPerCategory = max(1, min(20, (int)$request->input('items_per_category', 10)));
             $replaceCatalog = (bool)$request->input('replace_catalog', false);
+            $warehouseOrigin = strtoupper(trim((string)$request->input('warehouse_origin', 'ALL')));
+            if (!in_array($warehouseOrigin, ['ALL', 'BR', 'CN'], true)) {
+                $warehouseOrigin = 'ALL';
+            }
 
             $purgedCount = 0;
             if ($replaceCatalog) {
                 $purgedCount = $this->catalogRepo->clearAll(preserveOrdered: true);
             }
 
-            // Minera apenas a categoria solicitada
-            $mined = $this->miningService->mineTrendingProducts(category: $category, limit: $itemsPerCategory, autoPersist: true);
+            // Minera apenas a categoria solicitada no entreposto selecionado
+            $mined = $this->miningService->mineTrendingProducts(
+                category: $category,
+                limit: $itemsPerCategory,
+                autoPersist: true,
+                sort: 'volume_desc',
+                warehouseOrigin: $warehouseOrigin
+            );
             $count = count($mined);
 
             // Garante publicação imediata
