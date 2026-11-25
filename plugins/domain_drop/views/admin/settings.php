@@ -64,8 +64,10 @@
 
     $requestsUsed = (int)($apiUsage['requests_this_month'] ?? 0);
     $quotaLimit = max(1, (int)($apiUsage['monthly_quota_limit'] ?? 1000000));
-    $pctUsed = (float)($apiUsage['percentage_used'] ?? 0.0);
-    $pctFree = (float)($apiUsage['percentage_available'] ?? 100.0);
+    $pctUsed = (float)($apiUsage['percentage_used'] ?? (($requestsUsed / $quotaLimit) * 100));
+    $pctFree = (float)($apiUsage['percentage_available'] ?? (100.0 - $pctUsed));
+    $pctUsedFormatted = ($pctUsed < 0.01 && $pctUsed > 0) ? number_format($pctUsed, 3, ',', '.') : number_format($pctUsed, 2, ',', '.');
+    $pctFreeFormatted = number_format($pctFree, 2, ',', '.');
 
     $lastDaily = (int)($config['last_daily_cycle_at'] ?? 0);
     $nextDailySec = max(0, 86400 - (time() - $lastDaily));
@@ -88,27 +90,38 @@
                 <span style="font-size: 13px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px;">
                     <i class="fas fa-chart-line" style="color: #45f3ff;"></i> Requisições da API
                 </span>
-                <span style="font-size: 11px; font-weight: 700; color: #4ade80; background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.3); padding: 2px 8px; border-radius: 10px;">
-                    <?= number_format($pctFree, 1, ',', '.') ?>% Livre
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 11px; font-weight: 700; color: #45f3ff; background: rgba(69,243,255,0.12); border: 1px solid rgba(69,243,255,0.3); padding: 2px 8px; border-radius: 10px;">
+                        <?= $pctUsedFormatted ?>% Usado
+                    </span>
+                    <span style="font-size: 11px; font-weight: 700; color: #4ade80; background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.3); padding: 2px 8px; border-radius: 10px;">
+                        <?= $pctFreeFormatted ?>% Livre
+                    </span>
+                </div>
+            </div>
+
+            <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
+                <div style="font-size: 24px; font-weight: 800; color: #fff; font-family: monospace;">
+                    <?= number_format($requestsUsed, 0, ',', '.') ?> <span style="font-size: 14px; font-weight: 500; color: #94a3b8;">/ <?= number_format($quotaLimit, 0, ',', '.') ?></span>
+                </div>
+                <span style="font-size: 15px; font-weight: 700; color: #45f3ff; font-family: monospace;">
+                    (<?= $pctUsedFormatted ?>%)
                 </span>
             </div>
 
-            <div style="font-size: 24px; font-weight: 800; color: #fff; margin-bottom: 4px; font-family: monospace;">
-                <?= number_format($requestsUsed, 0, ',', '.') ?> <span style="font-size: 14px; font-weight: 500; color: #94a3b8;">/ <?= number_format($quotaLimit, 0, ',', '.') ?></span>
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #94a3b8; margin-bottom: 8px;">
+                <span>Cota oficial do mês (<?= htmlspecialchars((string)($apiUsage['current_month'] ?? date('Y-m'))) ?>)</span>
+                <span style="color: #60a5fa; font-weight: 600; font-family: monospace;"><?= $pctUsedFormatted ?>% de 100%</span>
             </div>
 
-            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 12px;">
-                Cota oficial do mês (<?= htmlspecialchars((string)($apiUsage['current_month'] ?? date('Y-m'))) ?>)
+            <!-- Barra de Progresso Visual (0% a 100%) -->
+            <div style="width: 100%; height: 10px; background: rgba(255,255,255,0.08); border-radius: 5px; overflow: hidden; margin-bottom: 8px; border: 1px solid rgba(255,255,255,0.05); position: relative;">
+                <div style="width: <?= min(100.0, max(2.0, $pctUsed)) ?>%; height: 100%; background: linear-gradient(90deg, #45f3ff 0%, #10b981 100%); border-radius: 5px; box-shadow: 0 0 10px rgba(69,243,255,0.4); transition: width 0.4s ease;"></div>
             </div>
 
-            <!-- Barra de Progresso Visual -->
-            <div style="width: 100%; height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
-                <div style="width: <?= min(100.0, max(1.0, $pctUsed)) ?>%; height: 100%; background: linear-gradient(90deg, #45f3ff 0%, #22c55e 100%); border-radius: 4px; transition: width 0.3s ease;"></div>
-            </div>
-
-            <div style="font-size: 11px; color: #94a3b8; display: flex; justify-content: space-between;">
+            <div style="font-size: 11px; color: #94a3b8; display: flex; justify-content: space-between; align-items: center;">
                 <span>Total histórico: <strong style="color: #fff;"><?= number_format((int)($apiUsage['requests_total'] ?? 0), 0, ',', '.') ?></strong></span>
-                <span style="color: #4ade80;"><i class="fas fa-shield-alt"></i> Quota Saudável</span>
+                <span style="color: #4ade80; font-weight: 600;"><i class="fas fa-shield-alt"></i> Quota Saudável</span>
             </div>
         </div>
 

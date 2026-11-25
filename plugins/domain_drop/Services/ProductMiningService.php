@@ -82,9 +82,10 @@ class ProductMiningService implements ProductMiningServiceInterface
     {
         $category = self::normalizeCategory($category);
         $rawProducts = [];
+        $candidateTarget = min(60, max(25, $limit * 3));
         try {
-            $pageSize = min(max($limit, 10), 50);
-            $pagesNeeded = (int)ceil($limit / $pageSize);
+            $pageSize = min($candidateTarget, 50);
+            $pagesNeeded = (int)ceil($candidateTarget / $pageSize);
 
             // Obtém IDs e termos de busca oficiais da taxonomia alinhada ao AliExpress (categoria-e-atributos.pdf e dropshiper.pdf)
             $catIds = $this->taxonomy->getAliExpressCategoryIds($category);
@@ -118,7 +119,7 @@ class ProductMiningService implements ProductMiningServiceInterface
                 foreach ($batch as $bItem) {
                     $rawProducts[] = $bItem;
                 }
-                if (count($rawProducts) >= $limit) {
+                if (count($rawProducts) >= $candidateTarget) {
                     break;
                 }
             }
@@ -140,21 +141,30 @@ class ProductMiningService implements ProductMiningServiceInterface
 
         // Se a API remota oficial não estiver conectada (ou em modo Test), utiliza catálogo curado e verificado
         if (empty($rawProducts)) {
-            $rawProducts = $this->getCuratedTrendingFallback($category, $limit, $sort);
+            $rawProducts = $this->getCuratedTrendingFallback($category, $candidateTarget, $sort);
         } else {
-            $rawProducts = self::scoreAndSortByReputation($rawProducts, $sort, 4.5, 50, $limit);
+            $rawProducts = self::scoreAndSortByReputation($rawProducts, $sort, 4.0, 10, $candidateTarget);
         }
 
         // Ingestão no Container e Execução do Pipeline de Validação Contratual (Elimina 404s, Preços Isca e Restrições)
         $validatedBatch = $this->validationHub->ingestAndValidateBatch($rawProducts);
         $rawProducts = array_values($validatedBatch['valid_items']);
 
-        // Se todos os produtos externos falharem na validação, ativa o pool curado oficial verificado
-        if (empty($rawProducts)) {
-            $curatedFallback = $this->getCuratedTrendingFallback($category, $limit, $sort);
+        // Se os produtos externos descartados deixarem a cota abaixo do solicitado, complementa com o pool curado oficial
+        if (count($rawProducts) < $limit) {
+            $needed = $limit - count($rawProducts);
+            $curatedFallback = $this->getCuratedTrendingFallback($category, $needed + 5, $sort);
             $validatedCurated = $this->validationHub->ingestAndValidateBatch($curatedFallback);
-            $rawProducts = array_values($validatedCurated['valid_items']);
+            foreach ($validatedCurated['valid_items'] as $cItem) {
+                $rawProducts[] = $cItem;
+                if (count($rawProducts) >= $limit) {
+                    break;
+                }
+            }
         }
+
+        // Garante a cota exata solicitada com produtos 100% aprovados pelos 4 Guardiões
+        $rawProducts = array_slice($rawProducts, 0, max(1, $limit));
 
         $mined = [];
         foreach ($rawProducts as $item) {
@@ -376,7 +386,7 @@ class ProductMiningService implements ProductMiningServiceInterface
                 $minPriceBrl = (float)($raw['prices']['salePrice']['minPrice'] ?? ($raw['prices']['originalPrice']['minPrice'] ?? 0.0));
                 $costPriceUsd = $minPriceBrl > 0.0 ? round($minPriceBrl / $usdRate, 2) : 12.00;
                 $config = $this->loadConfig();
-                $markup = isset($config['default_markup_percent']) ? (float)$config['default_markup_percent'] : 30.0;
+                $markup = isset($config['default_markup_percent']) ? (float)$config['default_markup_percent'] : 100.0;
                 $volatility = isset($config['default_volatility_percent']) ? (float)$config['default_volatility_percent'] : 0.0;
                 $salePriceBrl = $minPriceBrl > 0.0
                     ? $this->currencyConverter->calculateSalePriceFromBrl($minPriceBrl, $markup, $volatility)
@@ -698,7 +708,7 @@ class ProductMiningService implements ProductMiningServiceInterface
         $slug = $this->slugify($polishedTitle . '-' . substr($scraped->sourceId, -4));
         $costBrl = !empty($scraped->attributes['cost_price_brl']) ? (float)$scraped->attributes['cost_price_brl'] : 0.0;
         $config = $this->loadConfig();
-        $markup = isset($config['default_markup_percent']) ? (float)$config['default_markup_percent'] : 30.0;
+        $markup = isset($config['default_markup_percent']) ? (float)$config['default_markup_percent'] : 100.0;
         $volatility = isset($config['default_volatility_percent']) ? (float)$config['default_volatility_percent'] : 0.0;
         $salePriceBrl = $costBrl > 0.0
             ? $this->currencyConverter->calculateSalePriceFromBrl($costBrl, $markup, $volatility)
@@ -900,7 +910,7 @@ class ProductMiningService implements ProductMiningServiceInterface
         }
 
         $config = $this->loadConfig();
-        $markup = isset($config['default_markup_percent']) ? (float)$config['default_markup_percent'] : 30.0;
+        $markup = isset($config['default_markup_percent']) ? (float)$config['default_markup_percent'] : 100.0;
         $volatility = isset($config['default_volatility_percent']) ? (float)$config['default_volatility_percent'] : 0.0;
 
         if ($costBrl > 0.0) {
