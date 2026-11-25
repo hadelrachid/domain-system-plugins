@@ -293,6 +293,10 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
             );
         });
 
+        $runtime->singleton(\DomainSystem\Plugins\domain_drop\Contracts\CuratedCatalogProviderInterface::class, function () {
+            return new \DomainSystem\Plugins\domain_drop\Services\CuratedCatalogProvider();
+        });
+
         $runtime->singleton(ProductMiningServiceInterface::class, function () use ($runtime) {
             return new ProductMiningService(
                 apiClient: $runtime->make(AliExpressApiClientInterface::class),
@@ -301,7 +305,8 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
                 repository: $runtime->make(DropshipCatalogRepositoryInterface::class),
                 linkScraper: $runtime->make(ProductLinkScraperInterface::class),
                 demandMetricsRepo: $runtime->make(\DomainSystem\Plugins\domain_drop\Contracts\DemandMetricsRepositoryInterface::class),
-                taxonomy: $runtime->make(CategoryTaxonomyInterface::class)
+                taxonomy: $runtime->make(CategoryTaxonomyInterface::class),
+                catalogProvider: $runtime->make(\DomainSystem\Plugins\domain_drop\Contracts\CuratedCatalogProviderInterface::class)
             );
         });
 
