@@ -528,6 +528,16 @@
                     <!-- Content -->
                     <div style="padding: 16px; flex: 1; display: flex; flex-direction: column; justify-content: space-between;">
                         <div>
+                            <?php if (!empty($prod->attributes['store_name'])): ?>
+                                <div style="font-size: 11px; color: #a78bfa; margin-bottom: 6px; display: flex; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                    <i class="fas fa-store" style="font-size: 10px;"></i>
+                                    <?php if (!empty($prod->attributes['store_url'])): ?>
+                                        <a href="<?= htmlspecialchars($prod->attributes['store_url']) ?>" target="_blank" rel="noopener noreferrer" style="color: #a78bfa; text-decoration: none; font-weight: 500;" title="Abrir loja do vendedor no AliExpress"><?= htmlspecialchars($prod->attributes['store_name']) ?></a>
+                                    <?php else: ?>
+                                        <span style="font-weight: 500;"><?= htmlspecialchars($prod->attributes['store_name']) ?></span>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endif; ?>
                             <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600; color: #fff; line-height: 1.4; max-height: 2.8em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;" title="<?= htmlspecialchars($prod->title) ?>">
                                 <?= htmlspecialchars($prod->title) ?>
                             </h4>
@@ -556,12 +566,16 @@
                                     <i class="fas fa-eye"></i> Loja
                                 </a>
                                 <?php
-                                $isRealAeId = !empty($prod->aliexpressId) && is_numeric($prod->aliexpressId) && strlen($prod->aliexpressId) >= 12 && !str_starts_with($prod->aliexpressId, '100508');
-                                $aeLink = $isRealAeId
-                                    ? 'https://www.aliexpress.com/item/' . htmlspecialchars($prod->aliexpressId) . '.html'
+                                $directAeUrl = !empty($prod->attributes['aliexpress_url']) ? $prod->attributes['aliexpress_url'] : '';
+                                $isRealAeId = !empty($prod->aliexpressId) && preg_match('/^\d{8,24}$/', (string)$prod->aliexpressId);
+                                if (empty($directAeUrl) && $isRealAeId) {
+                                    $directAeUrl = 'https://www.aliexpress.com/item/' . htmlspecialchars((string)$prod->aliexpressId) . '.html';
+                                }
+                                $aeLink = !empty($directAeUrl)
+                                    ? $directAeUrl
                                     : 'https://www.aliexpress.com/wholesale?SearchText=' . urlencode($prod->title);
                                 ?>
-                                <a href="<?= $aeLink ?>" target="_blank" rel="noopener noreferrer" style="height: 26px; padding: 0 8px; font-size: 11px; font-weight: 600; color: #ff6b6b; background: rgba(255, 107, 107, 0.08); border: 1px solid rgba(255, 107, 107, 0.25); border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; text-decoration: none; box-sizing: border-box; line-height: 1;" title="<?= $isRealAeId ? 'Abrir anúncio original no AliExpress' : 'Buscar fornecedores deste item no AliExpress' ?>">
+                                <a href="<?= $aeLink ?>" target="_blank" rel="noopener noreferrer" style="height: 26px; padding: 0 8px; font-size: 11px; font-weight: 600; color: #ff6b6b; background: rgba(255, 107, 107, 0.08); border: 1px solid rgba(255, 107, 107, 0.25); border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; text-decoration: none; box-sizing: border-box; line-height: 1;" title="<?= !empty($directAeUrl) ? 'Abrir anúncio original do vendedor no AliExpress' : 'Buscar fornecedores deste item no AliExpress' ?>">
                                     <i class="fas fa-external-link-alt"></i> Link
                                 </a>
                                 <?php if ($prod->id !== null): ?>
@@ -1100,10 +1114,13 @@
 
             document.getElementById('imagesModalTitle').textContent = activeImagesState.title;
             document.getElementById('imagesModalTitle').title = activeImagesState.title;
-            var isRealId = activeImagesState.aliexpressId && /^\d{12,}$/.test(activeImagesState.aliexpressId) && !String(activeImagesState.aliexpressId).startsWith('100508');
-            document.getElementById('imagesModalAeLink').href = isRealId
-                ? 'https://www.aliexpress.com/item/' + encodeURIComponent(activeImagesState.aliexpressId) + '.html'
-                : 'https://www.aliexpress.com/wholesale?SearchText=' + encodeURIComponent(activeImagesState.title);
+            var directUrl = (item.attributes && item.attributes.aliexpress_url) ? item.attributes.aliexpress_url : '';
+            var isRealId = activeImagesState.aliexpressId && /^\d{8,24}$/.test(String(activeImagesState.aliexpressId));
+            document.getElementById('imagesModalAeLink').href = directUrl
+                ? directUrl
+                : (isRealId
+                    ? 'https://www.aliexpress.com/item/' + encodeURIComponent(activeImagesState.aliexpressId) + '.html'
+                    : 'https://www.aliexpress.com/wholesale?SearchText=' + encodeURIComponent(activeImagesState.title));
             document.getElementById('imagesModalNewUrl').value = '';
             setImagesModalStatus('', 'info');
             renderImagesModalGrid();

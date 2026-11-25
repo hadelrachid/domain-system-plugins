@@ -323,32 +323,65 @@ class ProductMediaSyncService implements ProductMediaSyncInterface
             }
         }
 
-        $skuDtos = $root['ae_item_sku_info_dtos']['ae_item_sku_info_d_t_o'] ?? [];
+        $skuDtos = $root['ae_item_sku_info_dtos']['ae_item_sku_info_d_t_o'] ?? ($root['ae_item_sku_info_dtos'] ?? []);
+        $minSkuCost = null;
         if (is_array($skuDtos)) {
-            $skuList = isset($skuDtos['sku_id']) || isset($skuDtos['id']) ? [$skuDtos] : $skuDtos;
+            $skuList = (isset($skuDtos['sku_id']) || isset($skuDtos['id']) || isset($skuDtos['ae_sku_property_dtos'])) ? [$skuDtos] : $skuDtos;
             foreach ($skuList as $sku) {
                 if (!is_array($sku)) {
                     continue;
                 }
-                $skuImg = trim((string)($sku['sku_image_url'] ?? ''));
+                $skuPrice = (float)($sku['offer_sale_price'] ?? ($sku['sku_price'] ?? 0.0));
+                if ($skuPrice > 0.0 && ($minSkuCost === null || $skuPrice < $minSkuCost)) {
+                    $minSkuCost = $skuPrice;
+                }
+                $skuImg = trim((string)($sku['sku_image'] ?? ($sku['sku_image_url'] ?? '')));
                 if ($skuImg !== '' && !in_array($skuImg, $images, true)) {
                     $images[] = $skuImg;
+                }
+                $rawProps = $sku['ae_sku_property_dtos']['ae_sku_property_d_t_o'] ?? ($sku['ae_sku_property_dtos'] ?? []);
+                if (is_array($rawProps)) {
+                    if (isset($rawProps['sku_image'])) {
+                        $rawProps = [$rawProps];
+                    }
+                    foreach ($rawProps as $rp) {
+                        if (is_array($rp) && !empty($rp['sku_image'])) {
+                            $rpImg = trim((string)$rp['sku_image']);
+                            if ($rpImg !== '' && !in_array($rpImg, $images, true)) {
+                                $images[] = $rpImg;
+                            }
+                        }
+                    }
                 }
             }
         }
 
         $mainImage = $images[0] ?? $existing->mainImageUrl;
-        $costUsd = (float)($baseInfo['target_sale_price'] ?? ($baseInfo['offer_sale_price'] ?? $existing->costPriceUsd));
-        if ($costUsd <= 0.0 && is_array($skuDtos)) {
-            $firstSku = isset($skuDtos['sku_id']) ? $skuDtos : ($skuDtos[0] ?? []);
-            if (is_array($firstSku)) {
-                $costUsd = (float)($firstSku['sku_price'] ?? ($firstSku['offer_sale_price'] ?? 0.0));
-            }
+        $costUsd = (float)($baseInfo['offer_sale_price'] ?? ($baseInfo['target_sale_price'] ?? ($minSkuCost ?? $existing->costPriceUsd)));
+
+        // Metadados do Vendedor e Link Direto
+        $storeInfo = $root['ae_store_info'] ?? ($root['store_info'] ?? []);
+        $attrs = is_array($existing->attributes) ? $existing->attributes : [];
+        $attrs['sdk_synced_at'] = time();
+        if (!empty($storeInfo['store_name'])) {
+            $attrs['store_name'] = (string)$storeInfo['store_name'];
+        }
+        if (!empty($storeInfo['store_id'])) {
+            $attrs['store_id'] = (string)$storeInfo['store_id'];
+            $attrs['store_url'] = 'https://www.aliexpress.com/store/' . $storeInfo['store_id'];
+        }
+        if (!empty($storeInfo['store_country_code'])) {
+            $attrs['store_country'] = (string)$storeInfo['store_country_code'];
+        }
+        if (!empty($root['itemUrl'])) {
+            $attrs['aliexpress_url'] = (string)$root['itemUrl'];
+        } elseif (!empty($sourceId) && is_numeric($sourceId)) {
+            $attrs['aliexpress_url'] = "https://www.aliexpress.com/item/{$sourceId}.html";
         }
 
         return new ScrapedProductDto(
             sourceId: $sourceId,
-            sourceUrl: "https://pt.aliexpress.com/item/{$sourceId}.html",
+            sourceUrl: $attrs['aliexpress_url'] ?? "https://www.aliexpress.com/item/{$sourceId}.html",
             rawTitle: $rawTitle,
             mainImageUrl: $mainImage,
             galleryImages: $images,
@@ -356,7 +389,7 @@ class ProductMediaSyncService implements ProductMediaSyncInterface
             category: $existing->category,
             rating: (float)($baseInfo['avg_evaluation_rating'] ?? $existing->rating),
             ordersCount: (int)($baseInfo['sales_count'] ?? $existing->ordersCount),
-            attributes: ['sdk_synced_at' => time()]
+            attributes: $attrs
         );
     }
 }

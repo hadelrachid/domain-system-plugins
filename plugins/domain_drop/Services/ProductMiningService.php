@@ -122,7 +122,14 @@ class ProductMiningService implements ProductMiningServiceInterface
         $mined = [];
         foreach ($rawProducts as $item) {
             try {
-                $itemId = (string)($item['product_id'] ?? ($item['item_id'] ?? uniqid('ae_')));
+                $baseInfo = $item['ae_item_base_info_dto'] ?? [];
+                $itemId = (string)(
+                    $item['itemId']
+                    ?? ($item['product_id']
+                    ?? ($baseInfo['product_id']
+                    ?? ($item['item_id']
+                    ?? ($item['productId'] ?? uniqid('ae_')))))
+                );
                 $dto = $this->processWithTransientBuffer(
                     $itemId,
                     $item,
@@ -735,9 +742,28 @@ class ProductMiningService implements ProductMiningServiceInterface
 
         // 2.5 De variantes/SKUs oficiais do AliExpress
         if (is_array($skuDtos)) {
-            foreach ($skuDtos as $sku) {
+            $normalizedSkuList = (isset($skuDtos['sku_id']) || isset($skuDtos['id']) || isset($skuDtos['ae_sku_property_dtos'])) ? [$skuDtos] : $skuDtos;
+            foreach ($normalizedSkuList as $sku) {
+                if (!is_array($sku)) {
+                    continue;
+                }
+                if (!empty($sku['sku_image'])) {
+                    $collectedImages[] = (string)$sku['sku_image'];
+                }
                 if (!empty($sku['sku_image_url'])) {
                     $collectedImages[] = (string)$sku['sku_image_url'];
+                }
+                $rawProps = $sku['ae_sku_property_dtos']['ae_sku_property_d_t_o']
+                    ?? ($sku['ae_sku_property_dtos'] ?? ($sku['sku_properties'] ?? []));
+                if (is_array($rawProps)) {
+                    if (isset($rawProps['sku_image']) || isset($rawProps['sku_property_name'])) {
+                        $rawProps = [$rawProps];
+                    }
+                    foreach ($rawProps as $rp) {
+                        if (is_array($rp) && !empty($rp['sku_image'])) {
+                            $collectedImages[] = (string)$rp['sku_image'];
+                        }
+                    }
                 }
             }
         }
@@ -773,15 +799,31 @@ class ProductMiningService implements ProductMiningServiceInterface
         }
 
         // 3. Precificação em Dólar e Conversão em Reais (suporta camelCase do dropshiper.pdf e snake_case legado)
+        $minSkuCost = null;
+        if (is_array($skuDtos) && !empty($skuDtos)) {
+            $normSkus = (isset($skuDtos['sku_id']) || isset($skuDtos['offer_sale_price']) || isset($skuDtos['sku_price']))
+                ? [$skuDtos]
+                : $skuDtos;
+            foreach ($normSkus as $sk) {
+                if (is_array($sk)) {
+                    $p = (float)($sk['offer_sale_price'] ?? ($sk['sku_price'] ?? 0.0));
+                    if ($p > 0.0 && ($minSkuCost === null || $p < $minSkuCost)) {
+                        $minSkuCost = $p;
+                    }
+                }
+            }
+        }
+
         $costBrl = (float)($item['cost_price_brl'] ?? 0.0);
         $costPriceUsd = (float)(
             $item['targetSalePrice']
             ?? ($item['salePrice']
             ?? ($item['target_sale_price']
             ?? ($item['sale_price']
+            ?? ($minSkuCost
             ?? ($item['targetOriginalPrice']
             ?? ($item['originalPrice']
-            ?? ($item['original_price'] ?? 10.0))))))
+            ?? ($item['original_price'] ?? 10.0)))))))
         );
         if ($costBrl > 0.0) {
             $salePriceBrl = $this->currencyConverter->calculateSalePriceFromBrl($costBrl, 100.0);
@@ -807,8 +849,27 @@ class ProductMiningService implements ProductMiningServiceInterface
             $props['ship_from'] = 'BR';
             $props['origem_brasil'] = true;
         }
+
+        // Metadados do Vendedor Oficial AliExpress (ae_store_info)
+        $storeInfo = $item['ae_store_info'] ?? ($item['store_info'] ?? []);
+        if (!empty($storeInfo) && is_array($storeInfo)) {
+            if (!empty($storeInfo['store_name'])) {
+                $props['store_name'] = (string)$storeInfo['store_name'];
+            }
+            if (!empty($storeInfo['store_id'])) {
+                $props['store_id'] = (string)$storeInfo['store_id'];
+                $props['store_url'] = 'https://www.aliexpress.com/store/' . $storeInfo['store_id'];
+            }
+            if (!empty($storeInfo['store_country_code'])) {
+                $props['store_country'] = (string)$storeInfo['store_country_code'];
+            }
+        }
+
+        // Link Direto do Produto no Vendedor Oficial
         if (!empty($item['itemUrl'])) {
             $props['aliexpress_url'] = (string)$item['itemUrl'];
+        } elseif (!empty($aeId) && is_numeric($aeId)) {
+            $props['aliexpress_url'] = 'https://www.aliexpress.com/item/' . $aeId . '.html';
         }
         if (!empty($item['productVideoUrl'])) {
             $props['video_url'] = (string)$item['productVideoUrl'];
@@ -854,12 +915,13 @@ class ProductMiningService implements ProductMiningServiceInterface
                     continue;
                 }
                 $skuId = (string)($sku['sku_id'] ?? ($sku['id'] ?? uniqid('sku_')));
-                $skuPriceUsd = (float)($sku['sku_price'] ?? ($sku['offer_sale_price'] ?? $costPriceUsd));
+                $skuPriceUsd = (float)($sku['offer_sale_price'] ?? ($sku['sku_price'] ?? $costPriceUsd));
                 $skuCostBrl = (float)($sku['cost_price_brl'] ?? 0.0);
                 $skuPriceBrl = $skuCostBrl > 0.0
                     ? $this->currencyConverter->calculateSalePriceFromBrl($skuCostBrl, 100.0)
                     : $this->currencyConverter->calculateSalePrice($skuPriceUsd, 100.0);
-                $skuImage = !empty($sku['sku_image_url']) ? $this->cleanImageUrl((string)$sku['sku_image_url']) : $mainImage;
+                $skuRawImg = !empty($sku['sku_image']) ? $sku['sku_image'] : (!empty($sku['sku_image_url']) ? $sku['sku_image_url'] : '');
+                $skuImage = !empty($skuRawImg) ? $this->cleanImageUrl((string)$skuRawImg) : $mainImage;
                 $skuStock = (int)($sku['sku_available_stock'] ?? ($sku['sku_stock'] ?? 100));
                 $skuAttr = (string)($sku['sku_attr'] ?? ($sku['sku_code'] ?? ''));
 
@@ -867,12 +929,15 @@ class ProductMiningService implements ProductMiningServiceInterface
                 $rawProps = $sku['ae_sku_property_dtos']['ae_sku_property_d_t_o']
                     ?? ($sku['ae_sku_property_dtos'] ?? ($sku['sku_properties'] ?? []));
                 if (is_array($rawProps)) {
-                    if (isset($rawProps['sku_property_name']) || isset($rawProps['property_name'])) {
+                    if (isset($rawProps['sku_property_name']) || isset($rawProps['property_name']) || isset($rawProps['sku_image'])) {
                         $rawProps = [$rawProps];
                     }
                     foreach ($rawProps as $rp) {
                         if (!is_array($rp)) {
                             continue;
+                        }
+                        if (!empty($rp['sku_image'])) {
+                            $skuImage = $this->cleanImageUrl((string)$rp['sku_image']);
                         }
                         $propName = trim((string)($rp['sku_property_name'] ?? ($rp['property_name'] ?? '')));
                         $lowerProp = mb_strtolower($propName, 'UTF-8');

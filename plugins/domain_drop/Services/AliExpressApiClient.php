@@ -329,7 +329,32 @@ class AliExpressApiClient implements AliExpressApiClientInterface
             }
 
             if (is_array($products) && !empty($products)) {
-                return $products;
+                $enrichedProducts = [];
+                foreach ($products as $p) {
+                    $pId = (string)($p['itemId'] ?? ($p['item_id'] ?? ($p['product_id'] ?? ($p['productId'] ?? ''))));
+                    if ($pId !== '' && is_numeric($pId)) {
+                        try {
+                            $details = $this->getProductDetails($pId, 'pt', 'USD');
+                            $unwrappedDetails = \DomainSystem\Plugins\domain_drop\ValueObjects\AliExpressToken::unwrapPayload($details);
+                            $productData = $unwrappedDetails['result'] ?? ($details['result'] ?? $unwrappedDetails);
+                            if (!empty($productData) && is_array($productData) && (isset($productData['ae_item_base_info_dto']) || isset($productData['ae_multimedia_info_dto']))) {
+                                $merged = array_merge($p, $productData);
+                                if (!isset($merged['itemUrl']) && !empty($p['itemUrl'])) {
+                                    $merged['itemUrl'] = $p['itemUrl'];
+                                }
+                                if (!isset($merged['itemId'])) {
+                                    $merged['itemId'] = $pId;
+                                }
+                                $enrichedProducts[] = $merged;
+                                continue;
+                            }
+                        } catch (Throwable $e) {
+                            // Se falhar a consulta de detalhes individuais, preserva o card de busca
+                        }
+                    }
+                    $enrichedProducts[] = $p;
+                }
+                return $enrichedProducts;
             }
         }
 
