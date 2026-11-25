@@ -91,36 +91,54 @@ class ProductMiningService implements ProductMiningServiceInterface
             $catIds = $this->taxonomy->getAliExpressCategoryIds($category);
             $primaryCatId = !empty($catIds) ? (string)$catIds[0] : null;
             $searchTerms = $this->taxonomy->getAliExpressSearchKeywords($category);
-            $primaryKeyword = !empty($searchTerms) ? $searchTerms[0] : $category;
+            if (empty($searchTerms)) {
+                $searchTerms = [$category];
+            }
 
-            for ($page = 1; $page <= $pagesNeeded; $page++) {
-                $batch = $this->apiClient->searchProducts([
-                    'keyword'           => $primaryKeyword,
-                    'keyWord'           => $primaryKeyword,
-                    'query'             => $primaryKeyword,
-                    'category_id'       => $primaryCatId,
-                    'categoryId'        => $primaryCatId,
-                    'feed_name'         => 'DS bestseller',
-                    'page_size'         => (string)$pageSize,
-                    'page_no'           => (string)$page,
-                    'page_index'        => (string)$page,
-                    'sort'              => $sort,
-                    'sort_by'           => 'orders,desc',
-                    'local'             => 'pt_BR',
-                    'country_code'      => 'BR',
-                    'country'           => 'BR',
-                    'currency'          => 'BRL',
-                    'ship_from_country' => 'BR',
-                    'ship_to_country'   => 'BR',
-                ]);
-                if (empty($batch) || !is_array($batch)) {
-                    break;
-                }
-                foreach ($batch as $bItem) {
-                    $rawProducts[] = $bItem;
-                }
+            $seenIds = [];
+
+            // Estratégia Adaptativa (Tentativas e Acertos):
+            // Itera sobre os termos de busca oficiais da categoria até acumular a cota de candidatos limpos
+            foreach ($searchTerms as $term) {
                 if (count($rawProducts) >= $candidateTarget) {
                     break;
+                }
+                try {
+                    $batch = $this->apiClient->searchProducts([
+                        'keyword'           => $term,
+                        'keyWord'           => $term,
+                        'query'             => $term,
+                        'category_id'       => $primaryCatId,
+                        'categoryId'        => $primaryCatId,
+                        'feed_name'         => 'DS bestseller',
+                        'page_size'         => '20',
+                        'page_no'           => '1',
+                        'page_index'        => '1',
+                        'sort'              => $sort,
+                        'sort_by'           => 'orders,desc',
+                        'local'             => 'pt_BR',
+                        'country_code'      => 'BR',
+                        'country'           => 'BR',
+                        'currency'          => 'BRL',
+                        'ship_from_country' => 'BR',
+                        'ship_to_country'   => 'BR',
+                    ]);
+
+                    if (is_array($batch) && !empty($batch)) {
+                        foreach ($batch as $bItem) {
+                            $pId = (string)($bItem['itemId'] ?? ($bItem['product_id'] ?? ($bItem['item_id'] ?? '')));
+                            if ($pId !== '' && !isset($seenIds[$pId])) {
+                                $seenIds[$pId] = true;
+                                $rawProducts[] = $bItem;
+                                if (count($rawProducts) >= $candidateTarget) {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                } catch (Throwable $eTerm) {
+                    // Isolamento por termo: segue para a próxima tentativa da mesma categoria
+                    continue;
                 }
             }
         } catch (Throwable $e) {
@@ -298,11 +316,18 @@ class ProductMiningService implements ProductMiningServiceInterface
         ];
 
         $termList = $searchTerms[$category] ?? ['smartwatch brasil', 'fone bluetooth'];
-        $searchTerm = $termList[array_rand($termList)];
-        // Empurra para a vitrine e estoques do Brasil (Remessa Conforme e Envio Local com Estoque no Brasil)
-        $searchUrl = "https://pt.aliexpress.com/w/wholesale-" . urlencode($searchTerm) . ".html?country=BR&locale=pt_BR&currency=BRL&shipFrom=BR&isrefine=y";
+        $html = null;
 
-        $html = $this->fetchLiveSearchHtml($searchUrl);
+        // Tentativas e acertos: testa os termos da categoria até obter retorno válido
+        foreach ($termList as $searchTerm) {
+            $searchUrl = "https://pt.aliexpress.com/w/wholesale-" . urlencode($searchTerm) . ".html?country=BR&locale=pt_BR&currency=BRL&shipFrom=BR&isrefine=y";
+            $fetched = $this->fetchLiveSearchHtml($searchUrl);
+            if ($fetched && is_string($fetched) && strlen($fetched) > 1000) {
+                $html = $fetched;
+                break;
+            }
+        }
+
         if (!$html || !is_string($html)) {
             return [];
         }

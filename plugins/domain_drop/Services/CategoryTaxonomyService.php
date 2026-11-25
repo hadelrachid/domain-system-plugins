@@ -77,17 +77,98 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
     {
         $canonical = $this->normalizeCategory($category);
         return match ($canonical) {
-            self::CAT_TECH       => ['fone bluetooth tws', 'carregador turbo usb c', 'fone sem fio', 'power bank'],
-            self::CAT_SMARTWATCH => ['smartwatch', 'relogio inteligente', 'pulseira smartwatch'],
-            self::CAT_HOME       => ['fita led rgb', 'luminaria tuya inteligente', 'lampada inteligente wifi', 'aspirador portatil'],
-            self::CAT_TOOLS      => ['alicate crimpador decapador', 'jogo chave precisao catraca', 'ferramentas reparo manual'],
-            self::CAT_BEAUTY     => ['escova secadora modeladora', 'maquiagem paleta', 'barbeador eletrico recarregavel'],
-            self::CAT_PETS       => ['coleira led cachorro', 'escova pelos pet gato cão', 'brinquedo interativo pet'],
-            self::CAT_AUTO       => ['suporte celular veicular', 'acessorios carro suporte', 'led veicular automotivo'],
-            self::CAT_FASHION    => ['mochila executiva impermeavel', 'tenis casual confortavel', 'bolsa transversal feminina'],
-            self::CAT_LINGERIE   => ['lingerie renda sexy', 'sutia sem costura push up', 'pijama cetim seda'],
-            self::CAT_ADULT      => ['massageador muscular eletrico', 'rolo massagem relaxamento'],
-            default              => ['eletronicos'],
+            self::CAT_TECH       => [
+                'fone bluetooth tws brasil',
+                'carregador turbo tipo c 65w',
+                'power bank inducao magnetico',
+                'headset gamer microfone rgb',
+                'mini projetor led 4k portatil',
+                'caixa de som bluetooth potente',
+                'fone conducao ossea corrida',
+                'suporte articulado celular mesa',
+                'cabo usb c carregamento rapido',
+                'adaptador bluetooth transmissor audio'
+            ],
+            self::CAT_SMARTWATCH => [
+                'smartwatch prova dagua nfc gps',
+                'relogio inteligente monitor cardiaco',
+                'smartwatch esportivo corrida fitness',
+                'pulseira magnetica smartwatch',
+                'smartwatch feminino elegante tela amoled',
+                'relogio quartzo masculino executivo luxo',
+                'smartwatch chamada bluetooth bateria longa'
+            ],
+            self::CAT_HOME       => [
+                'fita led rgb inteligente tuya wifi',
+                'lampada inteligente wifi alexa rgb',
+                'sensor presenca inteligente automacao',
+                'aspirador de po robo portatil recarregavel',
+                'dispensador sabonete automatico sensor',
+                'umidificador aromatizador ultrassonico led',
+                'fechadura digital biometrica senha',
+                'luz noturna sensor movimento sem fio'
+            ],
+            self::CAT_TOOLS      => [
+                'alicate desencapador fios multifuncional',
+                'jogo chave de precisao catraca bits',
+                'parafusadeira eletrica sem fio recarregavel',
+                'trena laser digital medidor distancia',
+                'canivete tatico multifuncional sobrevivencia',
+                'lanterna tatica led potente militar recarregavel',
+                'soldador eletrico portatil precisao ferro'
+            ],
+            self::CAT_BEAUTY     => [
+                'escova secadora alisadora modeladora 3 em 1',
+                'paleta de sombras maquiagem profissional',
+                'barbeador eletrico masculino aparador pelos',
+                'depilador laser luz pulsada ipl indolor',
+                'gloss labial efeito plump volume hidratante',
+                'massageador facial eletrico gua sha lifting',
+                'kit pinceis maquiagem profissional estojo',
+                'espelho de maquiagem led recarregavel toque'
+            ],
+            self::CAT_PETS       => [
+                'coleira led luminosa cachorro recarregavel usb',
+                'bebedouro fonte automatica pet gato cachorro',
+                'escova a vapor pet removedora pelos gatos caes',
+                'brinquedo interativo inteligência gato pet',
+                'cama nuvem calmante pelucia cachorro pet',
+                'cortador de unhas pet com led iluminador',
+                'tapete higienico impermeavel lavavel cachorro'
+            ],
+            self::CAT_AUTO       => [
+                'suporte celular veicular carregador inducao magsafe',
+                'transmissor bluetooth veicular fm usb aux',
+                'aspirador automotivo portatil potente sem fio',
+                'compressor de ar portatil eletrico pneus carro',
+                'camera veicular dvr gravador painel seguranca',
+                'fita led interna veicular sensor som rgb neon',
+                'chaveiro veicular couro metal luxo logo'
+            ],
+            self::CAT_FASHION    => [
+                'mochila executiva impermeavel antifurto usb notebook',
+                'tenis esportivo corrida caminhada respiravel leve',
+                'bolsa transversal feminina tiracolo couro vintage',
+                'carteira masculina couro legítimo antifurto rfid slim',
+                'jaqueta corta vento impermeavel capuz ciclismo',
+                'oculos de sol polarizado uv400 unissex protecao',
+                'bone aba curva basico algodao unissex'
+            ],
+            self::CAT_LINGERIE   => [
+                'conjunto lingerie renda sexy sutia calcinha luxo',
+                'sutia sem costura sustentacao push up confortavel',
+                'pijama feminino cetim seda camisola renda',
+                'kit cuecas boxer modal sem costura respiravel',
+                'meia calca termica translucida forrada peluciada',
+                'kit calcinhas sem costura invisivel algodao'
+            ],
+            self::CAT_ADULT      => [
+                'massageador muscular eletrico pistola relaxamento corporal',
+                'massageador cervical pescoco ombros calor',
+                'rolo de massagem miofascial fisioterapia yoga',
+                'almofada massageadora postural lombar eletrica'
+            ],
+            default              => ['eletronicos utilidades brasil'],
         };
     }
 
