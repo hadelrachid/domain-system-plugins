@@ -136,7 +136,7 @@
                             <span>🔍</span>
                             <span>Ver Detalhes</span>
                         </a>
-                        <a href="<?= htmlspecialchars($checkoutUrl) ?>" onclick="if(window.trackDropAction) window.trackDropAction(<?= $jsProdId ?>, <?= $jsProdTitle ?>, <?= $jsProdCat ?>, 'buy_click');" style="flex: 1; background: linear-gradient(135deg, #F0D060 0%, #D4AF37 100%); color: #0b0f17; text-decoration: none; padding: 0 6px; height: 36px; border-radius: 6px; font-size: 11.5px; font-weight: 800; text-align: center; text-transform: uppercase; letter-spacing: 0.4px; box-shadow: 0 4px 14px rgba(212, 175, 55, 0.35); transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; white-space: nowrap; line-height: 1.2;">
+                        <a href="<?= htmlspecialchars($checkoutUrl) ?>" onclick="return handleStageBuyClick(event, this, <?= (int)$p->id ?>, <?= htmlspecialchars((string)json_encode((string)$p->slug), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars((string)json_encode($checkoutUrl), ENT_QUOTES, 'UTF-8') ?>, <?= $jsProdId ?>, <?= $jsProdTitle ?>, <?= $jsProdCat ?>);" style="flex: 1; background: linear-gradient(135deg, #F0D060 0%, #D4AF37 100%); color: #0b0f17; text-decoration: none; padding: 0 6px; height: 36px; border-radius: 6px; font-size: 11.5px; font-weight: 800; text-align: center; text-transform: uppercase; letter-spacing: 0.4px; box-shadow: 0 4px 14px rgba(212, 175, 55, 0.35); transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; white-space: nowrap; line-height: 1.2;">
                             Comprar ➔
                         </a>
                     </div>
@@ -262,3 +262,117 @@ $isAdultCategory = ($dedicatedSection ?? '') === 'sexshop'
     })();
     </script>
 <?php endif; ?>
+
+<style>
+@keyframes dropToastSlideIn {
+    from { transform: translateX(110%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+</style>
+
+<script>
+if (typeof showDropToast !== 'function') {
+    function showDropToast(options) {
+        var title = options.title || 'Aviso';
+        var message = options.message || '';
+        var type = options.type || 'warning';
+        var duration = options.duration || 7000;
+
+        var container = document.getElementById('domain-drop-toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'domain-drop-toast-container';
+            container.style.cssText = 'position: fixed; top: 24px; right: 24px; z-index: 9999999; display: flex; flex-direction: column; gap: 12px; pointer-events: none; max-width: 440px; width: calc(100vw - 32px);';
+            document.body.appendChild(container);
+        }
+
+        var toast = document.createElement('div');
+        var isAlert = type === 'error' || type === 'warning';
+        var borderColor = isAlert ? '#ef4444' : '#10b981';
+        var titleColor = isAlert ? '#fca5a5' : '#6ee7b7';
+        var icon = isAlert ? '⚠️' : '✅';
+
+        toast.className = 'drop-toast-item';
+        toast.style.cssText = 'pointer-events: auto; background: linear-gradient(135deg, rgba(20, 24, 33, 0.96) 0%, rgba(30, 35, 48, 0.96) 100%); border: 1px solid rgba(255,255,255,0.12); border-left: 4px solid ' + borderColor + '; border-radius: 12px; padding: 16px 18px; box-shadow: 0 16px 36px rgba(0,0,0,0.65), 0 0 20px ' + (isAlert ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)') + '; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); display: flex; flex-direction: column; gap: 8px; animation: dropToastSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; transition: all 0.35s ease; font-family: inherit;';
+
+        toast.innerHTML = '<div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">' +
+            '<div style="display: flex; align-items: center; gap: 8px;">' +
+                '<span style="font-size: 18px; line-height: 1;">' + icon + '</span>' +
+                '<strong style="color: ' + titleColor + '; font-size: 14px; font-weight: 700; line-height: 1.3;">' + title + '</strong>' +
+            '</div>' +
+            '<button type="button" style="background: none; border: none; color: #94a3b8; font-size: 18px; cursor: pointer; padding: 0 4px; line-height: 1; transition: color 0.2s;" onmouseover="this.style.color=\'#fff\'" onmouseout="this.style.color=\'#94a3b8\'" onclick="this.closest(\'.drop-toast-item\').remove();">&times;</button>' +
+        '</div>' +
+        '<div style="color: #cbd5e1; font-size: 13px; line-height: 1.45;">' + message + '</div>' +
+        '<div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: #94a3b8; margin-top: 4px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 6px;">' +
+            '<span>🛡️</span>' +
+            '<span>Segurança e Transparência CDC / Procon • Nenhuma cobrança indevida</span>' +
+        '</div>';
+
+        container.appendChild(toast);
+
+        setTimeout(function() {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(100%)';
+            setTimeout(function() {
+                if (toast.parentNode) toast.parentNode.removeChild(toast);
+            }, 350);
+        }, duration);
+    }
+}
+
+function handleStageBuyClick(event, btn, productId, slug, checkoutUrl, jsProdId, jsProdTitle, jsProdCat) {
+    if (event) event.preventDefault();
+    if (!btn || btn.getAttribute('data-sold-out') === '1' || btn._checkInProgress) {
+        return false;
+    }
+
+    btn._checkInProgress = true;
+    var origHtml = btn.innerHTML;
+    btn.style.opacity = '0.75';
+    btn.innerHTML = '<span>⏳ Checando...</span>';
+
+    fetch(<?= json_encode($baseUrl . '/api/drop/check-availability', JSON_UNESCAPED_SLASHES) ?>, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ product_id: productId, slug: slug })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        btn._checkInProgress = false;
+        if (data && data.available === false) {
+            btn.setAttribute('data-sold-out', '1');
+            btn.style.opacity = '0.55';
+            btn.style.cursor = 'not-allowed';
+            btn.style.background = '#334155';
+            btn.style.color = '#cbd5e1';
+            btn.innerHTML = '<span>Esgotado</span>';
+
+            showDropToast({
+                title: 'Produto Esgotado / Indisponível',
+                message: data.message || 'O estoque deste produto se esgotou recentemente no fornecedor oficial. Para sua total segurança e transparência (CDC / Procon), nenhuma cobrança foi realizada no seu cartão ou Pix.',
+                type: 'warning',
+                duration: 8500
+            });
+            return;
+        }
+
+        btn.style.opacity = '1';
+        btn.innerHTML = origHtml;
+        if (window.trackDropAction) {
+            window.trackDropAction(jsProdId, jsProdTitle, jsProdCat, 'buy_click');
+        }
+        window.location.href = checkoutUrl;
+    })
+    .catch(function() {
+        btn._checkInProgress = false;
+        btn.style.opacity = '1';
+        btn.innerHTML = origHtml;
+        if (window.trackDropAction) {
+            window.trackDropAction(jsProdId, jsProdTitle, jsProdCat, 'buy_click');
+        }
+        window.location.href = checkoutUrl;
+    });
+
+    return false;
+}
+</script>

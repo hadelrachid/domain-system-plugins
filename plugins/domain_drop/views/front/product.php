@@ -1046,6 +1046,53 @@ function calculateProductShipping(shouldFocus) {
         });
 }
 
+function showDropToast(options) {
+    var title = options.title || 'Aviso';
+    var message = options.message || '';
+    var type = options.type || 'warning';
+    var duration = options.duration || 7000;
+
+    var container = document.getElementById('domain-drop-toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'domain-drop-toast-container';
+        container.style.cssText = 'position: fixed; top: 24px; right: 24px; z-index: 9999999; display: flex; flex-direction: column; gap: 12px; pointer-events: none; max-width: 440px; width: calc(100vw - 32px);';
+        document.body.appendChild(container);
+    }
+
+    var toast = document.createElement('div');
+    var isAlert = type === 'error' || type === 'warning';
+    var borderColor = isAlert ? '#ef4444' : '#10b981';
+    var titleColor = isAlert ? '#fca5a5' : '#6ee7b7';
+    var icon = isAlert ? '⚠️' : '✅';
+
+    toast.className = 'drop-toast-item';
+    toast.style.cssText = 'pointer-events: auto; background: linear-gradient(135deg, rgba(20, 24, 33, 0.96) 0%, rgba(30, 35, 48, 0.96) 100%); border: 1px solid rgba(255,255,255,0.12); border-left: 4px solid ' + borderColor + '; border-radius: 12px; padding: 16px 18px; box-shadow: 0 16px 36px rgba(0,0,0,0.65), 0 0 20px ' + (isAlert ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)') + '; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); display: flex; flex-direction: column; gap: 8px; animation: dropToastSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; transition: all 0.35s ease; font-family: inherit;';
+
+    toast.innerHTML = '<div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">' +
+        '<div style="display: flex; align-items: center; gap: 8px;">' +
+            '<span style="font-size: 18px; line-height: 1;">' + icon + '</span>' +
+            '<strong style="color: ' + titleColor + '; font-size: 14px; font-weight: 700; line-height: 1.3;">' + title + '</strong>' +
+        '</div>' +
+        '<button type="button" style="background: none; border: none; color: #94a3b8; font-size: 18px; cursor: pointer; padding: 0 4px; line-height: 1; transition: color 0.2s;" onmouseover="this.style.color=\'#fff\'" onmouseout="this.style.color=\'#94a3b8\'" onclick="this.closest(\'.drop-toast-item\').remove();">&times;</button>' +
+    '</div>' +
+    '<div style="color: #cbd5e1; font-size: 13px; line-height: 1.45;">' + message + '</div>' +
+    '<div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: #94a3b8; margin-top: 4px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 6px;">' +
+        '<span>🛡️</span>' +
+        '<span>Segurança e Transparência CDC / Procon • Nenhuma cobrança indevida</span>' +
+    '</div>';
+
+    container.appendChild(toast);
+
+    setTimeout(function() {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        setTimeout(function() {
+            if (toast.parentNode) toast.parentNode.removeChild(toast);
+        }, 350);
+    }, duration);
+}
+
 var _buyCheckInProgress = false;
 function handleBuyNowClick(event, btn) {
     if (event) event.preventDefault();
@@ -1081,12 +1128,24 @@ function handleBuyNowClick(event, btn) {
             btn.style.background = '#334155';
             btn.style.color = '#cbd5e1';
             btn.innerHTML = '<span>Estoque Esgotado</span>';
+
+            var soldOutMsg = data.message || 'O estoque deste produto se esgotou recentemente no fornecedor oficial. Para sua total segurança e transparência (em conformidade com o Código de Defesa do Consumidor e Procon), nenhuma cobrança foi realizada no seu cartão ou Pix.';
+
+            if (typeof showDropToast === 'function') {
+                showDropToast({
+                    title: 'Produto Esgotado / Indisponível',
+                    message: soldOutMsg,
+                    type: 'warning',
+                    duration: 8500
+                });
+            }
+
             if (fbBox) {
                 fbBox.style.display = 'block';
                 fbBox.style.background = 'rgba(239, 68, 68, 0.14)';
                 fbBox.style.border = '1px solid rgba(239, 68, 68, 0.45)';
                 fbBox.style.color = '#fca5a5';
-                fbBox.textContent = '⚠️ ' + (data.message || 'O estoque deste produto já acabou no momento.');
+                fbBox.textContent = '⚠️ ' + soldOutMsg;
             }
             return;
         }
