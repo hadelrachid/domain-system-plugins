@@ -59,8 +59,8 @@
             "description": "Motor autônomo de dropshipping e mineração de produtos virais integrado ao AliExpress Open Platform (App ISV 558628), precificação dinâmica e enriquecimento por IA.",
             "zip_filename": "domain_drop.zip",
             "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/domain_drop.zip",
-            "sha256": "b288771748ddb8c7441b8f83c44cef81639a42edb43179b9ebe30cbbce4e3a7b",
-            "size_bytes": 582645
+            "sha256": "b677764733d230352a6eb78ee395031fc8295a31b214c0e279d55ccd3ef98db6",
+            "size_bytes": 306709
         },
         "flextheme": {
             "slug": "flextheme",
