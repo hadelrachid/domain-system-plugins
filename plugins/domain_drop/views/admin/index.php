@@ -230,92 +230,120 @@
             'Sex Shop & Bem-Estar'
         ];
 
+        window.runProgressiveMiningCycle = function(options) {
+            options = options || {};
+            var replaceCatalog = !!options.replaceCatalog;
+            var itemsPerCategory = options.itemsPerCategory || 10;
+            var csrfToken = <?= json_encode($csrfToken) ?>;
+            var baseUrl = <?= json_encode($baseUrl) ?>;
+
+            // Fechar modal de aquisição caso esteja aberto
+            var modal = document.getElementById('modalAcquireNew');
+            if (modal) modal.style.display = 'none';
+
+            var btnBanner = document.getElementById('btnRunDailyCycle');
+            var btnModal = document.getElementById('btnSubmitAcquireNew');
+            if (btnBanner) {
+                btnBanner.disabled = true;
+                btnBanner.style.opacity = '0.6';
+                btnBanner.style.pointerEvents = 'none';
+                btnBanner.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Minerando 9 Categorias...';
+            }
+            if (btnModal) {
+                btnModal.disabled = true;
+                btnModal.style.opacity = '0.6';
+            }
+
+            var pBox = document.getElementById('dailyCycleProgressBox');
+            var pBar = document.getElementById('dailyCycleProgressBar');
+            var pPercent = document.getElementById('dailyCycleProgressPercent');
+            var pTitle = document.getElementById('dailyCycleProgressTitle');
+            var pCat = document.getElementById('dailyCycleActiveCategory');
+            var pStep = document.getElementById('dailyCycleCategoryStep');
+
+            if (pBox) {
+                pBox.style.display = 'block';
+                pBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+
+            var totalCategories = categories.length;
+            var currentCatIndex = 0;
+            var totalMinedAll = 0;
+
+            function processNextCategory() {
+                if (currentCatIndex >= totalCategories) {
+                    // Finalizado: dispara registro do ciclo diário de 24h
+                    if (pBar) pBar.style.width = '100%';
+                    if (pPercent) pPercent.textContent = '100%';
+                    if (pTitle) pTitle.innerHTML = '<i class="fas fa-check-circle" style="color: #10b981;"></i> Ciclo de 9 Categorias Concluído com Sucesso!';
+                    if (pCat) pCat.textContent = 'Catálogo atualizado com ' + totalMinedAll + ' novos produtos validados!';
+                    if (pStep) pStep.textContent = '(100% Finalizado)';
+
+                    var finishData = new FormData();
+                    finishData.append('csrf_token', csrfToken);
+
+                    fetch(baseUrl + '/admin/dropship/finish-daily-cycle', {
+                        method: 'POST',
+                        body: finishData,
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    }).finally(function() {
+                        if (typeof window.showDropToast === 'function') {
+                            window.showDropToast('🎉 Mineração concluída com sucesso! ' + totalMinedAll + ' novos produtos adicionados.', 'success');
+                        }
+                        setTimeout(function() {
+                            window.location.reload();
+                        }, 1400);
+                    });
+                    return;
+                }
+
+                var catName = categories[currentCatIndex];
+                var isFirst = (currentCatIndex === 0 && replaceCatalog);
+                var progressPercent = Math.round((currentCatIndex / totalCategories) * 100);
+
+                if (pBar) pBar.style.width = Math.max(4, progressPercent) + '%';
+                if (pPercent) pPercent.textContent = progressPercent + '%';
+                if (pCat) pCat.textContent = catName;
+                if (pStep) pStep.textContent = '(' + (currentCatIndex + 1) + ' de ' + totalCategories + ')';
+
+                var stepData = new FormData();
+                stepData.append('csrf_token', csrfToken);
+                stepData.append('category', catName);
+                stepData.append('items_per_category', itemsPerCategory);
+                if (isFirst) {
+                    stepData.append('replace_catalog', '1');
+                }
+
+                fetch(baseUrl + '/admin/dropship/mine-category-step', {
+                    method: 'POST',
+                    body: stepData,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    if (data && data.success) {
+                        totalMinedAll += (data.mined_count || 0);
+                    }
+                    currentCatIndex++;
+                    var nextPercent = Math.round((currentCatIndex / totalCategories) * 100);
+                    if (pBar) pBar.style.width = nextPercent + '%';
+                    if (pPercent) pPercent.textContent = nextPercent + '%';
+                    processNextCategory();
+                })
+                .catch(function(err) {
+                    console.error('Falha temporária ao minerar ' + catName, err);
+                    currentCatIndex++;
+                    processNextCategory();
+                });
+            }
+
+            processNextCategory();
+        };
+
         if (form && btn) {
             form.addEventListener('submit', function(e) {
                 e.preventDefault();
-                btn.disabled = true;
-                btn.style.opacity = '0.6';
-                btn.style.pointerEvents = 'none';
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Minerando 9 Categorias...';
-
-                var pBox = document.getElementById('dailyCycleProgressBox');
-                var pBar = document.getElementById('dailyCycleProgressBar');
-                var pPercent = document.getElementById('dailyCycleProgressPercent');
-                var pTitle = document.getElementById('dailyCycleProgressTitle');
-                var pCat = document.getElementById('dailyCycleActiveCategory');
-                var pStep = document.getElementById('dailyCycleCategoryStep');
-
-                if (pBox) pBox.style.display = 'block';
-
-                var currentCatIndex = 0;
-                var currentPercent = 5;
-                if (pBar) pBar.style.width = '5%';
-                if (pPercent) pPercent.textContent = '5%';
-                if (pCat) pCat.textContent = categories[0];
-                if (pStep) pStep.textContent = '(1 de 9)';
-
-                var progressTimer = setInterval(function() {
-                    if (currentCatIndex < categories.length - 1) {
-                        currentCatIndex++;
-                        currentPercent = Math.min(92, Math.round((currentCatIndex + 1) * (100 / categories.length) - 2));
-                        if (pBar) pBar.style.width = currentPercent + '%';
-                        if (pPercent) pPercent.textContent = currentPercent + '%';
-                        if (pCat) pCat.textContent = categories[currentCatIndex];
-                        if (pStep) pStep.textContent = '(' + (currentCatIndex + 1) + ' de 9)';
-                    } else if (currentPercent < 96) {
-                        currentPercent += 1;
-                        if (pBar) pBar.style.width = currentPercent + '%';
-                        if (pPercent) pPercent.textContent = currentPercent + '%';
-                        if (pCat) pCat.textContent = 'Consolidando catálogo e limpando links...';
-                        if (pStep) pStep.textContent = '(Finalizando)';
-                    }
-                }, 3000);
-
-                var formData = new FormData(form);
-                fetch(form.action, {
-                    method: 'POST',
-                    body: formData,
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                })
-                .then(function(res) {
-                    return res.json().catch(function() {
-                        return { success: true, message: 'Ciclo diário 24h finalizado com sucesso!' };
-                    });
-                })
-                .then(function(data) {
-                    clearInterval(progressTimer);
-                    if (pBar) pBar.style.width = '100%';
-                    if (pPercent) pPercent.textContent = '100%';
-                    if (pTitle) {
-                        pTitle.innerHTML = '<i class="fas fa-check-circle" style="color: #10b981;"></i> Ciclo de 9 Categorias Concluído com Sucesso!';
-                    }
-                    if (pCat) pCat.textContent = 'Todos os produtos minerados e precificados!';
-                    if (pStep) pStep.textContent = '(Concluído)';
-
-                    if (window.OS && typeof window.OS.notify === 'function') {
-                        window.OS.notify(data.message || 'Ciclo diário de 9 categorias concluído!', 'success');
-                    }
-
-                    setTimeout(function() {
-                        window.location.reload();
-                    }, 1200);
-                })
-                .catch(function(err) {
-                    clearInterval(progressTimer);
-                    if (pBar) {
-                        pBar.style.width = '100%';
-                        pBar.style.background = '#ef4444';
-                    }
-                    if (pPercent) pPercent.textContent = 'Erro';
-                    if (pTitle) {
-                        pTitle.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i> Erro na Mineração';
-                    }
-                    if (pCat) pCat.textContent = 'Falha de comunicação com a API do AliExpress.';
-                    btn.disabled = false;
-                    btn.style.opacity = '1';
-                    btn.style.pointerEvents = 'auto';
-                    btn.innerHTML = '<i class="fas fa-bolt"></i> Tentar Novamente';
-                });
+                window.runProgressiveMiningCycle({ replaceCatalog: false, itemsPerCategory: 10 });
             });
         }
 
@@ -700,7 +728,7 @@
                                 $directAeUrl = !empty($prod->attributes['aliexpress_url']) ? $prod->attributes['aliexpress_url'] : '';
                                 $isRealAeId = !empty($prod->aliexpressId) && preg_match('/^\d{8,24}$/', (string)$prod->aliexpressId);
                                 if (empty($directAeUrl) && $isRealAeId) {
-                                    $directAeUrl = 'https://www.aliexpress.com/item/' . htmlspecialchars((string)$prod->aliexpressId) . '.html';
+                                    $directAeUrl = 'https://pt.aliexpress.com/item/' . htmlspecialchars((string)$prod->aliexpressId) . '.html?country=BR&locale=pt_BR&currency=BRL';
                                 }
                                 $aeLink = !empty($directAeUrl)
                                     ? $directAeUrl
@@ -1250,7 +1278,7 @@
             document.getElementById('imagesModalAeLink').href = directUrl
                 ? directUrl
                 : (isRealId
-                    ? 'https://www.aliexpress.com/item/' + encodeURIComponent(activeImagesState.aliexpressId) + '.html'
+                    ? 'https://pt.aliexpress.com/item/' + encodeURIComponent(activeImagesState.aliexpressId) + '.html?country=BR&locale=pt_BR&currency=BRL'
                     : 'https://www.aliexpress.com/wholesale?SearchText=' + encodeURIComponent(activeImagesState.title));
             document.getElementById('imagesModalNewUrl').value = '';
             setImagesModalStatus('', 'info');
@@ -1802,12 +1830,16 @@
         </div>
     </div>
     <script>
-    document.getElementById('formAcquireNew')?.addEventListener('submit', function() {
-        var b = document.getElementById('btnSubmitAcquireNew');
-        if (b) {
-            b.disabled = true;
-            b.style.opacity = '0.7';
-            b.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adquirindo Novos Itens Limpos...';
+    document.getElementById('formAcquireNew')?.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var form = document.getElementById('formAcquireNew');
+        var rep = form.querySelector('input[name="replace_catalog"]')?.checked;
+        var items = form.querySelector('select[name="items_per_category"]')?.value || 10;
+        if (typeof window.runProgressiveMiningCycle === 'function') {
+            window.runProgressiveMiningCycle({
+                replaceCatalog: !!rep,
+                itemsPerCategory: parseInt(items, 10)
+            });
         }
     });
     </script>

@@ -55,6 +55,18 @@ class ProductExistenceGuard implements ProductValidationGuardInterface
                     ['status' => $status]
                 );
             }
+
+            // ae-product-management.docx: ws_offline_date indica encerramento do anúncio
+            if (!empty($baseInfo['ws_offline_date'])) {
+                $offlineTime = strtotime((string)$baseInfo['ws_offline_date']);
+                if ($offlineTime !== false && $offlineTime < time()) {
+                    return ValidationResult::fail(
+                        $this->getName(),
+                        "Anúncio expirado na data '{$baseInfo['ws_offline_date']}' (ws_offline_date vencida).",
+                        ['ws_offline_date' => $baseInfo['ws_offline_date']]
+                    );
+                }
+            }
         }
 
         // 3. Verificação de códigos de erro do SDK AliExpress

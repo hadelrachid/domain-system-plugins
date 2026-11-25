@@ -965,7 +965,7 @@ class ProductMiningService implements ProductMiningServiceInterface
         if (!empty($item['itemUrl'])) {
             $props['aliexpress_url'] = (string)$item['itemUrl'];
         } elseif (!empty($aeId) && is_numeric($aeId)) {
-            $props['aliexpress_url'] = 'https://www.aliexpress.com/item/' . $aeId . '.html';
+            $props['aliexpress_url'] = 'https://pt.aliexpress.com/item/' . $aeId . '.html?country=BR&locale=pt_BR&currency=BRL';
         }
         if (!empty($item['productVideoUrl'])) {
             $props['video_url'] = (string)$item['productVideoUrl'];

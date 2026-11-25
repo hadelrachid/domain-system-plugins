@@ -376,12 +376,12 @@ class ProductMediaSyncService implements ProductMediaSyncInterface
         if (!empty($root['itemUrl'])) {
             $attrs['aliexpress_url'] = (string)$root['itemUrl'];
         } elseif (!empty($sourceId) && is_numeric($sourceId)) {
-            $attrs['aliexpress_url'] = "https://www.aliexpress.com/item/{$sourceId}.html";
+            $attrs['aliexpress_url'] = "https://pt.aliexpress.com/item/{$sourceId}.html?country=BR&locale=pt_BR&currency=BRL";
         }
 
         return new ScrapedProductDto(
             sourceId: $sourceId,
-            sourceUrl: $attrs['aliexpress_url'] ?? "https://www.aliexpress.com/item/{$sourceId}.html",
+            sourceUrl: $attrs['aliexpress_url'] ?? "https://pt.aliexpress.com/item/{$sourceId}.html?country=BR&locale=pt_BR&currency=BRL",
             rawTitle: $rawTitle,
             mainImageUrl: $mainImage,
             galleryImages: $images,

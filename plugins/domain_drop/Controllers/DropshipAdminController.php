@@ -1276,6 +1276,76 @@ class DropshipAdminController
     }
 
     /**
+     * Mineração Progressiva em Lote por Categoria (AJAX Step-by-Step).
+     * Evita timeout 504 Gateway Time-out na Hostinger executando cada categoria em 2-4 segundos.
+     */
+    public function mineCategoryStep(Request $request): ResponseInterface
+    {
+        if (!$this->verifyCsrf($request)) {
+            return new Response(json_encode(['success' => false, 'error' => 'Token CSRF inválido ou expirado.']), 403, ['Content-Type' => 'application/json']);
+        }
+
+        try {
+            $category = trim((string)$request->input('category', 'Eletrônicos & Gadget'));
+            $itemsPerCategory = max(1, min(20, (int)$request->input('items_per_category', 10)));
+            $replaceCatalog = (bool)$request->input('replace_catalog', false);
+
+            $purgedCount = 0;
+            if ($replaceCatalog) {
+                $purgedCount = $this->catalogRepo->clearAll(preserveOrdered: true);
+            }
+
+            // Minera apenas a categoria solicitada
+            $mined = $this->miningService->mineTrendingProducts(category: $category, limit: $itemsPerCategory, autoPersist: true);
+            $count = count($mined);
+
+            // Garante publicação imediata
+            $this->catalogRepo->publishAll();
+            $totalCatalog = $this->catalogRepo->count();
+
+            return new Response(json_encode([
+                'success'          => true,
+                'category'         => $category,
+                'mined_count'      => $count,
+                'purged_count'     => $purgedCount,
+                'total_in_catalog' => $totalCatalog,
+            ]), 200, ['Content-Type' => 'application/json']);
+        } catch (Throwable $e) {
+            return new Response(json_encode([
+                'success' => false,
+                'error'   => $e->getMessage(),
+            ]), 500, ['Content-Type' => 'application/json']);
+        }
+    }
+
+    /**
+     * Finaliza o ciclo diário de 24 horas atualizando o timestamp de rotação.
+     */
+    public function finishDailyCycle(Request $request): ResponseInterface
+    {
+        if (!$this->verifyCsrf($request)) {
+            return new Response(json_encode(['success' => false, 'error' => 'Token CSRF inválido']), 403, ['Content-Type' => 'application/json']);
+        }
+
+        try {
+            $now = time();
+            $this->miningService->updateConfigField('last_daily_cycle_at', $now);
+            $cycleInfo = $this->miningService->getDailyCycleInfo();
+
+            return new Response(json_encode([
+                'success' => true,
+                'message' => 'Ciclo diário 24h finalizado com sucesso!',
+                'cycle'   => $cycleInfo,
+            ]), 200, ['Content-Type' => 'application/json']);
+        } catch (Throwable $e) {
+            return new Response(json_encode([
+                'success' => false,
+                'error'   => $e->getMessage(),
+            ]), 500, ['Content-Type' => 'application/json']);
+        }
+    }
+
+    /**
      * Gestão Administrativa de Clientes Cadastrados (semelhante a Alunos & Matrículas do Academy).
      */
     public function customers(Request $request): ResponseInterface
