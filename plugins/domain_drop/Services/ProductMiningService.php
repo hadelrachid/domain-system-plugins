@@ -336,12 +336,14 @@ class ProductMiningService implements ProductMiningServiceInterface
 
         $searchTerms = [
             'Eletrônicos & Gadget'              => ['fone bluetooth tws brasil', 'carregador turbo tipo c 65w brasil', 'power bank inducao magnetico brasil', 'headset gamer microfone rgb brasil', 'mini projetor led 4k portatil brasil', 'caixa som bluetooth potente brasil', 'fone conducao ossea corrida brasil', 'smartwatch amoled nfc gps brasil'],
+            'Smartphones, TVs & Projetores 4K'  => ['mini projetor hy300 4k', 'projetor magcubic 4k', 'tv box android 4k', 'smartphone poco x6 pro', 'smartphone redmi note', 'projetor portatil wifi'],
             'Casa Inteligente & Organização'    => ['lampada led inteligente wifi rgb brasil', 'tomada inteligente wifi tuya brasil', 'sensor presenca inteligente automacao brasil', 'dispensador sabonete automatico sensor brasil', 'fita led rgb inteligente wifi brasil', 'aspirador po robo inteligente brasil', 'fechadura digital biometrica brasil'],
             'Beleza, Cuidados & Estilo'         => ['escova secadora alisadora modeladora brasil', 'paleta de sombras maquiagem profissional brasil', 'kit pinceis maquiagem profissional estojo brasil', 'batom matte longa duracao a prova d agua brasil', 'gloss labial efeito plump volume hidratante brasil', 'modelador cabelo profissional automatico brasil', 'depilador laser luz pulsada ipl brasil', 'massageador facial eletrico gua sha brasil'],
             'Ferramentas & Utilidades'          => ['alicate desencapador fios multifuncional brasil', 'trena laser digital medidor fita metrica brasil', 'parafusadeira eletrica recarregavel sem fio brasil', 'canivete tatico multifuncional sobrevivencia brasil', 'chave universal precisao multifuncoes bits brasil', 'lanterna tatica led potente militar recarregavel brasil'],
             'Pet Shop & Pets Virais'            => ['coleira led luminosa cachorro recarregavel usb brasil', 'bebedouro fonte automatica pet gato cachorro brasil', 'escova a vapor pet removedora pelos gatos caes brasil', 'brinquedo interativo inteligente pet gato brasil', 'cama nuvem calmante pelucia cachorro pet brasil', 'cortador unhas pet com led iluminador brasil'],
             'Acessórios para Veículos'          => ['suporte celular veicular carregador inducao magsafe brasil', 'aspirador automotivo portatil potente sem fio brasil', 'transmissor bluetooth veicular fm usb aux brasil', 'compressor ar portatil eletrico pneus carro brasil', 'fita led interna veicular sensor som rgb brasil', 'camera veicular dvr gravador painel brasil'],
-            'Moda, Roupas & Vestuário'          => ['macacao feminino longo casual verao brasil', 'calca legging feminina cintura alta suplex brasil', 'vestido feminino casual verao elegante brasil', 'camisa social masculina manga longa linho brasil', 'conjunto feminino cropped e calca brasil', 'camiseta basica 100 algodao unissex slim brasil', 'jaqueta jeans masculina feminina oversize casual brasil', 'calca jeans feminina masculina skinny stretch brasil', 'calca jogger streetwear cargo bolsos unissex brasil', 'jaqueta corta vento impermeavel capuz ciclismo brasil', 'conjunto moletom masculino feminino agasalho inverno brasil', 'blusa feminina casual verao elegante brasil', 'tenis esportivo corrida caminhada respiravel leve brasil', 'bolsa feminina transversal tiracolo couro vintage brasil', 'mochila executiva impermeavel antifurto usb brasil'],
+            'Moda, Roupas & Vestuário'          => ['vestido feminino casual verao elegante brasil', 'camisa social masculina manga longa linho brasil', 'camiseta basica 100 algodao unissex slim brasil', 'jaqueta jeans masculina feminina oversize casual brasil', 'calca jeans feminina masculina skinny stretch brasil', 'calca jogger streetwear cargo bolsos unissex brasil', 'jaqueta corta vento impermeavel capuz ciclismo brasil', 'conjunto moletom masculino feminino agasalho inverno brasil', 'blusa feminina casual verao elegante brasil', 'tenis esportivo corrida caminhada respiravel leve brasil', 'bolsa feminina transversal tiracolo couro vintage brasil', 'mochila executiva impermeavel antifurto usb brasil'],
+            'Moda Fitness, Leggings & Academia' => ['legging suplex feminina', 'macacao fitness feminino', 'conjunto academia feminino', 'macaquinho fitness treino', 'short suplex academia', 'top fitness sustentacao', 'calca legging empina bumbum', 'body feminino canelado'],
             'Moda Íntima, Lingeries & Pijamas'  => ['conjunto lingerie renda floral sutiã calcinha luxo brasil', 'sutia sem costura sustentacao push up confortavel brasil', 'pijama feminino cetim seda camisola renda brasil', 'kit cuecas boxer modal sem costura respiravel brasil', 'meia calca termica translucida forrada peluciada brasil', 'kit calcinhas sem costura invisivel algodao brasil', 'espartilho modelador cinta feminina compressao brasil'],
             'Sex Shop & Produtos Adultos (+18)' => ['vibrador liquido estimulador feminino discreto brasil', 'massageador varinha magica corporal silencioso brasil', 'estimulador sucção clitoriana silicone recarregavel brasil', 'oleo corporal beijavel aromaterapia massagem brasil'],
         ];
@@ -356,41 +358,25 @@ class ProductMiningService implements ProductMiningServiceInterface
         $searchTerms['Roupas, Bolsas & Calçados']      = $searchTerms['Moda, Roupas & Vestuário'];
         $searchTerms['Roupa Íntima & Pijamas']         = $searchTerms['Moda Íntima, Lingeries & Pijamas'];
         $searchTerms['Novidades & Uso Especial']       = $searchTerms['Sex Shop & Produtos Adultos (+18)'];
-        $searchTerms['Moda Fitness, Leggings & Academia'] = [
-            'calca legging feminina cintura alta suplex brasil',
-            'macacao fitness feminino academia brasil',
-            'conjunto academia feminino fitness brasil',
-            'short legging suplex academia brasil',
-            'top fitness sustentacao academia brasil',
-            'macaquinho fitness corrida feminino brasil',
-            'calca legging sem costura empina bumbum brasil',
-            'body feminino macacao canelado brasil'
-        ];
 
         $termList = $searchTerms[$commercialCat] ?? ($searchTerms[$canonicalCat] ?? null);
         if (empty($termList)) {
             $termList = $this->taxonomy->getAliExpressSearchKeywords($canonicalCat);
         }
         if (empty($termList)) {
-            $termList = [$commercialCat . ' brasil'];
+            $termList = [$commercialCat];
         }
 
         $html = null;
-
-        $shipParam = '';
-        if ($warehouseOrigin === 'BR') {
-            $shipParam = '&shipFrom=BR&selectedShippedFrom=BR&shippedFrom=BR';
-        } elseif ($warehouseOrigin === 'CN') {
-            $shipParam = '&shipFrom=CN&selectedShippedFrom=CN';
-        }
 
         $catIds = $this->taxonomy->getAliExpressCategoryIds($canonicalCat);
         $primaryCatId = !empty($catIds) ? (int)$catIds[0] : null;
         $catParam = $primaryCatId ? "&catId={$primaryCatId}" : '';
 
-        // Tentativas e acertos: testa os termos da categoria com catId rígido até obter retorno válido
+        // Executa busca global sem parâmetros restritivos de entreposto na URL
+        // (Isso evita que o mecanismo chinês do AliExpress retorne 0 itens ou anúncios de joias)
         foreach ($termList as $searchTerm) {
-            $searchUrl = "https://pt.aliexpress.com/w/wholesale-" . urlencode($searchTerm) . ".html?country=BR&locale=pt_BR&currency=BRL" . $shipParam . $catParam . "&isrefine=y";
+            $searchUrl = "https://pt.aliexpress.com/w/wholesale-" . urlencode($searchTerm) . ".html?country=BR&locale=pt_BR&currency=BRL" . $catParam . "&isrefine=y";
             $fetched = $this->fetchLiveSearchHtml($searchUrl);
             if ($fetched && is_string($fetched) && strlen($fetched) > 1000) {
                 $html = $fetched;
@@ -422,9 +408,90 @@ class ProductMiningService implements ProductMiningServiceInterface
 
         // Ingestão no Container e Validação Contratual dos itens obtidos ao vivo
         $validatedLiveBatch = $this->validationHub->ingestAndValidateBatch($itemList);
-        $itemList = array_values($validatedLiveBatch['valid_items']);
+        $rawItems = array_values($validatedLiveBatch['valid_items']);
 
-        if (empty($itemList)) {
+        // 2. Filtro Semântico Rigoroso: Elimina qualquer intruso patrocinado (ex: joias/pulseiras em roupas ou lingerie)
+        $cleanItems = [];
+        foreach ($rawItems as $item) {
+            $rawTitle = trim((string)($item['title']['displayTitle'] ?? ($item['title']['title'] ?? '')));
+            if ($rawTitle === '') {
+                continue;
+            }
+            if ($this->isItemRelevantToCategory($rawTitle, $commercialCat)) {
+                $cleanItems[] = $item;
+            }
+        }
+
+        // Se o AliExpress devolveu apenas anúncios patrocinados de outras categorias, aciona contingência curada da categoria
+        if (empty($cleanItems)) {
+            $cleanItems = $this->catalogProvider->getCatalog()[$commercialCat] 
+                ?? ($this->catalogProvider->getCatalog()[$canonicalCat] ?? []);
+        }
+
+        // 3. Separação em Memória no Container (Arquitetura Container-First):
+        // Detecta quais itens possuem estoque ou entrega no Brasil (Local Supply)
+        $brazilItems = [];
+        $globalItems = [];
+        foreach ($cleanItems as $raw) {
+            $rawTitle = trim((string)($raw['title']['displayTitle'] ?? ($raw['title']['title'] ?? ($raw['product_title'] ?? ''))));
+            $isBr = $this->isRawItemShippedFromBrazil($raw, $rawTitle);
+            $raw['_is_brazil'] = $isBr;
+            if ($isBr) {
+                $brazilItems[] = $raw;
+            } else {
+                $globalItems[] = $raw;
+            }
+        }
+
+        // 4. Seleção e Priorização dos Candidatos conforme Entreposto Solicitado
+        $candidateList = [];
+        if ($warehouseOrigin === 'BR') {
+            // Apenas Brasil: Prioriza todo o estoque nacional detectado
+            $candidateList = $brazilItems;
+
+            // Se a busca ao vivo retornou menos itens nacionais que o limite, complementa com itens curados nacionais
+            if (count($candidateList) < $limit) {
+                $curatedCat = $this->catalogProvider->getCatalog()[$commercialCat] 
+                    ?? ($this->catalogProvider->getCatalog()[$canonicalCat] ?? []);
+                foreach ($curatedCat as $curated) {
+                    if (count($candidateList) >= $limit) {
+                        break;
+                    }
+                    if (!empty($curated['origem_brasil']) || (!empty($curated['ship_from']) && $curated['ship_from'] === 'BR')) {
+                        $pId = (string)($curated['product_id'] ?? ($curated['productId'] ?? ''));
+                        $alreadyIn = false;
+                        foreach ($candidateList as $c) {
+                            $existingId = (string)($c['productId'] ?? ($c['product_id'] ?? ($c['item_id'] ?? '')));
+                            if ($existingId === $pId) {
+                                $alreadyIn = true;
+                                break;
+                            }
+                        }
+                        if (!$alreadyIn) {
+                            $curated['_is_brazil'] = true;
+                            $candidateList[] = $curated;
+                        }
+                    }
+                }
+            }
+
+            // Se ainda faltar, complementa com os itens mais vendidos da categoria (Remessa Conforme DDP)
+            if (count($candidateList) < $limit) {
+                foreach ($globalItems as $globalItem) {
+                    if (count($candidateList) >= $limit) {
+                        break;
+                    }
+                    $candidateList[] = $globalItem;
+                }
+            }
+        } elseif ($warehouseOrigin === 'CN') {
+            $candidateList = $globalItems;
+        } else {
+            // ALL / Global: Brasil sempre no topo da vitrine, seguido pelos importados
+            $candidateList = array_merge($brazilItems, $globalItems);
+        }
+
+        if (empty($candidateList)) {
             return [];
         }
 
@@ -435,37 +502,23 @@ class ProductMiningService implements ProductMiningServiceInterface
             $usdRate = 5.80;
         }
 
-        foreach ($itemList as $raw) {
+        foreach ($candidateList as $raw) {
             if ($collected >= $limit) {
                 break;
             }
 
             try {
-                $aeId = (string)($raw['productId'] ?? ($raw['item_id'] ?? ''));
+                $aeId = (string)($raw['productId'] ?? ($raw['product_id'] ?? ($raw['item_id'] ?? '')));
                 if (empty($aeId) || !is_numeric($aeId)) {
                     continue;
                 }
 
-                $rawTitle = trim((string)($raw['title']['displayTitle'] ?? ($raw['title']['title'] ?? '')));
+                $rawTitle = trim((string)($raw['title']['displayTitle'] ?? ($raw['title']['title'] ?? ($raw['product_title'] ?? ''))));
                 if ($rawTitle === '') {
                     continue;
                 }
 
-                // 1. Guarda Semântica: Elimina produtos patrocinados intrusos (ex: pulseiras/joias quando busca lingerie)
-                if (!$this->isItemRelevantToCategory($rawTitle, $commercialCat)) {
-                    continue;
-                }
-
-                // 2. Guarda Estrita de Entreposto quando 'Apenas Brasil' for selecionado
-                $isItemBr = $this->isRawItemShippedFromBrazil($raw, $rawTitle);
-                if ($warehouseOrigin === 'BR' && !$isItemBr) {
-                    continue;
-                }
-                if ($warehouseOrigin === 'CN' && $isItemBr) {
-                    continue;
-                }
-
-                $rawMainImg = (string)($raw['image']['imgUrl'] ?? '');
+                $rawMainImg = (string)($raw['image']['imgUrl'] ?? ($raw['product_main_image_url'] ?? ''));
                 if ($rawMainImg === '') {
                     continue;
                 }
@@ -492,8 +545,8 @@ class ProductMiningService implements ProductMiningServiceInterface
                 }
 
                 // Precificação oficial em BRL e conversão limpa para USD de custo
-                $minPriceBrl = (float)($raw['prices']['salePrice']['minPrice'] ?? ($raw['prices']['originalPrice']['minPrice'] ?? 0.0));
-                $costPriceUsd = $minPriceBrl > 0.0 ? round($minPriceBrl / $usdRate, 2) : 12.00;
+                $minPriceBrl = (float)($raw['prices']['salePrice']['minPrice'] ?? ($raw['prices']['originalPrice']['minPrice'] ?? ($raw['cost_price_brl'] ?? 0.0)));
+                $costPriceUsd = $minPriceBrl > 0.0 ? round($minPriceBrl / $usdRate, 2) : (float)($raw['target_sale_price'] ?? 12.00);
                 $config = $this->loadConfig();
                 $markup = isset($config['default_markup_percent']) ? (float)$config['default_markup_percent'] : 100.0;
                 $volatility = isset($config['default_volatility_percent']) ? (float)$config['default_volatility_percent'] : 0.0;
@@ -529,17 +582,10 @@ class ProductMiningService implements ProductMiningServiceInterface
                     ? "{$ordersCount} vendidos"
                     : ($ordersCountKnown ? '0 vendidos' : 'vendas não informadas');
 
-                $isItemBr = ($warehouseOrigin === 'BR')
-                    || !empty($raw['origem_brasil'])
-                    || (!empty($raw['delivery']['shippingFrom']) && in_array(strtolower((string)$raw['delivery']['shippingFrom']), ['br', 'brazil', 'brasil'], true))
-                    || (!empty($raw['ship_from']) && in_array(strtoupper((string)$raw['ship_from']), ['BR', 'BRAZIL', 'BRASIL'], true))
-                    || (!empty($raw['send_goods_country_code']) && strtoupper((string)$raw['send_goods_country_code']) === 'BR')
-                    || str_contains(mb_strtolower($rawTitle, 'UTF-8'), 'brasil')
-                    || str_contains(mb_strtolower($rawTitle, 'UTF-8'), 'nacional')
-                    || str_contains(mb_strtolower($rawTitle, 'UTF-8'), 'pronta entrega');
+                $isItemBr = !empty($raw['_is_brazil']) || $this->isRawItemShippedFromBrazil($raw, $rawTitle);
 
                 $attributes = [
-                    'Origem'            => $isItemBr ? 'Estoque Nacional (Brasil) - Envio em 3 a 7 dias' : 'Entreposto Central AliExpress (China)',
+                    'Origem'            => $isItemBr ? 'Estoque Nacional (Brasil) - Envio em 3 a 7 dias' : 'Entreposto Central AliExpress (China) - Remessa Conforme DDP',
                     'Categoria'         => $commercialCat,
                     'Garantia'          => '90 dias contra defeitos de fabricação',
                     'Envio'             => $isItemBr ? 'Envio Nacional Rápido (Correios / Transportadora)' : 'Rastreamento Expresso com Seguro DDP',
@@ -625,7 +671,39 @@ class ProductMiningService implements ProductMiningServiceInterface
             return false;
         }
 
-        if ($commercialCat === 'Moda, Roupas & Vestuário' || $commercialCat === 'Moda Fitness, Leggings & Academia') {
+        if ($commercialCat === 'Moda Fitness, Leggings & Academia') {
+            $forbidden = ['fone', 'smartwatch', 'relogio', 'parafusadeira', 'alicate', 'ferramenta', 'lampada', 'pulseira', 'brinco', 'colar', 'jóia', 'joia', 'anel', 'bijuteria', 'drone', 'projetor', 'celular'];
+            foreach ($forbidden as $bad) {
+                if (str_contains($clean, $bad)) {
+                    return false;
+                }
+            }
+            $allowed = ['legging', 'macacao', 'macacão', 'macaquinho', 'suplex', 'fitness', 'academia', 'conjunto', 'short', 'top', 'bermuda', 'calca', 'calça', 'body', 'canelado', 'treino', 'corrida', 'cintura alta', 'empina bumbum', 'cinta', 'dry fit'];
+            foreach ($allowed as $good) {
+                if (str_contains($clean, $good)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        if ($commercialCat === 'Smartphones, TVs & Projetores 4K') {
+            $forbidden = ['calcinha', 'sutiã', 'sutia', 'lingerie', 'vestido', 'saia', 'batom', 'maquiagem', 'brinco', 'colar', 'pulseira', 'anel', 'jóia', 'joia', 'alicate'];
+            foreach ($forbidden as $bad) {
+                if (str_contains($clean, $bad)) {
+                    return false;
+                }
+            }
+            $allowed = ['projetor', 'projetores', 'smartphone', 'smartphones', 'celular', 'celulares', 'tv', 'box', 'xiaomi', 'poco', 'redmi', 'magcubic', 'hy300', 'hy320', 'android', '4k', 'display', 'hdmi', 'wifi', 'led', 'tela', 'telefone'];
+            foreach ($allowed as $good) {
+                if (str_contains($clean, $good)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        if ($commercialCat === 'Moda, Roupas & Vestuário') {
             $forbidden = ['fone', 'smartwatch', 'relogio', 'parafusadeira', 'alicate', 'ferramenta', 'lampada', 'pulseira', 'brinco', 'colar', 'jóia', 'joia'];
             foreach ($forbidden as $bad) {
                 if (str_contains($clean, $bad)) {

@@ -1,0 +1,31 @@
+name: Build and Release Plugin
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Package Plugin Archive
+        run: |
+          mkdir -p /tmp/pkg/domain_drop
+          cp -r . /tmp/pkg/domain_drop/
+          rm -rf /tmp/pkg/domain_drop/.git /tmp/pkg/domain_drop/.github /tmp/pkg/domain_drop/dist
+          mkdir -p dist
+          (cd /tmp/pkg && zip -r "$GITHUB_WORKSPACE/dist/domain_drop.zip" domain_drop)
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/domain_drop.zip
+          generate_release_notes: true

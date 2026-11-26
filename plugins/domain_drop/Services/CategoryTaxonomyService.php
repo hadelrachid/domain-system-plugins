@@ -16,6 +16,7 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
 {
     // Categorias Oficiais alinhadas 1:1 com a AliExpress Open Platform
     public const CAT_TECH         = 'Eletrônicos & Telefonia';          // IDs 44, 509, 7
+    public const CAT_MOBILE_TV    = 'Smartphones, TVs & Projetores 4K'; // IDs 509, 44, 7
     public const CAT_SMARTWATCH   = 'Relógios & Smartwatches';          // ID 1511
     public const CAT_HOME         = 'Casa, Iluminação & Eletro';        // IDs 15, 39, 6, 13
     public const CAT_TOOLS        = 'Ferramentas & Utilidades';         // IDs 1420, 30
@@ -23,6 +24,7 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
     public const CAT_PETS         = 'Pet Shop';                         // ID 100006664 (Casa e jardim)
     public const CAT_AUTO         = 'Peças & Acessórios Automotivos';   // IDs 34, 201355758
     public const CAT_FASHION      = 'Roupas, Bolsas & Calçados';        // IDs 200000345, 200000343, 1524, 322
+    public const CAT_FITNESS      = 'Moda Fitness, Leggings & Academia';// IDs 200000785, 200000349, 200000345, 200000780
     public const CAT_LINGERIE     = 'Roupa Íntima & Pijamas';           // ID 200574005 (feminina, masculina, pijamas)
     public const CAT_ADULT        = 'Novidades & Uso Especial';         // ID 200000532
 
@@ -30,6 +32,7 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
     {
         return [
             self::CAT_TECH,
+            self::CAT_MOBILE_TV,
             self::CAT_SMARTWATCH,
             self::CAT_HOME,
             self::CAT_TOOLS,
@@ -37,6 +40,7 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
             self::CAT_PETS,
             self::CAT_AUTO,
             self::CAT_FASHION,
+            self::CAT_FITNESS,
             self::CAT_LINGERIE,
             self::CAT_ADULT,
         ];
@@ -54,6 +58,7 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
         $canonical = $this->normalizeCategory($category);
         return match ($canonical) {
             self::CAT_TECH       => [44, 509, 7],
+            self::CAT_MOBILE_TV  => [509, 44, 7],
             self::CAT_SMARTWATCH => [1511],
             self::CAT_HOME       => [15, 39, 6],
             self::CAT_TOOLS      => [1420, 30],
@@ -61,6 +66,7 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
             self::CAT_PETS       => [100006664, 15],
             self::CAT_AUTO       => [34, 201355758],
             self::CAT_FASHION    => [200000345, 200000343, 200000346, 200000347, 200000344, 200000348, 1524, 322],
+            self::CAT_FITNESS    => [200000785, 200000349, 200000345, 200000780],
             self::CAT_LINGERIE   => [200574005, 200000851, 200000858, 200000780, 200000778, 200000779, 200000781],
             self::CAT_ADULT      => [200000532],
             default              => [44],
@@ -82,12 +88,21 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
                 'carregador turbo tipo c 65w',
                 'power bank inducao magnetico',
                 'headset gamer microfone rgb',
-                'mini projetor led 4k portatil',
                 'caixa de som bluetooth potente',
                 'fone conducao ossea corrida',
                 'suporte articulado celular mesa',
                 'cabo usb c carregamento rapido',
                 'adaptador bluetooth transmissor audio'
+            ],
+            self::CAT_MOBILE_TV, 'Smartphones, TVs & Projetores 4K' => [
+                'mini projetor hy300 4k',
+                'projetor magcubic 4k android',
+                'tv box android 4k',
+                'smartphone poco x6 pro',
+                'smartphone xiaomi redmi note',
+                'projetor portatil wifi 4k',
+                'smart tv box homologada',
+                'celular android versao global'
             ],
             self::CAT_SMARTWATCH => [
                 'smartwatch prova dagua nfc gps',
@@ -159,6 +174,16 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
                 'bolsa feminina transversal tiracolo couro vintage',
                 'mochila executiva impermeavel antifurto usb notebook'
             ],
+            self::CAT_FITNESS, 'Moda Fitness, Leggings & Academia' => [
+                'legging suplex feminina',
+                'macacao fitness feminino',
+                'conjunto academia feminino',
+                'macaquinho fitness treino',
+                'short suplex academia',
+                'top fitness sustentacao',
+                'calca legging empina bumbum',
+                'body feminino canelado academia'
+            ],
             self::CAT_LINGERIE, 'Moda Íntima, Lingeries & Pijamas' => [
                 'conjunto lingerie renda floral sutiã calcinha luxo',
                 'sutia sem costura sustentacao push up confortavel',
@@ -187,6 +212,16 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
 
         $lower = mb_strtolower($raw, 'UTF-8');
         $clean = preg_replace('/[^\p{L}\p{N}\s&]/u', ' ', $lower) ?? $lower;
+
+        // 0. Moda Fitness, Leggings & Academia (Precedência sobre Moda geral)
+        if (str_contains($clean, 'fitness') || str_contains($clean, 'feetness') || str_contains($clean, 'legging') || str_contains($clean, 'academia') || str_contains($clean, 'suplex') || str_contains($clean, 'macaquinho') || str_contains($clean, 'macacao fitness') || str_contains($clean, 'macacão fitness')) {
+            return 'Moda Fitness, Leggings & Academia';
+        }
+
+        // 0.1 Smartphones, TVs & Projetores 4K (Precedência sobre Eletrônicos gerais)
+        if (str_contains($clean, 'smartphone') || str_contains($clean, 'celular') || str_contains($clean, 'projetor') || str_contains($clean, 'tv box') || str_contains($clean, 'smart tv') || str_contains($clean, 'xiaomi') || str_contains($clean, 'poco') || str_contains($clean, 'magcubic') || str_contains($clean, 'hy300')) {
+            return 'Smartphones, TVs & Projetores 4K';
+        }
 
         // 1. Moda Íntima e Lingeries
         if (str_contains($clean, 'lingerie') || str_contains($clean, 'intima') || str_contains($clean, 'íntima') || str_contains($clean, 'sutia') || str_contains($clean, 'sutiã') || str_contains($clean, 'calcinha') || str_contains($clean, 'cueca') || str_contains($clean, 'boxer') || str_contains($clean, 'pijama')) {
@@ -246,6 +281,16 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
             return self::CAT_TOOLS;
         }
 
+        // 0. Moda Fitness, Leggings & Academia (Precedência sobre Roupas em geral)
+        if (str_contains($clean, 'fitness') || str_contains($clean, 'feetness') || str_contains($clean, 'legging') || str_contains($clean, 'academia') || str_contains($clean, 'suplex') || str_contains($clean, 'macaquinho') || str_contains($clean, 'macacao fitness') || str_contains($clean, 'macacão fitness')) {
+            return self::CAT_FITNESS;
+        }
+
+        // 0.1 Smartphones, TVs & Projetores 4K (Precedência sobre Eletrônicos gerais)
+        if (str_contains($clean, 'smartphone') || str_contains($clean, 'celular') || str_contains($clean, 'projetor') || str_contains($clean, 'tv box') || str_contains($clean, 'smart tv') || str_contains($clean, 'xiaomi') || str_contains($clean, 'poco') || str_contains($clean, 'magcubic') || str_contains($clean, 'hy300')) {
+            return self::CAT_MOBILE_TV;
+        }
+
         // 1. Roupa Íntima & Pijamas (ID 200574005)
         if (str_contains($clean, 'lingerie') || str_contains($clean, 'sutia') || str_contains($clean, 'sutiã') || str_contains($clean, 'calcinha') || str_contains($clean, 'intima') || str_contains($clean, 'íntima') || str_contains($clean, 'pijama') || str_contains($clean, 'cueca') || str_contains($clean, 'boxer') || str_contains($clean, 'espartilho') || str_contains($clean, 'corset')) {
             return self::CAT_LINGERIE;
@@ -298,6 +343,16 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
     public function classifyFromText(string $title, ?string $rawCategory = null): string
     {
         $t = mb_strtolower(trim($title), 'UTF-8');
+
+        // 0. Moda Fitness, Leggings & Academia (Precedência alta sobre Moda geral)
+        if (preg_match('/\b(legging|leggings|suplex|macaquinho|macaquinhos|macacão fitness|macacao fitness|conjunto academia|top fitness|calça suplex|calca suplex|bermuda fitness|empina bumbum|short suplex|fitness|feetness|academia)\b/iu', $t)) {
+            return self::CAT_FITNESS;
+        }
+
+        // 0.1 Smartphones, TVs & Projetores 4K (Precedência sobre Eletrônicos gerais)
+        if (preg_match('/\b(smartphone|smartphones|celular|celulares|projetor|projetores|magcubic|hy300|tv box|smart tv|poco x6|redmi note|xiaomi)\b/iu', $t)) {
+            return self::CAT_MOBILE_TV;
+        }
 
         // 1. Roupa Íntima & Pijamas (Precedência alta sobre Moda geral para evitar falso-positivo)
         if (preg_match('/\b(lingerie|sutiã|sutia|calcinha|calcinhas|bojo|push up|push-up|guipir|bralette|camisola|baby doll|pijama|pijamas|renda sexy|natalina sexy|meia-calça|meias-calça|meia calça|meias calça|meia calca|meia-calca|meia arrastão|meia arrastao|cueca|cuecas|boxer|slip|corpete|espartilho|espartilhos|corset|cinta modeladora|peças íntimas|pecas intimas|roupa íntima)\b/iu', $t)) {
@@ -384,6 +439,40 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
                 OR title LIKE '%Celular%'
                 OR title LIKE '%Telefone%'
                 OR title LIKE '%Smartphone%'
+            )";
+        }
+
+        // 0.2 Filtro específico de Moda Fitness & Leggings
+        if (str_contains($clean, 'fitness') || str_contains($clean, 'feetness') || str_contains($clean, 'legging') || str_contains($clean, 'academia') || str_contains($clean, 'suplex') || str_contains($clean, 'macaquinho')) {
+            return "(
+                category IN ('Moda Fitness, Leggings & Academia', 'Moda Fitness', 'Fitness', 'Academia')
+                OR category LIKE '%Fitness%'
+                OR category LIKE '%Legging%'
+                OR title LIKE '%Legging%'
+                OR title LIKE '%Suplex%'
+                OR title LIKE '%Macacão%'
+                OR title LIKE '%Macacao%'
+                OR title LIKE '%Macaquinho%'
+                OR title LIKE '%Fitness%'
+                OR title LIKE '%Academia%'
+                OR title LIKE '%Empina Bumbum%'
+            )";
+        }
+
+        // 0.3 Filtro específico de Smartphones, TVs & Projetores 4K
+        if (str_contains($clean, 'projetor') || str_contains($clean, 'tv box') || str_contains($clean, 'smart tv') || str_contains($clean, 'poco') || str_contains($clean, 'magcubic') || str_contains($clean, 'hy300')) {
+            return "(
+                category IN ('Smartphones, TVs & Projetores 4K', 'Smartphones', 'Celulares', 'Projetores', 'TV Box')
+                OR category LIKE '%Smartphone%'
+                OR category LIKE '%Projetor%'
+                OR category LIKE '%TV%'
+                OR title LIKE '%Projetor%'
+                OR title LIKE '%Magcubic%'
+                OR title LIKE '%HY300%'
+                OR title LIKE '%TV Box%'
+                OR title LIKE '%Smartphone%'
+                OR title LIKE '%Poco%'
+                OR title LIKE '%Redmi Note%'
             )";
         }
 

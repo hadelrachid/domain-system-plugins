@@ -232,12 +232,14 @@
 
         var categories = [
             'Eletrônicos & Gadget',
+            'Smartphones, TVs & Projetores 4K',
             'Casa Inteligente & Organização',
             'Beleza, Cuidados & Estilo',
             'Ferramentas & Utilidades',
             'Pet Shop & Pets Virais',
             'Acessórios para Veículos',
             'Moda, Roupas & Vestuário',
+            'Moda Fitness, Leggings & Academia',
             'Moda Íntima, Lingeries & Pijamas',
             'Sex Shop & Bem-Estar'
         ];
@@ -611,6 +613,7 @@
                         <label style="display: block; font-size: 12px; color: var(--text-muted, #94a3b8); margin-bottom: 4px;">Nicho / Categoria</label>
                         <select name="category" style="width: 100%; background: rgba(0,0,0,0.25); border: 1px solid var(--border, rgba(255,255,255,0.15)); color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 13px;">
                             <option value="Eletrônicos & Gadget">Eletrônicos & Gadget</option>
+                            <option value="Smartphones, TVs & Projetores 4K">Smartphones, TVs & Projetores 4K</option>
                             <option value="Casa Inteligente & Organização">Casa Inteligente & Organização</option>
                             <option value="Beleza, Cuidados & Estilo">Beleza, Cuidados & Estilo</option>
                             <option value="Ferramentas & Utilidades">Ferramentas & Utilidades</option>
@@ -721,11 +724,15 @@
                         <select name="category" style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border, rgba(255,255,255,0.15)); color: #fff; padding: 7px 8px; border-radius: 6px; font-size: 12px;">
                             <option value="">Inferir Auto</option>
                             <option value="Eletrônicos & Gadget">Eletrônicos</option>
+                            <option value="Smartphones, TVs & Projetores 4K">Smartphones & Projetores</option>
                             <option value="Casa Inteligente & Organização">Casa Inteligente</option>
                             <option value="Beleza, Cuidados & Estilo">Beleza & Estilo</option>
                             <option value="Ferramentas & Utilidades">Ferramentas</option>
                             <option value="Pet Shop & Pets Virais">Pet Shop</option>
                             <option value="Acessórios para Veículos">Veículos</option>
+                            <option value="Moda, Roupas & Vestuário">Moda & Roupas</option>
+                            <option value="Moda Fitness, Leggings & Academia">Moda Fitness</option>
+                            <option value="Moda Íntima, Lingeries & Pijamas">Moda Íntima</option>
                         </select>
                     </div>
                 </div>
