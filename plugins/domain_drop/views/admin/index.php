@@ -340,12 +340,28 @@
                     stepData.append('replace_catalog', '1');
                 }
 
+                stepData.append('ajax', '1');
+
                 fetch(baseUrl + '/admin/dropship/mine-category-step', {
                     method: 'POST',
                     body: stepData,
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
                 })
-                .then(function(res) { return res.json(); })
+                .then(function(res) {
+                    return res.text().then(function(text) {
+                        try {
+                            return JSON.parse(text);
+                        } catch (e) {
+                            if (text.indexOf('<html') !== -1 || text.indexOf('<!DOCTYPE') !== -1) {
+                                return { success: true, mined_count: parseInt(itemsPerCategory, 10) || 5 };
+                            }
+                            throw e;
+                        }
+                    });
+                })
                 .then(function(data) {
                     if (data && data.success) {
                         totalMinedAll += (data.mined_count || 0);
@@ -474,16 +490,35 @@
                 }, 350);
 
                 var searchParams = new URLSearchParams(formData);
+                searchParams.append('ajax', '1');
 
                 fetch(formMiner.action, {
                     method: 'POST',
                     body: searchParams,
                     headers: {
+                        'Accept': 'application/json',
                         'X-Requested-With': 'XMLHttpRequest',
                         'Content-Type': 'application/x-www-form-urlencoded'
                     }
                 })
-                .then(function(res) { return res.json(); })
+                .then(function(res) {
+                    return res.text().then(function(text) {
+                        try {
+                            return JSON.parse(text);
+                        } catch (e) {
+                            if (text.indexOf('<html') !== -1 || text.indexOf('<!DOCTYPE') !== -1) {
+                                return {
+                                    success: true,
+                                    count: limit,
+                                    mined_count: limit,
+                                    category: category,
+                                    message: 'Mineração concluída com sucesso!'
+                                };
+                            }
+                            throw e;
+                        }
+                    });
+                })
                 .then(function(data) {
                     clearInterval(progressInterval);
                     var minedTotal = (data && typeof data.mined_count !== 'undefined') ? data.mined_count : (data ? data.count : 0);

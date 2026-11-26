@@ -1192,14 +1192,19 @@ class DropshipAdminController
     private function isAjaxOrJson(Request $request): bool
     {
         $serverAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower((string)$_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+        $serverFetch = !empty($_SERVER['HTTP_SEC_FETCH_DEST']) && $_SERVER['HTTP_SEC_FETCH_DEST'] === 'empty';
+        $serverAccept = !empty($_SERVER['HTTP_ACCEPT']) && str_contains($_SERVER['HTTP_ACCEPT'], 'application/json');
         $reqIsAjax = method_exists($request, 'isAjax') && $request->isAjax();
         $hasHeader = method_exists($request, 'header');
 
         return $serverAjax
+            || $serverFetch
+            || $serverAccept
             || $reqIsAjax
             || (bool)$request->input('ajax', false)
             || ($hasHeader && str_contains((string)$request->header('Accept', ''), 'application/json'))
-            || ($hasHeader && strtolower((string)$request->header('X-Requested-With', '')) === 'xmlhttprequest');
+            || ($hasHeader && strtolower((string)$request->header('X-Requested-With', '')) === 'xmlhttprequest')
+            || ($hasHeader && (string)$request->header('Sec-Fetch-Dest', '') === 'empty');
     }
 
     private function parseCurrency(string|float|int|null $value): float
