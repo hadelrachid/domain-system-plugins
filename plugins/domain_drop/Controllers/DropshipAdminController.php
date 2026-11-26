@@ -99,8 +99,12 @@ class DropshipAdminController
     public function mine(Request $request): ResponseInterface
     {
         $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
+        $isAjax = $request->isAjax() || strtolower((string)$request->header('X-Requested-With')) === 'xmlhttprequest';
 
         if (!$this->verifyCsrf($request)) {
+            if ($isAjax) {
+                return new Response(json_encode(['success' => false, 'error' => 'Token de segurança expirado.']), 403, ['Content-Type' => 'application/json']);
+            }
             $this->session->setFlash('error', 'Token de segurança expirado.');
             return Response::redirect($baseUrl . '/admin/dropship');
         }
@@ -121,9 +125,28 @@ class DropshipAdminController
             $mined = $this->miningService->mineTrendingProducts($category, $limit, true, $sort, $warehouseOrigin);
             $this->catalogRepo->publishAll();
             $count = count($mined);
-            $this->session->setFlash('success', "🚀 Mineração concluída com sucesso! {$count} produtos com alta reputação minerados e ativos para venda.");
+            $msg = "🚀 Mineração concluída com sucesso! {$count} produtos com alta reputação minerados e ativos para venda.";
+
+            if ($isAjax) {
+                return new Response(json_encode([
+                    'success'     => true,
+                    'count'       => $count,
+                    'mined_count' => $count,
+                    'category'    => $category,
+                    'message'     => $msg,
+                ]), 200, ['Content-Type' => 'application/json']);
+            }
+
+            $this->session->setFlash('success', $msg);
         } catch (Throwable $e) {
-            $this->session->setFlash('error', "Falha ao minerar produtos: " . $e->getMessage());
+            $errMsg = "Falha ao minerar produtos: " . $e->getMessage();
+            if ($isAjax) {
+                return new Response(json_encode([
+                    'success' => false,
+                    'error'   => $errMsg,
+                ]), 500, ['Content-Type' => 'application/json']);
+            }
+            $this->session->setFlash('error', $errMsg);
         }
 
         return Response::redirect($baseUrl . '/admin/dropship');

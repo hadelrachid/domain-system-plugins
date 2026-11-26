@@ -16,6 +16,7 @@ use PDO;
  */
 class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
 {
+    private DatabaseConnectionInterface|PDO $connection;
     private PDO $pdo;
     private CategoryTaxonomyInterface $taxonomy;
 
@@ -23,30 +24,84 @@ class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
         DatabaseConnectionInterface|PDO $connection,
         ?CategoryTaxonomyInterface $taxonomy = null
     ) {
+        $this->connection = $connection;
         $this->pdo = $connection instanceof DatabaseConnectionInterface
             ? $connection->getPdo()
             : $connection;
         $this->taxonomy = $taxonomy ?? new CategoryTaxonomyService();
-        DomainDropSchemaEnsurer::ensure($this->pdo);
+        DomainDropSchemaEnsurer::ensure($this->getPdo());
+    }
+
+    private function getPdo(): PDO
+    {
+        if ($this->connection instanceof DatabaseConnectionInterface) {
+            $this->pdo = $this->connection->getPdo();
+        }
+        return $this->pdo;
+    }
+
+    private function executeWithRetry(\Closure $callback): mixed
+    {
+        try {
+            return $callback($this->getPdo());
+        } catch (\PDOException $e) {
+            $isGoneAway = in_array((int)($e->errorInfo[1] ?? 0), [2006, 2013], true)
+                || stripos($e->getMessage(), 'server has gone away') !== false
+                || stripos($e->getMessage(), 'Lost connection') !== false;
+
+            if ($isGoneAway && $this->connection instanceof DatabaseConnectionInterface) {
+                $this->pdo = $this->connection->getPdo();
+                return $callback($this->pdo);
+            }
+            throw $e;
+        }
     }
 
     public function save(DropshipProductDto $product): int
     {
-        $existing = $this->findByAliExpressId($product->aliexpressId);
-        $now = date('Y-m-d H:i:s');
-        $imagesJson = json_encode($product->images, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $attrJson = json_encode($product->attributes, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        return $this->executeWithRetry(function (PDO $pdo) use ($product) {
+            $existing = $this->findByAliExpressId($product->aliexpressId);
+            $now = date('Y-m-d H:i:s');
+            $imagesJson = json_encode($product->images, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            $attrJson = json_encode($product->attributes, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
-        if ($existing !== null && $existing->id !== null) {
-            $stmt = $this->pdo->prepare("
-                UPDATE domain_drop_catalog
-                SET title = ?, slug = ?, cost_price_usd = ?, sale_price_brl = ?,
-                    main_image_url = ?, images = ?, category = ?, description = ?,
-                    rating = ?, orders_count = ?, attributes = ?, status = ?, updated_at = ?
-                WHERE id = ?
+            if ($existing !== null && $existing->id !== null) {
+                $stmt = $pdo->prepare("
+                    UPDATE domain_drop_catalog
+                    SET title = ?, slug = ?, cost_price_usd = ?, sale_price_brl = ?,
+                        main_image_url = ?, images = ?, category = ?, description = ?,
+                        rating = ?, orders_count = ?, attributes = ?, status = ?, updated_at = ?
+                    WHERE id = ?
+                ");
+
+                $stmt->execute([
+                    $product->title,
+                    $product->slug,
+                    $product->costPriceUsd,
+                    $product->salePriceBrl,
+                    $product->mainImageUrl,
+                    $imagesJson,
+                    $product->category,
+                    $product->description,
+                    $product->rating,
+                    $product->ordersCount,
+                    $attrJson,
+                    $product->status,
+                    $now,
+                    $existing->id,
+                ]);
+
+                return $existing->id;
+            }
+
+            $stmt = $pdo->prepare("
+                INSERT INTO domain_drop_catalog
+                    (aliexpress_id, title, slug, cost_price_usd, sale_price_brl, main_image_url, images, category, description, rating, orders_count, attributes, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
 
             $stmt->execute([
+                $product->aliexpressId,
                 $product->title,
                 $product->slug,
                 $product->costPriceUsd,
@@ -60,37 +115,11 @@ class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
                 $attrJson,
                 $product->status,
                 $now,
-                $existing->id,
+                $now,
             ]);
 
-            return $existing->id;
-        }
-
-        $stmt = $this->pdo->prepare("
-            INSERT INTO domain_drop_catalog
-                (aliexpress_id, title, slug, cost_price_usd, sale_price_brl, main_image_url, images, category, description, rating, orders_count, attributes, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ");
-
-        $stmt->execute([
-            $product->aliexpressId,
-            $product->title,
-            $product->slug,
-            $product->costPriceUsd,
-            $product->salePriceBrl,
-            $product->mainImageUrl,
-            $imagesJson,
-            $product->category,
-            $product->description,
-            $product->rating,
-            $product->ordersCount,
-            $attrJson,
-            $product->status,
-            $now,
-            $now,
-        ]);
-
-        return (int)$this->pdo->lastInsertId();
+            return (int)$pdo->lastInsertId();
+        });
     }
 
     public function findById(int $id): ?DropshipProductDto
@@ -393,43 +422,46 @@ class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
 
     public function clearAll(bool $preserveOrdered = true): int
     {
-        if ($preserveOrdered) {
-            try {
-                // Preserva produtos vinculados a pedidos de clientes
-                $sql = "
-                    DELETE FROM domain_drop_catalog
-                    WHERE aliexpress_id NOT IN (
-                        SELECT aliexpress_product_id 
-                        FROM domain_drop_orders 
-                        WHERE aliexpress_product_id IS NOT NULL AND aliexpress_product_id != ''
-                    )
-                ";
-                $stmt = $this->pdo->prepare($sql);
-                $stmt->execute();
-                return $stmt->rowCount();
-            } catch (\Throwable $e) {
-                // Fallback se a tabela de pedidos ainda não tiver sido criada
+        return $this->executeWithRetry(function (PDO $pdo) use ($preserveOrdered) {
+            if ($preserveOrdered) {
+                try {
+                    $sql = "
+                        DELETE FROM domain_drop_catalog
+                        WHERE aliexpress_id NOT IN (
+                            SELECT aliexpress_product_id 
+                            FROM domain_drop_orders 
+                            WHERE aliexpress_product_id IS NOT NULL AND aliexpress_product_id != ''
+                        )
+                    ";
+                    $stmt = $pdo->prepare($sql);
+                    $stmt->execute();
+                    return $stmt->rowCount();
+                } catch (\Throwable $e) {}
             }
-        }
 
-        $stmt = $this->pdo->prepare("DELETE FROM domain_drop_catalog");
-        $stmt->execute();
-        return $stmt->rowCount();
+            $stmt = $pdo->prepare("DELETE FROM domain_drop_catalog");
+            $stmt->execute();
+            return $stmt->rowCount();
+        });
     }
 
     public function purgeDrafts(): int
     {
-        $stmt = $this->pdo->prepare("DELETE FROM domain_drop_catalog WHERE status != 'published'");
-        $stmt->execute();
-        return $stmt->rowCount();
+        return $this->executeWithRetry(function (PDO $pdo) {
+            $stmt = $pdo->prepare("DELETE FROM domain_drop_catalog WHERE status != 'published'");
+            $stmt->execute();
+            return $stmt->rowCount();
+        });
     }
 
     public function publishAll(): int
     {
-        $now = date('Y-m-d H:i:s');
-        $stmt = $this->pdo->prepare("UPDATE domain_drop_catalog SET status = 'published', updated_at = ? WHERE status != 'published'");
-        $stmt->execute([$now]);
-        return $stmt->rowCount();
+        return $this->executeWithRetry(function (PDO $pdo) {
+            $now = date('Y-m-d H:i:s');
+            $stmt = $pdo->prepare("UPDATE domain_drop_catalog SET status = 'published', updated_at = ? WHERE status != 'published'");
+            $stmt->execute([$now]);
+            return $stmt->rowCount();
+        });
     }
 
     public function findSimilarOffers(int $excludeId, string $category, string $title = '', int $limit = 4): array

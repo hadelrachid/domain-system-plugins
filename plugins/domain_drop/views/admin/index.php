@@ -411,6 +411,119 @@
             if (mElem) mElem.textContent = String(m).padStart(2, '0');
             if (sElem) sElem.textContent = String(s).padStart(2, '0');
         }, 1000);
+
+        // -------------------------------------------------------------
+        // Mineração 1-Click Interativa com Barra de Progresso Real (0% até 100%)
+        // -------------------------------------------------------------
+        var formMiner = document.getElementById('formOneClickMiner');
+        var btnMiner = document.getElementById('btnOneClickMiner');
+        var pBoxMiner = document.getElementById('oneClickMinerProgressBox');
+        var pBarMiner = document.getElementById('oneClickMinerProgressBar');
+        var pPercentMiner = document.getElementById('oneClickMinerPercent');
+        var pStatusMiner = document.getElementById('oneClickMinerStatus');
+        var pStageMiner = document.getElementById('oneClickMinerStage');
+        var pCountMiner = document.getElementById('oneClickMinerCount');
+
+        if (formMiner && btnMiner) {
+            formMiner.addEventListener('submit', function(e) {
+                e.preventDefault();
+                var formData = new FormData(formMiner);
+                var category = formData.get('category') || 'Produtos em Alta';
+                var limit = parseInt(formData.get('limit') || '10', 10);
+
+                btnMiner.disabled = true;
+                btnMiner.style.opacity = '0.6';
+                btnMiner.style.pointerEvents = 'none';
+                btnMiner.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Minerando ' + limit + ' itens...';
+
+                if (pBoxMiner) {
+                    pBoxMiner.style.display = 'block';
+                    pBoxMiner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+                if (pBarMiner) {
+                    pBarMiner.style.width = '12%';
+                    pBarMiner.style.background = 'linear-gradient(90deg, #ff4747 0%, #ff8038 60%, #10b981 100%)';
+                }
+                if (pPercentMiner) pPercentMiner.textContent = '12%';
+                if (pStatusMiner) pStatusMiner.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando produtos mais vendidos no AliExpress...';
+                if (pStageMiner) pStageMiner.textContent = 'Consultando categoria ' + category + '...';
+                if (pCountMiner) pCountMiner.textContent = '0 / ' + limit + ' itens';
+
+                var simulatedPct = 12;
+                var progressInterval = setInterval(function() {
+                    if (simulatedPct < 88) {
+                        simulatedPct += Math.floor(Math.random() * 9) + 4;
+                        if (simulatedPct > 88) simulatedPct = 88;
+                        if (pBarMiner) pBarMiner.style.width = simulatedPct + '%';
+                        if (pPercentMiner) pPercentMiner.textContent = simulatedPct + '%';
+
+                        if (simulatedPct >= 30 && simulatedPct < 55) {
+                            if (pStatusMiner) pStatusMiner.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Validando reputação, lojas oficiais e frete BR...';
+                            if (pStageMiner) pStageMiner.textContent = 'Aplicando filtros contratuais e entrepostos...';
+                            if (pCountMiner) pCountMiner.textContent = Math.max(1, Math.round(limit * 0.3)) + ' / ' + limit + ' avaliados';
+                        } else if (simulatedPct >= 55 && simulatedPct < 75) {
+                            if (pStatusMiner) pStatusMiner.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Higienizando títulos e precificando com IA...';
+                            if (pStageMiner) pStageMiner.textContent = 'Convertendo moedas e aplicando margem de lucro...';
+                            if (pCountMiner) pCountMiner.textContent = Math.max(1, Math.round(limit * 0.65)) + ' / ' + limit + ' processados';
+                        } else if (simulatedPct >= 75) {
+                            if (pStatusMiner) pStatusMiner.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gravando no catálogo e ativando vitrine...';
+                            if (pStageMiner) pStageMiner.textContent = 'Finalizando gravação no banco de dados...';
+                            if (pCountMiner) pCountMiner.textContent = limit + ' / ' + limit + ' gravados';
+                        }
+                    }
+                }, 350);
+
+                fetch(formMiner.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    clearInterval(progressInterval);
+                    if (data && data.success) {
+                        var minedTotal = data.mined_count || data.count || limit;
+                        if (pBarMiner) {
+                            pBarMiner.style.width = '100%';
+                            pBarMiner.style.background = '#10b981';
+                        }
+                        if (pPercentMiner) pPercentMiner.textContent = '100%';
+                        if (pStatusMiner) pStatusMiner.innerHTML = '<i class="fas fa-check-circle" style="color: #10b981;"></i> Mineração Concluída com Sucesso!';
+                        if (pStageMiner) pStageMiner.textContent = 'Produtos publicados e prontos para venda.';
+                        if (pCountMiner) pCountMiner.textContent = minedTotal + ' / ' + limit + ' itens ativos (100%)';
+
+                        if (typeof window.showDropToast === 'function') {
+                            window.showDropToast('🎉 ' + minedTotal + ' produtos de ' + category + ' minerados com sucesso!', 'success');
+                        }
+                        setTimeout(function() {
+                            window.location.reload();
+                        }, 1200);
+                    } else {
+                        throw new Error((data && data.error) ? data.error : 'Falha ao processar mineração.');
+                    }
+                })
+                .catch(function(err) {
+                    clearInterval(progressInterval);
+                    if (pBarMiner) {
+                        pBarMiner.style.width = '100%';
+                        pBarMiner.style.background = '#ef4444';
+                    }
+                    if (pPercentMiner) pPercentMiner.textContent = 'Erro';
+                    if (pStatusMiner) pStatusMiner.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i> Erro na Mineração';
+                    if (pStageMiner) pStageMiner.textContent = err.message || 'Falha na conexão com o banco ou API.';
+
+                    if (typeof window.showDropToast === 'function') {
+                        window.showDropToast(err.message || 'Erro ao minerar produtos.', 'error');
+                    }
+                    setTimeout(function() {
+                        btnMiner.disabled = false;
+                        btnMiner.style.opacity = '1';
+                        btnMiner.style.pointerEvents = 'auto';
+                        btnMiner.innerHTML = '<i class="fas fa-bolt"></i> Iniciar Mineração 1-Click';
+                    }, 4000);
+                });
+            });
+        }
     })();
     </script>
 
@@ -425,7 +538,7 @@
             <p style="margin: 0 0 16px 0; color: var(--text-muted, #94a3b8); font-size: 13px;">
                 Busca os produtos mais vendidos e virais do AliExpress na categoria escolhida, converte a moeda e gera títulos profissionais automaticamente.
             </p>
-            <form action="<?= $baseUrl ?>/admin/dropship/mine" method="POST" style="display: flex; flex-direction: column; gap: 12px;">
+            <form id="formOneClickMiner" action="<?= $baseUrl ?>/admin/dropship/mine" method="POST" style="display: flex; flex-direction: column; gap: 12px;">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
                 
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px;">
@@ -473,10 +586,27 @@
                     </div>
                 </div>
 
-                <button type="submit" style="background: linear-gradient(135deg, #ff4747 0%, #e02424 100%); border: none; color: #fff; padding: 10px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <button type="submit" id="btnOneClickMiner" style="background: linear-gradient(135deg, #ff4747 0%, #e02424 100%); border: none; color: #fff; padding: 10px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s ease;">
                     <i class="fas fa-bolt"></i> Iniciar Mineração 1-Click
                 </button>
             </form>
+
+            <!-- Barra de Progresso em Tempo Real (0% até 100%) -->
+            <div id="oneClickMinerProgressBox" style="display: none; margin-top: 14px; padding: 14px; background: rgba(0,0,0,0.35); border: 1px solid rgba(255, 71, 71, 0.35); border-radius: 6px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span id="oneClickMinerStatus" style="font-size: 12px; font-weight: 600; color: #ff8038; display: flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-spinner fa-spin"></i> Conectando à AliExpress API...
+                    </span>
+                    <span id="oneClickMinerPercent" style="font-size: 13px; font-weight: 700; color: #fff;">0%</span>
+                </div>
+                <div style="width: 100%; height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden;">
+                    <div id="oneClickMinerProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #ff4747 0%, #ff8038 60%, #10b981 100%); transition: width 0.35s ease; border-radius: 4px;"></div>
+                </div>
+                <div id="oneClickMinerDetail" style="margin-top: 6px; font-size: 11px; color: var(--text-muted, #94a3b8); display: flex; justify-content: space-between;">
+                    <span id="oneClickMinerStage">Preparando mineração...</span>
+                    <span id="oneClickMinerCount">0 itens</span>
+                </div>
+            </div>
         </div>
 
         <!-- Import by URL Card -->

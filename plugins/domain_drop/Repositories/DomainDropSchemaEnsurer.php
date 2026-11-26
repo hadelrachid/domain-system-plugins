@@ -57,6 +57,12 @@ final class DomainDropSchemaEnsurer
                         $pdo->exec("ALTER TABLE domain_drop_product_demand ADD COLUMN `period_year_month` VARCHAR(7) NOT NULL DEFAULT ''");
                     }
                 }
+                $checkCatalog = $pdo->query("SHOW TABLES LIKE 'domain_drop_catalog'");
+                if ($checkCatalog && $checkCatalog->fetchColumn() !== false) {
+                    try {
+                        $pdo->exec("ALTER TABLE domain_drop_catalog MODIFY `attributes` MEDIUMTEXT NULL, MODIFY `images` MEDIUMTEXT NULL, MODIFY `description` MEDIUMTEXT NULL");
+                    } catch (Throwable $e) {}
+                }
             }
 
             $migrationsDir = dirname(__DIR__) . '/migrations';

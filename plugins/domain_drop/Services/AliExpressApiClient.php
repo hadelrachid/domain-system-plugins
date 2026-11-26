@@ -345,10 +345,12 @@ class AliExpressApiClient implements AliExpressApiClientInterface
             }
 
             if (is_array($products) && !empty($products)) {
+                $maxEnrich = !empty($filters['enrich_details']) ? (int)($filters['enrich_limit'] ?? 5) : 0;
                 $enrichedProducts = [];
+                $enrichedCount = 0;
                 foreach ($products as $p) {
                     $pId = (string)($p['itemId'] ?? ($p['item_id'] ?? ($p['product_id'] ?? ($p['productId'] ?? ''))));
-                    if ($pId !== '' && is_numeric($pId)) {
+                    if ($maxEnrich > 0 && $enrichedCount < $maxEnrich && $pId !== '' && is_numeric($pId)) {
                         try {
                             $details = $this->getProductDetails($pId, 'pt', 'BRL');
                             $unwrappedDetails = \DomainSystem\Plugins\domain_drop\ValueObjects\AliExpressToken::unwrapPayload($details);
@@ -362,6 +364,7 @@ class AliExpressApiClient implements AliExpressApiClientInterface
                                     $merged['itemId'] = $pId;
                                 }
                                 $enrichedProducts[] = $merged;
+                                $enrichedCount++;
                                 continue;
                             }
                         } catch (Throwable $e) {

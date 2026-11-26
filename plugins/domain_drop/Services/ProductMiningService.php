@@ -809,6 +809,22 @@ class ProductMiningService implements ProductMiningServiceInterface
             ?? ($item['item_id']
             ?? ($item['productId'] ?? uniqid('ae_')))))
         );
+
+        // Se o item veio de busca resumida e não tem SKUs ou galeria completa, enriquece sob demanda apenas este item final
+        if ($aeId !== '' && is_numeric($aeId) && empty($item['ae_item_sku_info_dtos']) && empty($item['variants'])) {
+            try {
+                $details = $this->apiClient->getProductDetails($aeId, 'pt', 'BRL');
+                $unwrapped = \DomainSystem\Plugins\domain_drop\ValueObjects\AliExpressToken::unwrapPayload($details);
+                $pData = $unwrapped['result'] ?? ($details['result'] ?? $unwrapped);
+                if (is_array($pData) && !empty($pData)) {
+                    $item = array_merge($item, $pData);
+                    $baseInfo = $item['ae_item_base_info_dto'] ?? $baseInfo;
+                    $multiMedia = $item['ae_multimedia_info_dto'] ?? $multiMedia;
+                    $skuDtos = $item['ae_item_sku_info_dtos']['ae_item_sku_info_d_t_o'] ?? ($item['ae_item_sku_info_dtos'] ?? $skuDtos);
+                }
+            } catch (\Throwable $e) {}
+        }
+
         $rawTitle = (string)(
             $item['title']
             ?? ($item['product_title']
