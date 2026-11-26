@@ -234,23 +234,26 @@ class DropshipAdminController
     public function downloadVideo(Request $request): ResponseInterface
     {
         $id = (int)$request->input('id', 0);
+        $urlParam = trim((string)$request->input('url', ''));
         $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
 
-        if ($id <= 0) {
-            $this->session->setFlash('error', 'ID do produto inválido.');
-            return Response::redirect($baseUrl . '/admin/dropship');
+        $videoUrl = '';
+        $slug = 'produto';
+
+        if ($urlParam !== '' && (filter_var($urlParam, FILTER_VALIDATE_URL) || str_starts_with($urlParam, '//'))) {
+            $videoUrl = str_starts_with($urlParam, '//') ? ('https:' . $urlParam) : $urlParam;
         }
 
-        $product = $this->catalogRepo->findById($id);
-        if ($product === null) {
-            $this->session->setFlash('error', 'Produto não encontrado.');
-            return Response::redirect($baseUrl . '/admin/dropship');
-        }
-
-        $videoUrl = (string)($product->attributes['video_url'] ?? '');
-        if ($videoUrl === '' && !empty($product->description)) {
-            if (preg_match('/<source\s+src="([^"]+\.mp4[^"]*)"/i', $product->description, $mVid)) {
-                $videoUrl = $mVid[1];
+        if ($videoUrl === '' && $id > 0) {
+            $product = $this->catalogRepo->findById($id);
+            if ($product !== null) {
+                $slug = $product->slug ?: 'produto';
+                $videoUrl = (string)($product->attributes['video_url'] ?? '');
+                if ($videoUrl === '' && !empty($product->description)) {
+                    if (preg_match('/<source\s+src="([^"]+\.mp4[^"]*)"/i', $product->description, $mVid)) {
+                        $videoUrl = $mVid[1];
+                    }
+                }
             }
         }
 
@@ -263,7 +266,7 @@ class DropshipAdminController
             $videoUrl = 'https:' . $videoUrl;
         }
 
-        $cleanSlug = preg_replace('/[^a-zA-Z0-9_-]/', '-', $product->slug ?: 'produto') ?: 'video';
+        $cleanSlug = preg_replace('/[^a-zA-Z0-9_-]/', '-', $slug ?: 'produto') ?: 'video';
         $filename = "{$cleanSlug}-video.mp4";
 
         if (!headers_sent()) {
@@ -278,7 +281,7 @@ class DropshipAdminController
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
         curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 120);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($curl, $data) {
             echo $data;
@@ -1057,6 +1060,7 @@ class DropshipAdminController
                     $videoInput = 'https:' . $videoInput;
                 }
                 $attributes['video_url'] = $videoInput;
+                $attributes['product_video_url'] = $videoInput;
             }
         }
 

@@ -994,9 +994,9 @@
                                     <i class="fas fa-external-link-alt"></i> Link
                                 </a>
                                 <?php if ($prod->id !== null): ?>
-                                    <a id="prod-video-btn-<?= (int)$prod->id ?>" href="<?= $baseUrl ?>/admin/dropship/download-video?id=<?= (int)$prod->id ?>" style="height: 26px; padding: 0 8px; font-size: 11px; font-weight: 700; color: #c084fc; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.4); border-radius: 4px; display: <?= !empty($prodVideoUrl) ? 'inline-flex' : 'none' ?>; align-items: center; gap: 4px; text-decoration: none; box-sizing: border-box; line-height: 1;" title="Baixar Vídeo MP4 do fornecedor para anúncios no TikTok, Reels e WhatsApp">
+                                    <button type="button" id="prod-video-btn-<?= (int)$prod->id ?>" onclick="downloadCardVideo(<?= (int)$prod->id ?>, event)" style="height: 26px; padding: 0 8px; font-size: 11px; font-weight: 700; color: #c084fc; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.4); border-radius: 4px; display: <?= !empty($prodVideoUrl) ? 'inline-flex' : 'none' ?>; align-items: center; gap: 4px; cursor: pointer; box-sizing: border-box; line-height: 1;" title="Baixar Vídeo MP4 do fornecedor para anúncios no TikTok, Reels e WhatsApp">
                                         <i class="fas fa-video"></i> Vídeo
-                                    </a>
+                                    </button>
                                     <button type="button" onclick="openPriceModal(<?= (int)$prod->id ?>, <?= htmlspecialchars(json_encode($prod->title)) ?>, <?= (float)$prod->costPriceUsd ?>, <?= (float)round($prod->costPriceUsd * $rate, 2) ?>, <?= (float)$prod->salePriceBrl ?>)" style="height: 26px; padding: 0 8px; font-size: 11px; font-weight: 600; color: #fbbf24; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; box-sizing: border-box; line-height: 1;" title="Editar Custo e Preço de Venda">
                                         <i class="fas fa-tags"></i> Preço
                                     </button>
@@ -1200,9 +1200,9 @@
                             <i class="fas fa-video"></i> Vídeo Demonstrativo do Produto (MP4)
                         </span>
                         <div style="display: flex; gap: 8px; align-items: center;">
-                            <a id="imagesModalVideoDownloadBtn" href="#" class="btn" style="display: none; background: linear-gradient(135deg, #a855f7, #7c3aed); border: none; color: #fff; padding: 5px 12px; border-radius: 5px; font-size: 12px; font-weight: 700; text-decoration: none; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(168, 85, 247, 0.3);">
+                            <button type="button" id="imagesModalVideoDownloadBtn" onclick="downloadCurrentModalVideo(event)" style="display: none; background: linear-gradient(135deg, #a855f7, #7c3aed); border: none; color: #fff; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(168, 85, 247, 0.3);">
                                 <i class="fas fa-download"></i> Baixar Arquivo MP4
-                            </a>
+                            </button>
                             <button type="button" id="imagesModalVideoRemoveBtn" onclick="removeVideoUrl()" style="display: none; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; padding: 5px 10px; border-radius: 5px; font-size: 11px; font-weight: 600; cursor: pointer;">
                                 Remover Vídeo
                             </button>
@@ -1619,12 +1619,12 @@
             const input = document.getElementById('imagesModalVideoUrlInput');
             const url = input ? input.value.trim() : '';
             if (!url) {
-                setImagesModalStatus('Informe uma URL de vídeo MP4 válida.', 'error');
+                setImagesModalStatus('Por favor, informe ou cole uma URL de vídeo MP4 válida.', 'error');
                 return;
             }
             activeImagesState.videoUrl = url;
             updateVideoModalUI(url);
-            setImagesModalStatus('Vídeo adicionado à prévia! Clique em "Salvar Galeria" para gravar.', 'info');
+            setImagesModalStatus('Vídeo carregado na prévia! Clique no botão azul "Salvar Galeria" para gravar permanentemente no catálogo.', 'info');
         }
 
         function removeVideoUrl() {
@@ -1649,10 +1649,7 @@
                     player.src = videoUrl;
                     player.load();
                 }
-                if (dlBtn) {
-                    dlBtn.style.display = 'inline-flex';
-                    dlBtn.href = activeImagesState.downloadVideoUrl || videoUrl;
-                }
+                if (dlBtn) dlBtn.style.display = 'inline-flex';
                 if (rmBtn) rmBtn.style.display = 'inline-flex';
             } else {
                 if (playerContainer) playerContainer.style.display = 'none';
@@ -1664,6 +1661,35 @@
                 if (dlBtn) dlBtn.style.display = 'none';
                 if (rmBtn) rmBtn.style.display = 'none';
             }
+        }
+
+        function downloadCurrentModalVideo(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            const input = document.getElementById('imagesModalVideoUrlInput');
+            const videoUrl = (activeImagesState.videoUrl || (input ? input.value.trim() : '')).trim();
+            if (!videoUrl) {
+                setImagesModalStatus('Nenhum vídeo MP4 disponível para download neste produto.', 'error');
+                alert('Nenhum vídeo MP4 disponível para download neste produto.');
+                return false;
+            }
+            const targetUrl = baseAdminUrl + '/download-video?id=' + (activeImagesState.id || 0) + '&url=' + encodeURIComponent(videoUrl);
+            window.location.href = targetUrl;
+            return false;
+        }
+
+        function downloadCardVideo(id, e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            const item = (window.dropshipProductsMedia && window.dropshipProductsMedia[String(id)]) ? window.dropshipProductsMedia[String(id)] : null;
+            const videoUrl = item ? (item.videoUrl || '') : '';
+            const targetUrl = baseAdminUrl + '/download-video?id=' + id + (videoUrl ? '&url=' + encodeURIComponent(videoUrl) : '');
+            window.location.href = targetUrl;
+            return false;
         }
 
         function closeImagesModal() {
@@ -1848,6 +1874,12 @@
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
 
+            // Captura qualquer URL digitada ou colada no campo de vídeo, mesmo sem ter clicado em "Definir Vídeo"
+            const urlInput = document.getElementById('imagesModalVideoUrlInput');
+            if (urlInput && urlInput.value.trim() !== '') {
+                activeImagesState.videoUrl = urlInput.value.trim();
+            }
+
             const fd = new FormData();
             fd.append('csrf_token', dropshipCsrfToken);
             fd.append('ajax', '1');
@@ -1876,7 +1908,7 @@
                     }
                     renderImagesModalGrid();
                     updateCardImagesUi(id, activeImagesState.mainImageUrl, activeImagesState.images, activeImagesState.videoUrl);
-                    setImagesModalStatus(data.message || 'Galeria e vídeo salvos com sucesso!', 'success');
+                    setImagesModalStatus(data.message || 'Galeria e vídeo gravados com sucesso!', 'success');
                 } else {
                     setImagesModalStatus((data && data.message) ? data.message : 'Falha ao salvar galeria.', 'error');
                 }
@@ -2240,6 +2272,8 @@
         window.startBatchSync = startBatchSync;
         window.cancelBatchSync = cancelBatchSync;
         window.finishAndReload = finishAndReload;
+        window.downloadCurrentModalVideo = downloadCurrentModalVideo;
+        window.downloadCardVideo = downloadCardVideo;
     </script>
 
     <!-- Modal Limpar Catálogo -->

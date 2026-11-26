@@ -60,12 +60,19 @@ class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
     public function save(DropshipProductDto $product): int
     {
         return $this->executeWithRetry(function (PDO $pdo) use ($product) {
-            $existing = $this->findByAliExpressId($product->aliexpressId);
             $now = date('Y-m-d H:i:s');
             $imagesJson = json_encode($product->images, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
             $attrJson = json_encode($product->attributes, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
-            if ($existing !== null && $existing->id !== null) {
+            $targetId = $product->id;
+            if ($targetId === null && !empty($product->aliexpressId)) {
+                $existing = $this->findByAliExpressId($product->aliexpressId);
+                if ($existing !== null && $existing->id !== null) {
+                    $targetId = $existing->id;
+                }
+            }
+
+            if ($targetId !== null) {
                 $stmt = $pdo->prepare("
                     UPDATE domain_drop_catalog
                     SET title = ?, slug = ?, cost_price_usd = ?, sale_price_brl = ?,
@@ -88,10 +95,10 @@ class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
                     $attrJson,
                     $product->status,
                     $now,
-                    $existing->id,
+                    $targetId,
                 ]);
 
-                return $existing->id;
+                return $targetId;
             }
 
             $stmt = $pdo->prepare("
