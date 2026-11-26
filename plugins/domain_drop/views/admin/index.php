@@ -2346,11 +2346,17 @@
                 <button type="button" id="btnPurgeInvalidAudit" onclick="purgeAllInvalidAuditProducts()" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border: none; color: #fff; padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(239,68,68,0.3);">
                     <i class="fas fa-trash-alt"></i> Excluir Todos os Inválidos (<span id="auditPurgeCount">0</span> itens)
                 </button>
-                <div style="display: flex; gap: 10px;">
-                    <button type="button" onclick="copyCatalogAuditReport()" style="background: rgba(69, 243, 255, 0.15); border: 1px solid rgba(69, 243, 255, 0.4); color: #45f3ff; padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;">
-                        <i class="fas fa-copy"></i> Copiar Relatório Formatado
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button type="button" onclick="exportCatalogAuditReport('txt')" style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #fbbf24; padding: 9px 14px; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;" title="Baixar relatório completo em arquivo .txt">
+                        <i class="fas fa-file-alt"></i> Exportar TXT
                     </button>
-                    <button type="button" onclick="closeCatalogAuditModal()" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                    <button type="button" onclick="exportCatalogAuditReport('csv')" style="background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.4); color: #4ade80; padding: 9px 14px; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;" title="Baixar planilha formatada para Excel (.csv)">
+                        <i class="fas fa-file-excel"></i> Exportar Excel (CSV)
+                    </button>
+                    <button type="button" onclick="copyCatalogAuditReport()" style="background: rgba(69, 243, 255, 0.15); border: 1px solid rgba(69, 243, 255, 0.4); color: #45f3ff; padding: 9px 14px; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-copy"></i> Copiar
+                    </button>
+                    <button type="button" onclick="closeCatalogAuditModal()" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 9px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;">
                         Fechar
                     </button>
                 </div>
@@ -2470,6 +2476,46 @@
         }
     }
 
+    function exportCatalogAuditReport(format = 'txt') {
+        const now = new Date().toISOString().slice(0, 10);
+        let blob, filename;
+
+        if (format === 'csv') {
+            const mediaSource = window.dropshipProductsMedia || (typeof dropshipProductsMedia !== 'undefined' ? dropshipProductsMedia : {});
+            const items = Object.values(mediaSource);
+
+            // BOM (\uFEFF) para garantir abertura com caracteres acentuados corretos no Excel
+            let csvContent = "\uFEFF";
+            csvContent += "Item;ID AliExpress;Título;Procedência;Preço Custo (R$);Preço Venda (R$);Lucro (R$);Status\n";
+
+            items.forEach((item, idx) => {
+                const isReal = item.isRealId && /^\d{10,24}$/.test(String(item.aliexpressId || ''));
+                const status = !isReal ? 'Página não encontrada' : (item.isNational || item.origin === 'BR' ? 'Do Brasil' : 'Do Global');
+                const cleanTitle = (item.title || '').replace(/"/g, '""');
+                const cost = (parseFloat(item.costBrl) || 0).toFixed(2).replace('.', ',');
+                const price = (parseFloat(item.saleBrl) || 0).toFixed(2).replace('.', ',');
+                const profit = (parseFloat(item.profitBrl) || 0).toFixed(2).replace('.', ',');
+
+                csvContent += `${idx + 1};"${item.aliexpressId || item.id || ''}";"${cleanTitle}";"${status}";"${cost}";"${price}";"${profit}";"${isReal ? 'Ativo' : 'Inválido'}"\n`;
+            });
+
+            blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            filename = `auditoria-catalogo-dropship-${now}.csv`;
+        } else {
+            const textToExport = lastGeneratedAuditText || 'Nenhum dado auditado.';
+            blob = new Blob([textToExport], { type: 'text/plain;charset=utf-8;' });
+            filename = `auditoria-catalogo-dropship-${now}.txt`;
+        }
+
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+    }
+
     function fallbackCopy(text) {
         const ta = document.createElement('textarea');
         ta.value = text;
@@ -2550,6 +2596,7 @@
     window.openCatalogAuditModal = openCatalogAuditModal;
     window.closeCatalogAuditModal = closeCatalogAuditModal;
     window.copyCatalogAuditReport = copyCatalogAuditReport;
+    window.exportCatalogAuditReport = exportCatalogAuditReport;
     window.purgeAllInvalidAuditProducts = purgeAllInvalidAuditProducts;
     </script>
 </div>
