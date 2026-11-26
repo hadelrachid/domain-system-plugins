@@ -26,6 +26,12 @@ interface CategoryTaxonomyInterface
     public function normalizeCategory(string $category): string;
 
     /**
+     * Converte qualquer apelido, sinônimo ou nome canônico para o nome comercial
+     * oficial exibido na vitrine da loja e no painel administrativo.
+     */
+    public function toCommercialCategory(string $category): string;
+
+    /**
      * Infere a categoria canônica apropriada a partir do título do produto,
      * palavras-chave e/ou categoria bruta do fornecedor.
      */

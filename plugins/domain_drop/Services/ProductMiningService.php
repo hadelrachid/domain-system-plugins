@@ -78,14 +78,20 @@ class ProductMiningService implements ProductMiningServiceInterface
         return (new CategoryTaxonomyService())->normalizeCategory($category);
     }
 
+    public static function toCommercialCategory(string $category): string
+    {
+        return (new CategoryTaxonomyService())->toCommercialCategory($category);
+    }
+
     public function mineTrendingProducts(
-        string $category = 'Eletrônicos & Gadget',
+        string $category = 'Moda, Roupas & Vestuário',
         int $limit = 10,
         bool $autoPersist = true,
         string $sort = 'volume_desc',
         string $warehouseOrigin = 'ALL'
     ): array {
-        $category = self::normalizeCategory($category);
+        $commercialCat = self::toCommercialCategory($category);
+        $canonicalCat = self::normalizeCategory($category);
         $warehouseOrigin = strtoupper(trim($warehouseOrigin)) ?: 'ALL';
         $rawProducts = [];
         $candidateTarget = min(60, max(25, $limit * 3));
@@ -94,11 +100,11 @@ class ProductMiningService implements ProductMiningServiceInterface
             $pagesNeeded = (int)ceil($candidateTarget / $pageSize);
 
             // Obtém IDs e termos de busca oficiais da taxonomia alinhada ao AliExpress (categoria-e-atributos.pdf e dropshiper.pdf)
-            $catIds = $this->taxonomy->getAliExpressCategoryIds($category);
+            $catIds = $this->taxonomy->getAliExpressCategoryIds($canonicalCat);
             $primaryCatId = !empty($catIds) ? (string)$catIds[0] : null;
-            $searchTerms = $this->taxonomy->getAliExpressSearchKeywords($category);
+            $searchTerms = $this->taxonomy->getAliExpressSearchKeywords($canonicalCat);
             if (empty($searchTerms)) {
-                $searchTerms = [$category];
+                $searchTerms = [$commercialCat];
             }
 
             $seenIds = [];
@@ -162,7 +168,7 @@ class ProductMiningService implements ProductMiningServiceInterface
         // Se a API remota oficial não estiver conectada ou retornar vazio, busca em tempo real na vitrine do AliExpress Brasil
         if (empty($rawProducts)) {
             try {
-                $liveMined = $this->mineLiveFromAliExpressSearch($category, $limit, $autoPersist);
+                $liveMined = $this->mineLiveFromAliExpressSearch($commercialCat, $limit, $autoPersist, $warehouseOrigin);
                 if (!empty($liveMined)) {
                     return $liveMined;
                 }
@@ -173,7 +179,7 @@ class ProductMiningService implements ProductMiningServiceInterface
 
         // Se a API remota oficial não estiver conectada (ou em modo Test), utiliza catálogo curado e verificado
         if (empty($rawProducts)) {
-            $rawProducts = $this->getCuratedTrendingFallback($category, $candidateTarget, $sort);
+            $rawProducts = $this->getCuratedTrendingFallback($commercialCat, $candidateTarget, $sort);
         } else {
             $rawProducts = self::scoreAndSortByReputation($rawProducts, $sort, 4.0, 10, $candidateTarget, $warehouseOrigin);
         }
@@ -185,7 +191,7 @@ class ProductMiningService implements ProductMiningServiceInterface
         // Se os produtos externos descartados deixarem a cota abaixo do solicitado, complementa com o pool curado oficial
         if (count($rawProducts) < $limit) {
             $needed = $limit - count($rawProducts);
-            $curatedFallback = $this->getCuratedTrendingFallback($category, $needed + 5, $sort);
+            $curatedFallback = $this->getCuratedTrendingFallback($commercialCat, $needed + 5, $sort);
             $validatedCurated = $this->validationHub->ingestAndValidateBatch($curatedFallback);
             foreach ($validatedCurated['valid_items'] as $cItem) {
                 $rawProducts[] = $cItem;
@@ -212,8 +218,8 @@ class ProductMiningService implements ProductMiningServiceInterface
                 $dto = $this->processWithTransientBuffer(
                     $itemId,
                     $item,
-                    function (array $rawItem) use ($category, $autoPersist) {
-                        $transformed = $this->transformRawItemToDto($rawItem, $category);
+                    function (array $rawItem) use ($commercialCat, $autoPersist) {
+                        $transformed = $this->transformRawItemToDto($rawItem, $commercialCat);
                         if ($autoPersist) {
                             $savedId = $this->repository->save($transformed);
                             return $this->repository->findById($savedId) ?? $transformed;
@@ -323,28 +329,54 @@ class ProductMiningService implements ProductMiningServiceInterface
      *
      * @return array<int, DropshipProductDto>
      */
-    protected function mineLiveFromAliExpressSearch(string $category, int $limit, bool $autoPersist): array
+    protected function mineLiveFromAliExpressSearch(string $category, int $limit, bool $autoPersist, string $warehouseOrigin = 'ALL'): array
     {
-        $category = self::normalizeCategory($category);
+        $commercialCat = self::toCommercialCategory($category);
+        $canonicalCat = self::normalizeCategory($category);
 
         $searchTerms = [
-            'Eletrônicos & Gadget'              => ['smartwatch brasil', 'fone sem fio bluetooth brasil', 'headphone over ear cancelamento ruido', 'headset gamer microfone rgb', 'fone conducao ossea corrida', 'projetor portatil 4k', 'mini drone 4k camera', 'power bank inducao', 'caixa som bluetooth potente', 'camera seguranca wifi 360'],
-            'Casa Inteligente & Organização'    => ['lampada led inteligente wifi rgb', 'tomada inteligente wifi tuya', 'sensor presenca inteligente', 'dispensador sabonete automatico sensor', 'fita led rgb inteligente wifi', 'aspirador po robo inteligente', 'fechadura digital biometrica'],
-            'Beleza, Cuidados & Estilo'         => ['paleta de sombras maquiagem profissional', 'kit pinceis maquiagem profissional', 'batom matte longa duracao a prova d agua', 'gloss labial efeito plump volume', 'modelador cabelo profissional automatico', 'escova secadora modeladora eletrica', 'depilador laser luz pulsada ipl', 'massageador facial eletrico gua sha', 'espelho led maquiagem recarregavel'],
-            'Ferramentas & Utilidades'          => ['alicate desencapador fios multifuncional', 'trena laser digital fita metrica', 'parafusadeira eletrica recarregavel sem fio', 'canivete tatico multifuncional', 'chave universal precisao multifuncoes', 'lanterna tatica led potente militar', 'chaveiro tatico mosquetao multifuncional militar'],
-            'Pet Shop & Pets Virais'            => ['coleira led luminosa cachorro recarregavel', 'bebedouro fonte automatica pet gato', 'escova a vapor pet removedora pelos', 'brinquedo interativo inteligente pet gato', 'cama nuvem calmante cachorro', 'cortador unhas pet com led'],
-            'Acessórios para Veículos'          => ['suporte celular veicular carregador inducao', 'aspirador portatil automotivo sem fio', 'transmissor bluetooth veicular fm', 'compressor ar portatil eletrico pneus carro', 'led interno veicular sensor som', 'camera dvr veicular gravador transito', 'chaveiro automotivo couro metal'],
-            'Moda, Roupas & Vestuário'          => ['mochila impermeavel executiva antifurto usb brasil', 'tenis esportivo masculino corrida caminhada respiravel', 'tenis feminino casual leve caminhada', 'bolsa feminina transversal tiracolo couro', 'carteira masculina de couro slim antifurto rfid', 'kit meias masculinas cano invisivel algodao', 'jaqueta corta vento impermeavel capuz ciclismo', 'calca jogger streetwear unissex'],
-            'Moda Íntima, Lingeries & Pijamas'  => ['meia calca termica translucida feminina inverno', 'meia calca arrastao sexy feminina cintura alta', 'kit cuecas boxer masculinas sem costura modal', 'conjunto lingerie renda floral sutiã calcinha', 'calcinhas sem costura confortaveis kit', 'sutia push up sustentacao confortavel', 'pijama de seda acetinado feminino camisola'],
-            'Sex Shop & Produtos Adultos (+18)' => ['vibrador liquido estimulador feminino discreto', 'massageador varinha magica corporal silencioso', 'estimulador sucção clitoriana silicone recarregavel', 'oleo corporal beijavel aromaterapia massagem'],
+            'Eletrônicos & Gadget'              => ['fone bluetooth tws brasil', 'carregador turbo tipo c 65w brasil', 'power bank inducao magnetico brasil', 'headset gamer microfone rgb brasil', 'mini projetor led 4k portatil brasil', 'caixa som bluetooth potente brasil', 'fone conducao ossea corrida brasil', 'smartwatch amoled nfc gps brasil'],
+            'Casa Inteligente & Organização'    => ['lampada led inteligente wifi rgb brasil', 'tomada inteligente wifi tuya brasil', 'sensor presenca inteligente automacao brasil', 'dispensador sabonete automatico sensor brasil', 'fita led rgb inteligente wifi brasil', 'aspirador po robo inteligente brasil', 'fechadura digital biometrica brasil'],
+            'Beleza, Cuidados & Estilo'         => ['escova secadora alisadora modeladora brasil', 'paleta de sombras maquiagem profissional brasil', 'kit pinceis maquiagem profissional estojo brasil', 'batom matte longa duracao a prova d agua brasil', 'gloss labial efeito plump volume hidratante brasil', 'modelador cabelo profissional automatico brasil', 'depilador laser luz pulsada ipl brasil', 'massageador facial eletrico gua sha brasil'],
+            'Ferramentas & Utilidades'          => ['alicate desencapador fios multifuncional brasil', 'trena laser digital medidor fita metrica brasil', 'parafusadeira eletrica recarregavel sem fio brasil', 'canivete tatico multifuncional sobrevivencia brasil', 'chave universal precisao multifuncoes bits brasil', 'lanterna tatica led potente militar recarregavel brasil'],
+            'Pet Shop & Pets Virais'            => ['coleira led luminosa cachorro recarregavel usb brasil', 'bebedouro fonte automatica pet gato cachorro brasil', 'escova a vapor pet removedora pelos gatos caes brasil', 'brinquedo interativo inteligente pet gato brasil', 'cama nuvem calmante pelucia cachorro pet brasil', 'cortador unhas pet com led iluminador brasil'],
+            'Acessórios para Veículos'          => ['suporte celular veicular carregador inducao magsafe brasil', 'aspirador automotivo portatil potente sem fio brasil', 'transmissor bluetooth veicular fm usb aux brasil', 'compressor ar portatil eletrico pneus carro brasil', 'fita led interna veicular sensor som rgb brasil', 'camera veicular dvr gravador painel brasil'],
+            'Moda, Roupas & Vestuário'          => ['vestido feminino casual verao elegante brasil', 'camisa social masculina manga longa linho brasil', 'camiseta basica 100 algodao unissex slim brasil', 'jaqueta jeans masculina feminina oversize casual brasil', 'calca jeans feminina masculina skinny stretch brasil', 'calca jogger streetwear cargo bolsos unissex brasil', 'jaqueta corta vento impermeavel capuz ciclismo brasil', 'conjunto moletom masculino feminino agasalho inverno brasil', 'blusa feminina casual verao elegante brasil', 'tenis esportivo corrida caminhada respiravel leve brasil', 'bolsa feminina transversal tiracolo couro vintage brasil', 'mochila executiva impermeavel antifurto usb brasil'],
+            'Moda Íntima, Lingeries & Pijamas'  => ['conjunto lingerie renda floral sutiã calcinha luxo brasil', 'sutia sem costura sustentacao push up confortavel brasil', 'pijama feminino cetim seda camisola renda brasil', 'kit cuecas boxer modal sem costura respiravel brasil', 'meia calca termica translucida forrada peluciada brasil', 'kit calcinhas sem costura invisivel algodao brasil', 'espartilho modelador cinta feminina compressao brasil'],
+            'Sex Shop & Produtos Adultos (+18)' => ['vibrador liquido estimulador feminino discreto brasil', 'massageador varinha magica corporal silencioso brasil', 'estimulador sucção clitoriana silicone recarregavel brasil', 'oleo corporal beijavel aromaterapia massagem brasil'],
         ];
 
-        $termList = $searchTerms[$category] ?? ['smartwatch brasil', 'fone bluetooth'];
+        // Mapeia apelidos canônicos para garantir acesso direto e bidirecional
+        $searchTerms['Eletrônicos & Telefonia']        = $searchTerms['Eletrônicos & Gadget'];
+        $searchTerms['Relógios & Smartwatches']        = $searchTerms['Eletrônicos & Gadget'];
+        $searchTerms['Casa, Iluminação & Eletro']      = $searchTerms['Casa Inteligente & Organização'];
+        $searchTerms['Beleza, Saúde & Maquiagem']      = $searchTerms['Beleza, Cuidados & Estilo'];
+        $searchTerms['Pet Shop']                       = $searchTerms['Pet Shop & Pets Virais'];
+        $searchTerms['Peças & Acessórios Automotivos'] = $searchTerms['Acessórios para Veículos'];
+        $searchTerms['Roupas, Bolsas & Calçados']      = $searchTerms['Moda, Roupas & Vestuário'];
+        $searchTerms['Roupa Íntima & Pijamas']         = $searchTerms['Moda Íntima, Lingeries & Pijamas'];
+        $searchTerms['Novidades & Uso Especial']       = $searchTerms['Sex Shop & Produtos Adultos (+18)'];
+
+        $termList = $searchTerms[$commercialCat] ?? ($searchTerms[$canonicalCat] ?? null);
+        if (empty($termList)) {
+            $termList = $this->taxonomy->getAliExpressSearchKeywords($canonicalCat);
+        }
+        if (empty($termList)) {
+            $termList = [$commercialCat . ' brasil'];
+        }
+
         $html = null;
+
+        $shipParam = '';
+        if ($warehouseOrigin === 'BR') {
+            $shipParam = '&shipFrom=BR';
+        } elseif ($warehouseOrigin === 'CN') {
+            $shipParam = '&shipFrom=CN';
+        }
 
         // Tentativas e acertos: testa os termos da categoria até obter retorno válido
         foreach ($termList as $searchTerm) {
-            $searchUrl = "https://pt.aliexpress.com/w/wholesale-" . urlencode($searchTerm) . ".html?country=BR&locale=pt_BR&currency=BRL&shipFrom=BR&isrefine=y";
+            $searchUrl = "https://pt.aliexpress.com/w/wholesale-" . urlencode($searchTerm) . ".html?country=BR&locale=pt_BR&currency=BRL" . $shipParam . "&isrefine=y";
             $fetched = $this->fetchLiveSearchHtml($searchUrl);
             if ($fetched && is_string($fetched) && strlen($fetched) > 1000) {
                 $html = $fetched;
@@ -462,7 +494,7 @@ class ProductMiningService implements ProductMiningServiceInterface
                 }
 
                 // Enriquecimento e Polimento de Cópia Comercial por IA
-                $polishedTitle = $this->aiEnricher->polishTitle($rawTitle, $category);
+                $polishedTitle = $this->aiEnricher->polishTitle($rawTitle, $commercialCat);
                 $slug = $this->slugify($polishedTitle . '-' . substr($aeId, -4));
 
                 $salesLabel = $ordersCount > 0
@@ -471,7 +503,7 @@ class ProductMiningService implements ProductMiningServiceInterface
 
                 $attributes = [
                     'Origem'            => 'Estoque Brasil / Remessa Conforme',
-                    'Categoria'         => $category,
+                    'Categoria'         => $commercialCat,
                     'Garantia'          => '90 dias contra defeitos de fabricação',
                     'Envio'             => 'Rastreamento Expresso com Seguro',
                     'Avaliações'        => "{$rating} estrelas ({$salesLabel})",
@@ -497,7 +529,7 @@ class ProductMiningService implements ProductMiningServiceInterface
                     salePriceBrl: $salePriceBrl,
                     mainImageUrl: $mainImg,
                     images: $images,
-                    category: $category,
+                    category: $commercialCat,
                     description: $salesCopy,
                     rating: $rating,
                     ordersCount: $ordersCount,
@@ -832,7 +864,7 @@ class ProductMiningService implements ProductMiningServiceInterface
             ?? 'Produto Internacional'))
         );
         $rawCat = (string)($item['category_name'] ?? ($item['cateId'] ?? $defaultCategory));
-        $category = self::normalizeCategory($rawCat);
+        $category = self::toCommercialCategory($rawCat);
 
         // 1. Higienização por I.A.
         $polishedTitle = $this->aiEnricher->polishTitle($rawTitle, $category);
@@ -1242,9 +1274,8 @@ class ProductMiningService implements ProductMiningServiceInterface
     private function getCuratedTrendingFallback(string $category, int $limit, string $sort = 'volume_desc'): array
     {
         $catalog = $this->getCuratedCatalog();
+        $commercialCat = self::toCommercialCategory($category);
 
-        // Mapeia apelidos para a categoria oficial do pool
-        $normalizedCat = self::normalizeCategory($category);
         $aliasMap = [
             'Eletrônicos & Telefonia'        => 'Eletrônicos & Gadget',
             'Relógios & Smartwatches'        => 'Eletrônicos & Gadget',
@@ -1257,12 +1288,12 @@ class ProductMiningService implements ProductMiningServiceInterface
             'Roupa Íntima & Pijamas'         => 'Moda Íntima, Lingeries & Pijamas',
             'Novidades & Uso Especial'       => 'Sex Shop & Produtos Adultos (+18)',
         ];
-        $curatedKey = $aliasMap[$normalizedCat] ?? ($aliasMap[$category] ?? $normalizedCat);
-        $pool = $catalog[$normalizedCat] ?? ($catalog[$category] ?? ($catalog[$curatedKey] ?? $catalog['Eletrônicos & Gadget']));
+        $curatedKey = $aliasMap[$category] ?? $commercialCat;
+        $pool = $catalog[$commercialCat] ?? ($catalog[$curatedKey] ?? ($catalog[$category] ?? ($catalog['Moda, Roupas & Vestuário'] ?? reset($catalog))));
 
         // Se o limite solicitado for maior que o pool da categoria, completa garantindo variedade da própria categoria
         if (count($pool) < $limit) {
-            $pool = $this->expandCategoryPoolToLimit($pool, $normalizedCat, $limit);
+            $pool = $this->expandCategoryPoolToLimit($pool, $commercialCat, $limit);
         }
 
         // Ordena pelo critério de reputação solicitado: maior volume de vendas ou maior avaliação por estrelas

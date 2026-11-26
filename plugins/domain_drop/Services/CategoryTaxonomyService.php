@@ -145,22 +145,28 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
                 'fita led interna veicular sensor som rgb neon',
                 'chaveiro veicular couro metal luxo logo'
             ],
-            self::CAT_FASHION    => [
-                'mochila executiva impermeavel antifurto usb notebook',
-                'tenis esportivo corrida caminhada respiravel leve',
-                'bolsa transversal feminina tiracolo couro vintage',
-                'carteira masculina couro legítimo antifurto rfid slim',
+            self::CAT_FASHION, 'Moda, Roupas & Vestuário' => [
+                'vestido feminino casual verao elegante brasil',
+                'camisa social masculina manga longa linho brasil',
+                'camiseta basica 100 algodao unissex slim brasil',
+                'jaqueta jeans masculina feminina oversize casual',
+                'calca jeans feminina masculina skinny stretch brasil',
+                'calca jogger streetwear cargo bolsos unissex',
                 'jaqueta corta vento impermeavel capuz ciclismo',
-                'oculos de sol polarizado uv400 unissex protecao',
-                'bone aba curva basico algodao unissex'
+                'conjunto moletom masculino feminino agasalho inverno',
+                'blusa feminina casual verao elegante brasil',
+                'tenis esportivo corrida caminhada respiravel leve',
+                'bolsa feminina transversal tiracolo couro vintage',
+                'mochila executiva impermeavel antifurto usb notebook'
             ],
-            self::CAT_LINGERIE   => [
-                'conjunto lingerie renda sexy sutia calcinha luxo',
+            self::CAT_LINGERIE, 'Moda Íntima, Lingeries & Pijamas' => [
+                'conjunto lingerie renda floral sutiã calcinha luxo',
                 'sutia sem costura sustentacao push up confortavel',
                 'pijama feminino cetim seda camisola renda',
                 'kit cuecas boxer modal sem costura respiravel',
                 'meia calca termica translucida forrada peluciada',
-                'kit calcinhas sem costura invisivel algodao'
+                'kit calcinhas sem costura invisivel algodao',
+                'espartilho modelador cinta feminina compressao'
             ],
             self::CAT_ADULT      => [
                 'massageador muscular eletrico pistola relaxamento corporal',
@@ -170,6 +176,60 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
             ],
             default              => ['eletronicos utilidades brasil'],
         };
+    }
+
+    public function toCommercialCategory(string $category): string
+    {
+        $raw = trim($category);
+        if ($raw === '') {
+            return 'Eletrônicos & Gadget';
+        }
+
+        $lower = mb_strtolower($raw, 'UTF-8');
+        $clean = preg_replace('/[^\p{L}\p{N}\s&]/u', ' ', $lower) ?? $lower;
+
+        // 1. Moda Íntima e Lingeries
+        if (str_contains($clean, 'lingerie') || str_contains($clean, 'intima') || str_contains($clean, 'íntima') || str_contains($clean, 'sutia') || str_contains($clean, 'sutiã') || str_contains($clean, 'calcinha') || str_contains($clean, 'cueca') || str_contains($clean, 'boxer') || str_contains($clean, 'pijama')) {
+            return 'Moda Íntima, Lingeries & Pijamas';
+        }
+
+        // 2. Sex Shop & Adulto
+        if (str_contains($clean, 'sex shop') || str_contains($clean, 'sexshop') || str_contains($clean, 'adulto') || str_contains($clean, '18') || str_contains($clean, 'novidade') || str_contains($clean, 'especial') || str_contains($clean, 'erotic') || str_contains($clean, 'erótic')) {
+            return 'Sex Shop & Produtos Adultos (+18)';
+        }
+
+        // 3. Moda, Roupas & Vestuário
+        if (str_contains($clean, 'roupa') || str_contains($clean, 'vestu') || str_contains($clean, 'calcado') || str_contains($clean, 'calçado') || str_contains($clean, 'casaco') || str_contains($clean, 'jaqueta') || str_contains($clean, 'calca') || str_contains($clean, 'calça') || str_contains($clean, 'camisa') || str_contains($clean, 'camiseta') || str_contains($clean, 'vestido') || str_contains($clean, 'blusa') || str_contains($clean, 'tenis') || str_contains($clean, 'tênis') || str_contains($clean, 'bolsa') || str_contains($clean, 'mochila') || str_contains($clean, 'carteira') || str_contains($clean, 'moda')) {
+            return 'Moda, Roupas & Vestuário';
+        }
+
+        // 4. Casa Inteligente & Organização
+        if (str_contains($clean, 'casa') || str_contains($clean, 'ilumina') || str_contains($clean, 'eletro') || str_contains($clean, 'organiza') || str_contains($clean, 'decor')) {
+            return 'Casa Inteligente & Organização';
+        }
+
+        // 5. Beleza, Cuidados & Estilo
+        if (str_contains($clean, 'beleza') || str_contains($clean, 'saude') || str_contains($clean, 'saúde') || str_contains($clean, 'maquiagem') || str_contains($clean, 'cuidado') || str_contains($clean, 'estilo') || str_contains($clean, 'cabelo') || str_contains($clean, 'skincare')) {
+            return 'Beleza, Cuidados & Estilo';
+        }
+
+        // 6. Ferramentas & Utilidades
+        if (str_contains($clean, 'ferramenta') || str_contains($clean, 'utilidade') || str_contains($clean, 'alicate') || str_contains($clean, 'parafusadeira')) {
+            return 'Ferramentas & Utilidades';
+        }
+
+        // 7. Pet Shop & Pets Virais
+        if (str_contains($clean, 'pet') || str_contains($clean, 'cachorro') || str_contains($clean, 'gato') || str_contains($clean, 'cao') || str_contains($clean, 'cão')) {
+            return 'Pet Shop & Pets Virais';
+        }
+
+        // 8. Acessórios para Veículos
+        if (str_contains($clean, 'veiculo') || str_contains($clean, 'veículo') || str_contains($clean, 'auto') || str_contains($clean, 'carro') || str_contains($clean, 'moto')) {
+            return 'Acessórios para Veículos';
+        }
+
+        // 9. Eletrônicos & Gadget
+        return 'Eletrônicos & Gadget';
     }
 
     public function normalizeCategory(string $category): string

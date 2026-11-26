@@ -473,23 +473,29 @@
                     }
                 }, 350);
 
+                var searchParams = new URLSearchParams(formData);
+
                 fetch(formMiner.action, {
                     method: 'POST',
-                    body: formData,
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    body: searchParams,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    }
                 })
                 .then(function(res) { return res.json(); })
                 .then(function(data) {
                     clearInterval(progressInterval);
-                    if (data && data.success) {
-                        var minedTotal = data.mined_count || data.count || limit;
+                    var minedTotal = (data && typeof data.mined_count !== 'undefined') ? data.mined_count : (data ? data.count : 0);
+
+                    if (data && data.success && minedTotal > 0) {
                         if (pBarMiner) {
                             pBarMiner.style.width = '100%';
                             pBarMiner.style.background = '#10b981';
                         }
                         if (pPercentMiner) pPercentMiner.textContent = '100%';
-                        if (pStatusMiner) pStatusMiner.innerHTML = '<i class="fas fa-check-circle" style="color: #10b981;"></i> Mineração Concluída com Sucesso!';
-                        if (pStageMiner) pStageMiner.textContent = 'Produtos publicados e prontos para venda.';
+                        if (pStatusMiner) pStatusMiner.innerHTML = '<i class="fas fa-check-circle" style="color: #10b981;"></i> Mineração Concluída!';
+                        if (pStageMiner) pStageMiner.textContent = minedTotal + ' produtos de ' + category + ' minerados com fotos, links e preços.';
                         if (pCountMiner) pCountMiner.textContent = minedTotal + ' / ' + limit + ' itens ativos (100%)';
 
                         if (typeof window.showDropToast === 'function') {
@@ -499,7 +505,25 @@
                             window.location.reload();
                         }, 1200);
                     } else {
-                        throw new Error((data && data.error) ? data.error : 'Falha ao processar mineração.');
+                        var warnMsg = (data && (data.message || data.error)) ? (data.message || data.error) : 'Nenhum produto encontrado para ' + category + ' com os filtros selecionados.';
+                        if (pBarMiner) {
+                            pBarMiner.style.width = '100%';
+                            pBarMiner.style.background = '#f59e0b';
+                        }
+                        if (pPercentMiner) pPercentMiner.textContent = 'Aviso';
+                        if (pStatusMiner) pStatusMiner.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: #f59e0b;"></i> Nenhum Produto Encontrado';
+                        if (pStageMiner) pStageMiner.textContent = warnMsg;
+                        if (pCountMiner) pCountMiner.textContent = '0 / ' + limit + ' itens';
+
+                        if (typeof window.showDropToast === 'function') {
+                            window.showDropToast(warnMsg, 'warning');
+                        }
+                        setTimeout(function() {
+                            btnMiner.disabled = false;
+                            btnMiner.style.opacity = '1';
+                            btnMiner.style.pointerEvents = 'auto';
+                            btnMiner.innerHTML = '<i class="fas fa-bolt"></i> Iniciar Mineração 1-Click';
+                        }, 4000);
                     }
                 })
                 .catch(function(err) {

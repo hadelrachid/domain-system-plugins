@@ -109,7 +109,10 @@ class DropshipAdminController
             return Response::redirect($baseUrl . '/admin/dropship');
         }
 
-        $category = (string)$request->input('category', 'Eletrônicos');
+        $category = trim((string)$request->input('category', 'Moda, Roupas & Vestuário'));
+        if ($category === '') {
+            $category = 'Moda, Roupas & Vestuário';
+        }
         $limit = max(1, min(100, (int)$request->input('limit', 10)));
         $sort = (string)$request->input('sort', 'volume_desc');
         $replaceCatalog = (bool)$request->input('replace_catalog', false);
@@ -125,7 +128,25 @@ class DropshipAdminController
             $mined = $this->miningService->mineTrendingProducts($category, $limit, true, $sort, $warehouseOrigin);
             $this->catalogRepo->publishAll();
             $count = count($mined);
-            $msg = "🚀 Mineração concluída com sucesso! {$count} produtos com alta reputação minerados e ativos para venda.";
+
+            if ($count === 0) {
+                $warnMsg = "⚠️ Nenhum produto encontrado para '{$category}' com os filtros selecionados (Reputação: {$sort}, Entreposto: {$warehouseOrigin}). Tente alterar para Entreposto 'Global' ou selecionar outra categoria.";
+                if ($isAjax) {
+                    return new Response(json_encode([
+                        'success'     => false,
+                        'warning'     => true,
+                        'count'       => 0,
+                        'mined_count' => 0,
+                        'category'    => $category,
+                        'message'     => $warnMsg,
+                        'error'       => $warnMsg,
+                    ]), 200, ['Content-Type' => 'application/json']);
+                }
+                $this->session->setFlash('warning', $warnMsg);
+                return Response::redirect($baseUrl . '/admin/dropship');
+            }
+
+            $msg = "🚀 Mineração concluída com sucesso! {$count} produtos da categoria '{$category}' minerados e ativos para venda.";
 
             if ($isAjax) {
                 return new Response(json_encode([

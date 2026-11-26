@@ -1,5 +1,5 @@
 {
-    "updated_at": "2026-11-26T02:22:09+00:00",
+    "updated_at": "2026-11-26T03:56:37+01:00",
     "repository": "https://github.com/hadelrachid/domain-system-plugins",
     "plugins": {
         "academy": {
@@ -11,7 +11,7 @@
             "description": "LMS Híbrido (HTML/MD + Editor em Blocos + Fábrica Automática de Páginas PHP + 3 Perfis Mobile) para o Domain-System OS.",
             "zip_filename": "academy.zip",
             "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/academy.zip",
-            "sha256": "086b899162e868968eb457ce7b706e6d8948728fb2ad054b186dc2672f256911",
+            "sha256": "6fa96f5693aca086e6cfe1d67aac4588a70fb95cd8aaa371e48e796013c3c8b4",
             "size_bytes": 167913
         },
         "analytics": {
@@ -23,8 +23,8 @@
             "description": "Monitora pageviews e cliques em botões e injeta widgets no dashboard.",
             "zip_filename": "analytics.zip",
             "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/analytics.zip",
-            "sha256": "ef3953d6bb8f940260e07cf67f16d86578e3fac18735e287c8abba13a098f6cb",
-            "size_bytes": 4915
+            "sha256": "556d9f731e76cd6ec78f5ff719459c4aa91fd45f8ea032bfb4fdc5b060c4ebfb",
+            "size_bytes": 4929
         },
         "clock_widget": {
             "slug": "clock_widget",
@@ -35,7 +35,7 @@
             "description": "Um widget de relógio simples para provar a injeção de Capabilities no Web OS.",
             "zip_filename": "clock_widget.zip",
             "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/clock_widget.zip",
-            "sha256": "41ff7b273b65226f96c752ff46515f2a12ef44857d3e730868f9d6719cee4ddf",
+            "sha256": "0039137c846b82da6bfe74884a03785d13bb5f14a5dd37139b8ce1a26cc96133",
             "size_bytes": 3409
         },
         "commerce": {
@@ -47,20 +47,20 @@
             "description": "DomainCommerce: Motor de Comércio Eletrônico e Liquidação Financeira Desacoplado (Pix, Cartão e Boleto via Mercado Pago e PayPal) com Webhooks Reativos para o Domain-System OS.",
             "zip_filename": "commerce.zip",
             "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/commerce.zip",
-            "sha256": "64be55590929006ff5c87479ee08bc5bde18f76b903c10f71d650f5d01c3789a",
+            "sha256": "5f9b2b07882b9d28856e9add8197a951373d9d2f695f5df304b0caeea4588361",
             "size_bytes": 93241
         },
         "domain_drop": {
             "slug": "domain_drop",
             "name": "domain_drop",
             "title": "domain_drop",
-            "version": "2.9.9",
+            "version": "2.9.10",
             "os_version": "2.9",
             "description": "Motor autônomo de dropshipping e mineração de produtos virais integrado ao AliExpress Open Platform (App ISV 558628), precificação dinâmica e enriquecimento por IA.",
             "zip_filename": "domain_drop.zip",
             "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/domain_drop.zip",
-            "sha256": "64b1971c6053fbe4c2400cf20e8ac32803ed48e0e6cfd20251277f57241d5eba",
-            "size_bytes": 312609
+            "sha256": "fca0e85fb7651c829ec131ded16ed5e3f4f2912f72cf239c8dfed500e8edb400",
+            "size_bytes": 589948
         },
         "flextheme": {
             "slug": "flextheme",
@@ -71,8 +71,8 @@
             "description": "Motor de renderização de vitrines e temas (Frontend CMS)",
             "zip_filename": "flextheme.zip",
             "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/flextheme.zip",
-            "sha256": "4ac8548b005ddcdee750e1cd67225c0da1fc8913923e649cd70e0d783d753c4b",
-            "size_bytes": 4207742
+            "sha256": "9c80b374f2c5d058ac5c3db06776a199e8f77c088ca1d12635287427b758366f",
+            "size_bytes": 4207784
         },
         "radio_online": {
             "slug": "radio_online",
@@ -83,7 +83,7 @@
             "description": "Widget de rádio online com player interativo no Dashboard",
             "zip_filename": "radio_online.zip",
             "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/radio_online.zip",
-            "sha256": "151e46b7700d5a7c62ee088a8cf76d1b01aeaaa863f565d9e5786de202bbdbae",
+            "sha256": "e855e2aafb81aecbd1ee389817a54ddc38265ea165237b96ccecda716484ff1c",
             "size_bytes": 6816
         },
         "seo": {
@@ -95,8 +95,8 @@
             "description": "Middleware Global responsável por injetar o Tema Ativo, minificar os assets (HTML/CSS) e gerenciar as Meta Tags em todas as respostas de frontend.",
             "zip_filename": "seo.zip",
             "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/seo.zip",
-            "sha256": "155bb0b1e54fcad40e013ddc064a5a5a11c055d3fd848a74fe245a2bcea55277",
-            "size_bytes": 24613
+            "sha256": "7b59b171a59ff40f01df6a590a4f3d3a4d96ed9fcbc8e72332bdddbd6141be86",
+            "size_bytes": 24635
         }
     }
 }
