@@ -528,6 +528,37 @@ class AliExpressApiClient implements AliExpressApiClientInterface
         }
     }
 
+    public function queryFreight(array $deliveryReq): array
+    {
+        try {
+            $formattedReq = [
+                'productId'     => (string)($deliveryReq['productId'] ?? ($deliveryReq['product_id'] ?? '')),
+                'shipToCountry' => (string)($deliveryReq['shipToCountry'] ?? ($deliveryReq['ship_to_country'] ?? 'BR')),
+                'quantity'      => (int)($deliveryReq['quantity'] ?? 1),
+                'language'      => (string)($deliveryReq['language'] ?? 'pt_BR'),
+                'currency'      => (string)($deliveryReq['currency'] ?? 'BRL'),
+                'locale'        => (string)($deliveryReq['locale'] ?? 'pt_BR'),
+            ];
+            if (!empty($deliveryReq['selectedSkuId'])) {
+                $formattedReq['selectedSkuId'] = (string)$deliveryReq['selectedSkuId'];
+            } elseif (!empty($deliveryReq['sku_id'])) {
+                $formattedReq['selectedSkuId'] = (string)$deliveryReq['sku_id'];
+            }
+
+            $response = $this->execute('aliexpress.ds.freight.query', [
+                'queryDeliveryReq' => json_encode($formattedReq, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            ], $this->accessToken);
+            $this->lastError = null;
+            $unwrapped = \DomainSystem\Plugins\domain_drop\ValueObjects\AliExpressToken::unwrapPayload($response);
+            $res = $unwrapped['result'] ?? ($unwrapped['data'] ?? $unwrapped);
+            return is_array($res) ? $res : [];
+        } catch (Throwable $e) {
+            $this->lastError = $e->getMessage();
+            error_log("[AliExpressApiClient] queryFreight falhou: " . $e->getMessage());
+            return [];
+        }
+    }
+
     public function queryProductInventory(int|string $productId): array
     {
         try {

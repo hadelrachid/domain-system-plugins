@@ -11,6 +11,7 @@ use DomainSystem\Plugins\domain_drop\Services\Validation\Guards\ContentIntegrity
 use DomainSystem\Plugins\domain_drop\Services\Validation\Guards\PriceIntegrityGuard;
 use DomainSystem\Plugins\domain_drop\Services\Validation\Guards\ProductExistenceGuard;
 use DomainSystem\Plugins\domain_drop\Services\Validation\Guards\RegionalLogisticsGuard;
+use DomainSystem\Plugins\domain_drop\Services\Validation\Guards\WarehouseOriginGuard;
 
 /**
  * Esteira Orquestradora de Validação Contratual (SRP / Pipeline Pattern).
@@ -36,6 +37,7 @@ class ProductValidationPipeline implements ProductValidationPipelineInterface
             // Guards padrão alinhados às documentações oficiais
             $this->addGuard(new ProductExistenceGuard());
             $this->addGuard(new RegionalLogisticsGuard());
+            $this->addGuard(new WarehouseOriginGuard());
             $this->addGuard(new PriceIntegrityGuard());
             $this->addGuard(new ContentIntegrityGuard());
         }

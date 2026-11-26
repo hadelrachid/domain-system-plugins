@@ -118,6 +118,15 @@ interface AliExpressApiClientInterface
     public function getProductEanCode(string $eanCode): array;
 
     /**
+     * Consulta opções de frete, método de entrega, país de despacho (ship_from_country) e estoque.
+     * Endpoint oficial: aliexpress.ds.freight.query (documentacao-completa.pdf - Pág. 229-230).
+     *
+     * @param array<string, mixed> $deliveryReq Estrutura queryDeliveryReq (productId, shipToCountry, selectedSkuId, etc.)
+     * @return array<string, mixed>
+     */
+    public function queryFreight(array $deliveryReq): array;
+
+    /**
      * Consulta o estoque real por depósito e variações de SKU de um produto.
      * Endpoint oficial: aliexpress.solution.product.inventory.query (ae-product-management.pdf).
      *

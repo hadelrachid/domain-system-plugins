@@ -18,6 +18,23 @@ class WarehouseOriginResolver implements WarehouseOriginResolverInterface
 {
     public function resolve(array $rawItem, ?string $title = null): string
     {
+        // 0. Informação oficial do endpoint de frete (aliexpress.ds.freight.query - Pág. 229-230)
+        $freightShipFrom = strtoupper(trim((string)(
+            $rawItem['freight']['ship_from_country']
+            ?? ($rawItem['freight_info']['ship_from_country']
+            ?? ($rawItem['delivery_info']['ship_from_country']
+            ?? ($rawItem['ship_from_country'] ?? '')))
+        )));
+        if ($freightShipFrom === 'BR') {
+            return self::ORIGIN_BR;
+        }
+        if ($freightShipFrom === 'CN') {
+            return self::ORIGIN_CN;
+        }
+        if ($freightShipFrom !== '' && strlen($freightShipFrom) === 2) {
+            return $freightShipFrom;
+        }
+
         // 1. Tags explícitas de armazém previamente auditadas
         if (!empty($rawItem['origem_brasil']) || !empty($rawItem['entreposto_brasil'])) {
             return self::ORIGIN_BR;

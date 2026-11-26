@@ -183,10 +183,18 @@ class ProductMiningService implements ProductMiningServiceInterface
 
         // Se a API remota oficial não estiver conectada (ou em modo Test), utiliza catálogo curado e verificado
         if (empty($rawProducts)) {
-            $rawProducts = $this->getCuratedTrendingFallback($commercialCat, $candidateTarget, $sort);
+            $rawProducts = $this->getCuratedTrendingFallback($commercialCat, $candidateTarget, $sort, $warehouseOrigin);
         } else {
             $rawProducts = self::scoreAndSortByReputation($rawProducts, $sort, 4.0, 10, $candidateTarget, $warehouseOrigin);
         }
+
+        // Tag de entreposto para inspeção do WarehouseOriginGuard
+        foreach ($rawProducts as &$rawItemRef) {
+            if (is_array($rawItemRef)) {
+                $rawItemRef['target_warehouse_origin'] = $warehouseOrigin;
+            }
+        }
+        unset($rawItemRef);
 
         // Ingestão no Container e Execução do Pipeline de Validação Contratual (Elimina 404s, Preços Isca e Restrições)
         $validatedBatch = $this->validationHub->ingestAndValidateBatch($rawProducts);
@@ -195,7 +203,14 @@ class ProductMiningService implements ProductMiningServiceInterface
         // Se os produtos externos descartados deixarem a cota abaixo do solicitado, complementa com o pool curado oficial
         if (count($rawProducts) < $limit) {
             $needed = $limit - count($rawProducts);
-            $curatedFallback = $this->getCuratedTrendingFallback($commercialCat, $needed + 5, $sort);
+            $curatedFallback = $this->getCuratedTrendingFallback($commercialCat, $needed + 5, $sort, $warehouseOrigin);
+            foreach ($curatedFallback as &$curatedRef) {
+                if (is_array($curatedRef)) {
+                    $curatedRef['target_warehouse_origin'] = $warehouseOrigin;
+                }
+            }
+            unset($curatedRef);
+
             $validatedCurated = $this->validationHub->ingestAndValidateBatch($curatedFallback);
             foreach ($validatedCurated['valid_items'] as $cItem) {
                 $rawProducts[] = $cItem;
@@ -277,11 +292,9 @@ class ProductMiningService implements ProductMiningServiceInterface
             $orders = (int)($item['volume'] ?? ($item['orders_count'] ?? ($item['lastest_volume'] ?? 0)));
             $thermometer = self::calculateThermometerScore($rating, $orders);
 
-            $isBr = (!empty($item['properties']['origem_brasil'])
-                || !empty($item['properties']['entreposto_brasil'])
-                || ($item['ship_from'] ?? '') === 'BR'
-                || ($item['send_goods_country_code'] ?? '') === 'BR'
-                || (($item['ae_store_info']['store_country_code'] ?? '') === 'BR'));
+            $originResolver = new WarehouseOriginResolver();
+            $origin = $originResolver->resolve($item, (string)($item['title'] ?? ($item['product_title'] ?? '')));
+            $isBr = ($origin === WarehouseOriginResolverInterface::ORIGIN_BR);
 
             // Filtro estrito de entreposto quando solicitado
             if ($warehouseOrigin === 'BR' && !$isBr) {
@@ -1266,30 +1279,26 @@ class ProductMiningService implements ProductMiningServiceInterface
         $props['curadoria_nota'] = number_format($effectiveRating, 1) . ' ★';
         $props['termometro_demanda'] = $thermometer . '%';
 
-        // Detecção de Estoque em Entrepostos no Brasil
-        $isBrWarehouse = false;
+        // Detecção Rigorosa e Tri-State de Entreposto Físico (BR / CN / UNKNOWN)
         $storeInfo = $item['ae_store_info'] ?? ($item['store_info'] ?? []);
-        if (!empty($storeInfo['store_country_code']) && strtoupper((string)$storeInfo['store_country_code']) === 'BR') {
-            $isBrWarehouse = true;
-        }
-        if (!empty($item['ship_from']) && in_array(strtoupper((string)$item['ship_from']), ['BR', 'BRAZIL', 'BRASIL'], true)) {
-            $isBrWarehouse = true;
-        }
-        if (!empty($item['send_goods_country_code']) && strtoupper((string)$item['send_goods_country_code']) === 'BR') {
-            $isBrWarehouse = true;
-        }
+        $resolvedOrigin = $this->originResolver->resolve($item, (string)($item['title'] ?? ($item['product_title'] ?? '')));
 
-        if ($isBrWarehouse) {
+        if ($resolvedOrigin === WarehouseOriginResolverInterface::ORIGIN_BR) {
             $props['ship_from'] = 'BR';
             $props['origem_brasil'] = true;
             $props['entreposto_brasil'] = true;
             $props['despacho_nacional'] = 'Estoque no Brasil (Entreposto Nacional)';
-        } else {
+        } elseif ($resolvedOrigin === WarehouseOriginResolverInterface::ORIGIN_CN) {
             $props['ship_from'] = 'CN';
             $props['origem_china'] = true;
             $props['entreposto_china'] = true;
             $props['despacho_origem'] = 'Entreposto Central AliExpress (China)';
             $props['remessa_conforme'] = 'Importação Oficial com DDP e Rastreamento';
+        } else {
+            // Estado UNKNOWN preservado: nunca converte ausência de dados em China
+            $props['ship_from'] = 'UNKNOWN';
+            $props['origem_desconhecida'] = true;
+            $props['despacho_origem'] = 'Origem a Confirmar no Fornecedor';
         }
 
         // Metadados do Vendedor Oficial AliExpress (ae_store_info)
@@ -1505,7 +1514,7 @@ class ProductMiningService implements ProductMiningServiceInterface
      *
      * @return array<int, array<string, mixed>>
      */
-    private function getCuratedTrendingFallback(string $category, int $limit, string $sort = 'volume_desc'): array
+    private function getCuratedTrendingFallback(string $category, int $limit, string $sort = 'volume_desc', string $warehouseOrigin = 'ALL'): array
     {
         $catalog = $this->getCuratedCatalog();
         $commercialCat = self::toCommercialCategory($category);
@@ -1524,9 +1533,24 @@ class ProductMiningService implements ProductMiningServiceInterface
         $curatedKey = $aliasMap[$category] ?? $commercialCat;
         $pool = $catalog[$commercialCat] ?? ($catalog[$curatedKey] ?? ($catalog[$category] ?? ($catalog['Moda, Roupas & Vestuário'] ?? reset($catalog))));
 
-        // Se o limite solicitado for maior que o pool da categoria, completa garantindo variedade da própria categoria
-        if (count($pool) < $limit) {
-            $pool = $this->expandCategoryPoolToLimit($pool, $commercialCat, $limit);
+        // Filtragem estrita por entreposto físico solicitado (Zero-Contamination)
+        if ($warehouseOrigin === 'BR') {
+            $pool = array_values(array_filter($pool, function(array $item) {
+                return $this->originResolver->resolve($item, (string)($item['product_title'] ?? '')) === WarehouseOriginResolverInterface::ORIGIN_BR;
+            }));
+            // No modo BR, NUNCA expande artificialmente com produtos CN/UNKNOWN para bater meta de cota!
+        } elseif ($warehouseOrigin === 'CN') {
+            $pool = array_values(array_filter($pool, function(array $item) {
+                return $this->originResolver->resolve($item, (string)($item['product_title'] ?? '')) !== WarehouseOriginResolverInterface::ORIGIN_BR;
+            }));
+            if (count($pool) < $limit) {
+                $pool = $this->expandCategoryPoolToLimit($pool, $commercialCat, $limit);
+            }
+        } else {
+            // ALL: permite expansão normal garantindo variedade
+            if (count($pool) < $limit) {
+                $pool = $this->expandCategoryPoolToLimit($pool, $commercialCat, $limit);
+            }
         }
 
         // Ordena pelo critério de reputação solicitado: maior volume de vendas ou maior avaliação por estrelas
@@ -1540,28 +1564,15 @@ class ProductMiningService implements ProductMiningServiceInterface
     }
 
     /**
-     * Expande o pool da categoria com produtos virais qualificados (4.8★ a 5.0★) até o limite solicitado.
+     * Retorna os produtos virais qualificados (4.8★ a 5.0★) da categoria sem repetições artificiais.
      *
      * @param array<int, array<string, mixed>> $pool
      * @return array<int, array<string, mixed>>
      */
     private function expandCategoryPoolToLimit(array $pool, string $normalizedCat, int $limit): array
     {
-        if (empty($pool)) {
-            return [];
-        }
-
-        // Se o limite solicitado for maior que o número de produtos reais disponíveis,
-        // cicla entre os produtos reais já existentes sem NUNCA inventar IDs sintéticos ou falsos (imune a 404).
-        $expanded = $pool;
-        $count = count($pool);
-        $i = 0;
-        while (count($expanded) < $limit) {
-            $expanded[] = $pool[$i % $count];
-            $i++;
-        }
-
-        return $expanded;
+        // Retorna os produtos autênticos sem duplicações artificiais de itens para bater meta
+        return array_values($pool);
     }
 
     /**
