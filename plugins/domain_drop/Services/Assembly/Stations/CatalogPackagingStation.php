@@ -58,6 +58,7 @@ class CatalogPackagingStation implements AssemblyStationInterface
             'rating' => $rating,
             'orders_count' => $ordersCount,
             'stock' => $stock,
+            'video_url' => (string)$context->get('video_url', ''),
             'skus' => $context->get('skus', []),
             'history' => $context->getHistory(),
             'processed_at' => date('Y-m-d H:i:s')

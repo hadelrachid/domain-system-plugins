@@ -86,6 +86,28 @@ class ProductDetailExtractionStation implements AssemblyStationInterface
                 if (!empty($result['store_info'])) {
                     $context->set('store_info', $result['store_info']);
                 }
+
+                // Extração Oficial de Vídeo Demonstrativo (ae-product-management.pdf / ae_multimedia_info_dto)
+                $videoUrl = (string)$context->get('video_url', '');
+                if (empty($videoUrl) && !empty($result['ae_multimedia_info_dto']['ae_video_dtos'])) {
+                    $vDtos = $result['ae_multimedia_info_dto']['ae_video_dtos'];
+                    $vItem = $vDtos['ae_video_d_t_o'] ?? ($vDtos[0] ?? null);
+                    if (is_array($vItem)) {
+                        $firstV = isset($vItem[0]) ? $vItem[0] : $vItem;
+                        if (!empty($firstV['media_url'])) {
+                            $videoUrl = (string)$firstV['media_url'];
+                        }
+                    }
+                }
+                if (empty($videoUrl) && !empty($result['product_video_url'])) {
+                    $videoUrl = (string)$result['product_video_url'];
+                }
+                if (!empty($videoUrl)) {
+                    if (str_starts_with($videoUrl, '//')) {
+                        $videoUrl = 'https:' . $videoUrl;
+                    }
+                    $context->set('video_url', $videoUrl);
+                }
             } catch (\Throwable $e) {
                 // Se falhar e não tivermos dados prévios válidos, aborta
                 if ($price <= 0.0) {

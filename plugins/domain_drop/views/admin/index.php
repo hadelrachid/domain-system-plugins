@@ -994,11 +994,9 @@
                                     <i class="fas fa-external-link-alt"></i> Link
                                 </a>
                                 <?php if ($prod->id !== null): ?>
-                                    <?php if (!empty($prodVideoUrl)): ?>
-                                        <a href="<?= $baseUrl ?>/admin/dropship/download-video?id=<?= (int)$prod->id ?>" style="height: 26px; padding: 0 8px; font-size: 11px; font-weight: 700; color: #c084fc; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.4); border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; text-decoration: none; box-sizing: border-box; line-height: 1;" title="Baixar Vídeo MP4 do fornecedor para anúncios no TikTok, Reels e WhatsApp">
-                                            <i class="fas fa-video"></i> Vídeo
-                                        </a>
-                                    <?php endif; ?>
+                                    <a id="prod-video-btn-<?= (int)$prod->id ?>" href="<?= $baseUrl ?>/admin/dropship/download-video?id=<?= (int)$prod->id ?>" style="height: 26px; padding: 0 8px; font-size: 11px; font-weight: 700; color: #c084fc; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.4); border-radius: 4px; display: <?= !empty($prodVideoUrl) ? 'inline-flex' : 'none' ?>; align-items: center; gap: 4px; text-decoration: none; box-sizing: border-box; line-height: 1;" title="Baixar Vídeo MP4 do fornecedor para anúncios no TikTok, Reels e WhatsApp">
+                                        <i class="fas fa-video"></i> Vídeo
+                                    </a>
                                     <button type="button" onclick="openPriceModal(<?= (int)$prod->id ?>, <?= htmlspecialchars(json_encode($prod->title)) ?>, <?= (float)$prod->costPriceUsd ?>, <?= (float)round($prod->costPriceUsd * $rate, 2) ?>, <?= (float)$prod->salePriceBrl ?>)" style="height: 26px; padding: 0 8px; font-size: 11px; font-weight: 600; color: #fbbf24; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; box-sizing: border-box; line-height: 1;" title="Editar Custo e Preço de Venda">
                                         <i class="fas fa-tags"></i> Preço
                                     </button>
@@ -1196,16 +1194,29 @@
                 </div>
 
                 <!-- Bloco de Vídeo Demonstrativo MP4 Oficial -->
-                <div id="imagesModalVideoBox" style="display: none; margin-bottom: 16px; padding: 12px; background: rgba(147, 51, 234, 0.1); border: 1px solid rgba(147, 51, 234, 0.35); border-radius: 8px;">
+                <div id="imagesModalVideoBox" style="margin-bottom: 16px; padding: 14px; background: rgba(147, 51, 234, 0.08); border: 1px solid rgba(147, 51, 234, 0.35); border-radius: 8px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
                         <span style="font-size: 13px; font-weight: 700; color: #c084fc; display: flex; align-items: center; gap: 6px;">
-                            <i class="fas fa-play-circle"></i> Vídeo Demonstrativo Oficial (MP4)
+                            <i class="fas fa-video"></i> Vídeo Demonstrativo do Produto (MP4)
                         </span>
-                        <a id="imagesModalVideoDownloadBtn" href="#" class="btn" style="background: linear-gradient(135deg, #a855f7, #7c3aed); border: none; color: #fff; padding: 5px 12px; border-radius: 5px; font-size: 12px; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(168, 85, 247, 0.3);">
-                            <i class="fas fa-download"></i> Baixar Arquivo MP4
-                        </a>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <a id="imagesModalVideoDownloadBtn" href="#" class="btn" style="display: none; background: linear-gradient(135deg, #a855f7, #7c3aed); border: none; color: #fff; padding: 5px 12px; border-radius: 5px; font-size: 12px; font-weight: 700; text-decoration: none; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(168, 85, 247, 0.3);">
+                                <i class="fas fa-download"></i> Baixar Arquivo MP4
+                            </a>
+                            <button type="button" id="imagesModalVideoRemoveBtn" onclick="removeVideoUrl()" style="display: none; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; padding: 5px 10px; border-radius: 5px; font-size: 11px; font-weight: 600; cursor: pointer;">
+                                Remover Vídeo
+                            </button>
+                        </div>
                     </div>
-                    <video id="imagesModalVideoPlayer" controls playsinline preload="metadata" style="width: 100%; max-height: 240px; border-radius: 6px; background: #000; display: block;"></video>
+                    <div id="imagesModalVideoPlayerContainer" style="display: none; margin-bottom: 10px;">
+                        <video id="imagesModalVideoPlayer" controls playsinline preload="metadata" style="width: 100%; max-height: 240px; border-radius: 6px; background: #000; display: block;"></video>
+                    </div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                        <input type="url" id="imagesModalVideoUrlInput" placeholder="URL do vídeo MP4 (ex: https://.../video.mp4)" style="flex: 1; min-width: 220px; background: rgba(0,0,0,0.35); border: 1px solid rgba(168, 85, 247, 0.3); color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+                        <button type="button" onclick="setManualVideoUrl()" style="background: rgba(168, 85, 247, 0.2); border: 1px solid rgba(168, 85, 247, 0.5); color: #d8b4fe; padding: 8px 14px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer;">
+                            <i class="fas fa-link"></i> Definir Vídeo
+                        </button>
+                    </div>
                 </div>
 
                 <div id="imagesModalGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 12px; margin-bottom: 18px;"></div>
@@ -1591,27 +1602,68 @@
             document.getElementById('imagesModalNewUrl').value = '';
             setImagesModalStatus('', 'info');
 
-            const videoBox = document.getElementById('imagesModalVideoBox');
             const videoPlayer = document.getElementById('imagesModalVideoPlayer');
-            const videoDlBtn = document.getElementById('imagesModalVideoDownloadBtn');
-            if (videoBox && videoPlayer) {
-                if (activeImagesState.videoUrl) {
-                    videoBox.style.display = 'block';
-                    videoPlayer.src = activeImagesState.videoUrl;
-                    if (videoDlBtn) {
-                        videoDlBtn.href = activeImagesState.downloadVideoUrl || activeImagesState.videoUrl;
-                    }
-                } else {
-                    videoBox.style.display = 'none';
-                    videoPlayer.pause();
-                    videoPlayer.removeAttribute('src');
-                    videoPlayer.load();
-                }
+            if (videoPlayer) {
+                videoPlayer.pause();
+                videoPlayer.removeAttribute('src');
+                videoPlayer.load();
             }
+            updateVideoModalUI(activeImagesState.videoUrl || '');
 
             renderImagesModalGrid();
 
             document.getElementById('imagesEditModal').style.display = 'flex';
+        }
+
+        function setManualVideoUrl() {
+            const input = document.getElementById('imagesModalVideoUrlInput');
+            const url = input ? input.value.trim() : '';
+            if (!url) {
+                setImagesModalStatus('Informe uma URL de vídeo MP4 válida.', 'error');
+                return;
+            }
+            activeImagesState.videoUrl = url;
+            updateVideoModalUI(url);
+            setImagesModalStatus('Vídeo adicionado à prévia! Clique em "Salvar Galeria" para gravar.', 'info');
+        }
+
+        function removeVideoUrl() {
+            activeImagesState.videoUrl = '';
+            const input = document.getElementById('imagesModalVideoUrlInput');
+            if (input) input.value = '';
+            updateVideoModalUI('');
+            setImagesModalStatus('Vídeo removido da prévia! Clique em "Salvar Galeria" para confirmar a exclusão.', 'warning');
+        }
+
+        function updateVideoModalUI(videoUrl) {
+            const playerContainer = document.getElementById('imagesModalVideoPlayerContainer');
+            const player = document.getElementById('imagesModalVideoPlayer');
+            const dlBtn = document.getElementById('imagesModalVideoDownloadBtn');
+            const rmBtn = document.getElementById('imagesModalVideoRemoveBtn');
+            const input = document.getElementById('imagesModalVideoUrlInput');
+
+            if (input) input.value = videoUrl || '';
+            if (videoUrl) {
+                if (playerContainer) playerContainer.style.display = 'block';
+                if (player) {
+                    player.src = videoUrl;
+                    player.load();
+                }
+                if (dlBtn) {
+                    dlBtn.style.display = 'inline-flex';
+                    dlBtn.href = activeImagesState.downloadVideoUrl || videoUrl;
+                }
+                if (rmBtn) rmBtn.style.display = 'inline-flex';
+            } else {
+                if (playerContainer) playerContainer.style.display = 'none';
+                if (player) {
+                    player.pause();
+                    player.removeAttribute('src');
+                    player.load();
+                }
+                if (dlBtn) dlBtn.style.display = 'none';
+                if (rmBtn) rmBtn.style.display = 'none';
+            }
         }
 
         function closeImagesModal() {
@@ -1721,7 +1773,7 @@
             renderImagesModalGrid();
         }
 
-        function updateCardImagesUi(id, mainUrl, imagesList) {
+        function updateCardImagesUi(id, mainUrl, imagesList, videoUrl) {
             const imgEl = document.getElementById('prod-main-img-' + id);
             if (imgEl && mainUrl) {
                 imgEl.src = mainUrl;
@@ -1732,9 +1784,17 @@
             if (countEl) countEl.textContent = String(count);
             if (badge) badge.style.display = count > 1 ? 'flex' : 'none';
 
+            const vidBtn = document.getElementById('prod-video-btn-' + id);
+            if (vidBtn) {
+                vidBtn.style.display = (videoUrl && videoUrl !== '') ? 'inline-flex' : 'none';
+            }
+
             if (dropshipProductsMedia[String(id)]) {
                 dropshipProductsMedia[String(id)].mainImageUrl = mainUrl;
                 dropshipProductsMedia[String(id)].images = imagesList.slice();
+                if (typeof videoUrl !== 'undefined') {
+                    dropshipProductsMedia[String(id)].videoUrl = videoUrl;
+                }
             }
         }
 
@@ -1793,6 +1853,7 @@
             fd.append('ajax', '1');
             fd.append('main_image_url', activeImagesState.mainImageUrl || '');
             fd.append('images_json', JSON.stringify(activeImagesState.images || []));
+            fd.append('video_url', activeImagesState.videoUrl || '');
 
             fetch(baseAdminUrl + '/product/' + id + '/images', {
                 method: 'POST',
@@ -1809,9 +1870,13 @@
                 if (data && data.success) {
                     activeImagesState.mainImageUrl = data.main_image_url || '';
                     activeImagesState.images = Array.isArray(data.images) ? data.images : [];
+                    if (typeof data.video_url !== 'undefined') {
+                        activeImagesState.videoUrl = data.video_url || '';
+                        updateVideoModalUI(activeImagesState.videoUrl);
+                    }
                     renderImagesModalGrid();
-                    updateCardImagesUi(id, activeImagesState.mainImageUrl, activeImagesState.images);
-                    setImagesModalStatus(data.message || 'Galeria salva com sucesso!', 'success');
+                    updateCardImagesUi(id, activeImagesState.mainImageUrl, activeImagesState.images, activeImagesState.videoUrl);
+                    setImagesModalStatus(data.message || 'Galeria e vídeo salvos com sucesso!', 'success');
                 } else {
                     setImagesModalStatus((data && data.message) ? data.message : 'Falha ao salvar galeria.', 'error');
                 }
@@ -2166,6 +2231,8 @@
         window.openImagesModal = openImagesModal;
         window.closeImagesModal = closeImagesModal;
         window.addManualImageUrl = addManualImageUrl;
+        window.setManualVideoUrl = setManualVideoUrl;
+        window.removeVideoUrl = removeVideoUrl;
         window.syncImagesNow = syncImagesNow;
         window.handleImagesSave = handleImagesSave;
         window.openBatchMediaSyncModal = openBatchMediaSyncModal;

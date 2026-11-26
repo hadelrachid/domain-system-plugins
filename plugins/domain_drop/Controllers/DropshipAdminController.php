@@ -1049,6 +1049,17 @@ class DropshipAdminController
         // Garante que a imagem principal esteja na lista (em primeiro lugar)
         $orderedImages = $this->filterImageUrls(array_merge([$validMain], $validImages));
 
+        $attributes = is_array($product->attributes) ? $product->attributes : [];
+        if ($request->has('video_url')) {
+            $videoInput = trim((string)$request->input('video_url', ''));
+            if ($videoInput === '' || filter_var($videoInput, FILTER_VALIDATE_URL) || str_starts_with($videoInput, '//')) {
+                if (str_starts_with($videoInput, '//')) {
+                    $videoInput = 'https:' . $videoInput;
+                }
+                $attributes['video_url'] = $videoInput;
+            }
+        }
+
         $updatedDto = new DropshipProductDto(
             aliexpressId: $product->aliexpressId,
             title: $product->title,
@@ -1061,7 +1072,7 @@ class DropshipAdminController
             description: $product->description,
             rating: $product->rating,
             ordersCount: $product->ordersCount,
-            attributes: $product->attributes,
+            attributes: $attributes,
             status: $product->status,
             id: $product->id
         );
@@ -1069,6 +1080,7 @@ class DropshipAdminController
         $this->catalogRepo->save($updatedDto);
 
         $count = count($orderedImages);
+        $savedVideoUrl = (string)($attributes['video_url'] ?? '');
         $msg = "🖼️ Galeria de '{$product->title}' atualizada! {$count} foto(s) salva(s).";
 
         if ($isAjax) {
@@ -1077,6 +1089,7 @@ class DropshipAdminController
                 'message'        => $msg,
                 'main_image_url' => $validMain,
                 'images'         => $orderedImages,
+                'video_url'      => $savedVideoUrl,
                 'count'          => $count,
             ]);
         }
