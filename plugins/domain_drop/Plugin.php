@@ -493,6 +493,8 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
             $router->addRoute('GET', '/admin/dropship/sync-queue', [DropshipAdminController::class, 'syncQueue'], 'domain_drop', ['admin']);
             $router->addRoute('POST', '/admin/dropship/sync-all-images', [DropshipAdminController::class, 'syncAllImages'], 'domain_drop', ['admin']);
             $router->addRoute('POST', '/admin/dropship/delete/{id}', [DropshipAdminController::class, 'delete'], 'domain_drop', ['admin']);
+            $router->addRoute('POST', '/admin/dropship/product/{id}/delete', [DropshipAdminController::class, 'delete'], 'domain_drop', ['admin']);
+            $router->addRoute('POST', '/admin/dropship/purge-invalid-products', [DropshipAdminController::class, 'purgeInvalidProducts'], 'domain_drop', ['admin']);
 
             // 4. Rotas Públicas da Loja Virtual, Páginas Dedicadas & Área do Cliente
             $router->addRoute('GET', '/loja', [\DomainSystem\Plugins\domain_drop\Controllers\DropshipFrontController::class, 'storefront'], 'domain_drop');

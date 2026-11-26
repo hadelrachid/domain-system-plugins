@@ -928,10 +928,16 @@ class DropshipAdminController
             $this->session->setFlash('success', $msg);
         } catch (Throwable $e) {
             $prodId = (int)$id;
-            $isNotFoundOnSupplier = str_starts_with($e->getMessage(), 'PAGINA_NAO_ENCONTRADA:');
-            if ($isNotFoundOnSupplier && $prodId > 0) {
+            $autoPurge = !empty($request->getParsedBody()['auto_purge']);
+            $isNotFoundOnSupplier = str_starts_with($e->getMessage(), 'PAGINA_NAO_ENCONTRADA:')
+                || stripos($e->getMessage(), 'Página não encontrada') !== false
+                || stripos($e->getMessage(), 'não foi encontrado') !== false
+                || stripos($e->getMessage(), 'não está mais disponível') !== false
+                || stripos($e->getMessage(), 'Item no longer available') !== false;
+
+            if (($isNotFoundOnSupplier || $autoPurge) && $prodId > 0) {
                 $this->catalogRepo->delete($prodId);
-                $delMsg = "🗑️ Página Não Encontrada no fornecedor: o produto #{$prodId} foi excluído automaticamente (mesmo com imagem indexada).";
+                $delMsg = "🗑️ Produto #{$prodId} excluído automaticamente: fornecedor sem estoque, link desativado ou página não encontrada no AliExpress.";
                 if ($isAjax) {
                     return new JsonResponse([
                         'success'    => false,
@@ -1178,15 +1184,75 @@ class DropshipAdminController
     public function delete(Request $request, string $id): ResponseInterface
     {
         $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
+        $isAjax = $this->isAjaxOrJson($request);
 
         if (!$this->verifyCsrf($request)) {
+            if ($isAjax) {
+                return new JsonResponse(['success' => false, 'message' => 'Token de segurança expirado.'], 403);
+            }
             $this->session->setFlash('error', 'Token de segurança expirado.');
             return Response::redirect($baseUrl . '/admin/dropship');
         }
 
-        $this->catalogRepo->delete((int)$id);
+        $prodId = (int)$id;
+        if ($prodId > 0) {
+            $this->catalogRepo->delete($prodId);
+        }
+
+        if ($isAjax) {
+            return new JsonResponse([
+                'success' => true,
+                'deleted' => true,
+                'id'      => $prodId,
+                'message' => "Produto #{$prodId} removido do catálogo com sucesso."
+            ]);
+        }
+
         $this->session->setFlash('success', 'Produto removido do catálogo.');
 
+        return Response::redirect($baseUrl . '/admin/dropship');
+    }
+
+    public function purgeInvalidProducts(Request $request): ResponseInterface
+    {
+        $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
+        $isAjax = $this->isAjaxOrJson($request);
+
+        if (!$this->verifyCsrf($request)) {
+            if ($isAjax) {
+                return new JsonResponse(['success' => false, 'message' => 'Token de segurança expirado.'], 403);
+            }
+            $this->session->setFlash('error', 'Token de segurança expirado.');
+            return Response::redirect($baseUrl . '/admin/dropship');
+        }
+
+        $body = $request->getParsedBody();
+        $rawIds = $body['ids'] ?? [];
+        if (is_string($rawIds)) {
+            $rawIds = json_decode($rawIds, true) ?: [];
+        }
+
+        $deletedCount = 0;
+        if (is_array($rawIds)) {
+            foreach ($rawIds as $id) {
+                $pId = (int)$id;
+                if ($pId > 0) {
+                    $this->catalogRepo->delete($pId);
+                    $deletedCount++;
+                }
+            }
+        }
+
+        $msg = "🗑️ {$deletedCount} produto(s) inválido(s) / com página não encontrada foram removidos com sucesso.";
+        if ($isAjax) {
+            return new JsonResponse([
+                'success'       => true,
+                'deleted_count' => $deletedCount,
+                'message'       => $msg
+            ]);
+        }
+
+        $this->session->setFlash('success', $msg);
         return Response::redirect($baseUrl . '/admin/dropship');
     }
 

@@ -44,6 +44,9 @@
                     <i class="fas fa-bullhorn"></i> Publicar Todos (Ativar em Venda)
                 </button>
             </form>
+            <button type="button" onclick="openCatalogAuditModal()" style="background: rgba(69, 243, 255, 0.12); border: 1px solid rgba(69, 243, 255, 0.4); color: #45f3ff; padding: 9px 16px; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(69, 243, 255, 0.2); transition: all 0.2s ease;" title="Auditoria completa de estoque: produtos nacionais, importados e saúde do link">
+                <i class="fas fa-file-medical-alt"></i> Relatório do Catálogo
+            </button>
             <button type="button" onclick="document.getElementById('modalAcquireNew').style.display='flex'" style="background: linear-gradient(135deg, #F0D060 0%, #D4AF37 100%); color: #0b0f17; border: none; padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(212,175,55,0.3); transition: transform 0.2s ease;">
                 <i class="fas fa-bolt"></i> Adquirir Novos (24h)
             </button>
@@ -887,7 +890,7 @@
     <?php else: ?>
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; margin-bottom: 30px;">
             <?php foreach ($products as $prod): ?>
-                <div style="background: var(--bg-panel, #1d2327); border: 1px solid var(--border, rgba(255,255,255,0.1)); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column;">
+                <div data-product-id="<?= (int)$prod->id ?>" id="prod-card-<?= (int)$prod->id ?>" style="background: var(--bg-panel, #1d2327); border: 1px solid var(--border, rgba(255,255,255,0.1)); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column;">
                     <!-- Image with badges -->
                     <div style="position: relative; width: 100%; height: 200px; background: #0b0e11; overflow: hidden;">
                         <?php if (!empty($prod->mainImageUrl)): ?>
@@ -1282,11 +1285,20 @@
                                 </div>
                             </div>
                         </label>
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 10px 12px; border-radius: 8px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); margin-top: 4px;">
+                            <input type="checkbox" id="batchSyncAutoPurgeDead" checked style="width: 16px; height: 16px; accent-color: #ef4444;">
+                            <div>
+                                <strong style="color: #fca5a5; font-size: 13px;">🗑️ Auto-excluir cards com erro / "Página Não Encontrada" (Limpeza Automática)</strong>
+                                <div style="font-size: 11.5px; color: #94a3b8; margin-top: 2px;">
+                                    Exclui automaticamente do catálogo os produtos sem fornecedor ativo no AliExpress, links desativados ou com falha persistente de imagens.
+                                </div>
+                            </div>
+                        </label>
                     </div>
                 </div>
 
                 <!-- Painel de Contadores de Status -->
-                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">
+                <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;">
                     <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px; text-align: center;">
                         <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase;">Total Fila</div>
                         <div id="batchStatTotal" style="font-size: 20px; font-weight: 800; color: #fff; font-family: monospace; margin-top: 2px;">0</div>
@@ -1300,8 +1312,12 @@
                         <div id="batchStatSkipped" style="font-size: 20px; font-weight: 800; color: #f59e0b; font-family: monospace; margin-top: 2px;">0</div>
                     </div>
                     <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; padding: 10px; text-align: center;">
-                        <div style="font-size: 11px; color: #fca5a5; text-transform: uppercase;">Falhas</div>
-                        <div id="batchStatFailed" style="font-size: 20px; font-weight: 800; color: #ef4444; font-family: monospace; margin-top: 2px;">0</div>
+                        <div style="font-size: 11px; color: #fca5a5; text-transform: uppercase;">Excluídos (404)</div>
+                        <div id="batchStatPurged" style="font-size: 20px; font-weight: 800; color: #ef4444; font-family: monospace; margin-top: 2px;">0</div>
+                    </div>
+                    <div style="background: rgba(148, 163, 184, 0.08); border: 1px solid rgba(148, 163, 184, 0.25); border-radius: 8px; padding: 10px; text-align: center;">
+                        <div style="font-size: 11px; color: #cbd5e1; text-transform: uppercase;">Falhas Rede</div>
+                        <div id="batchStatFailed" style="font-size: 20px; font-weight: 800; color: #94a3b8; font-family: monospace; margin-top: 2px;">0</div>
                     </div>
                 </div>
 
@@ -1502,14 +1518,25 @@
             if ($vUrl === '' && !empty($p->description) && preg_match('/<source\s+src="([^"]+\.mp4[^"]*)"/i', $p->description, $mVm)) {
                 $vUrl = $mVm[1];
             }
+            $isBr = (!empty($p->attributes['origem_brasil']) || (($p->attributes['ship_from'] ?? '') === 'BR'));
+            $isCn = (!empty($p->attributes['origem_china']) || (($p->attributes['ship_from'] ?? '') === 'CN'));
+            $isReal = !empty($p->aliexpressId) && preg_match('/^\d{10,24}$/', (string)$p->aliexpressId);
             $mediaMap[(string)(int)$p->id] = [
                 'id'               => (int)$p->id,
                 'title'            => (string)$p->title,
                 'aliexpressId'     => (string)$p->aliexpressId,
+                'isRealId'         => (bool)$isReal,
+                'isNational'       => (bool)$isBr,
+                'isChina'          => (bool)$isCn,
+                'origin'           => $isBr ? 'BR' : ($isCn ? 'CN' : 'GLOBAL'),
+                'category'         => (string)($p->category ?? 'Geral'),
+                'salePriceBrl'     => (float)($p->salePriceBrl ?? 0.0),
+                'saleFormatted'    => 'R$ ' . number_format((float)($p->salePriceBrl ?? 0.0), 2, ',', '.'),
                 'mainImageUrl'     => (string)($p->mainImageUrl ?: ($imgs[0] ?? '')),
                 'videoUrl'         => $vUrl,
                 'downloadVideoUrl' => $baseUrl . '/admin/dropship/download-video?id=' . (int)$p->id,
                 'images'           => $imgs,
+                'imagesCount'      => count($imgs),
             ];
         }
         ?>
@@ -1853,15 +1880,23 @@
             if (modal) modal.style.display = 'none';
         }
 
+        let batchSyncedCount = 0;
+        let batchSkippedCount = 0;
+        let batchPurgedCount = 0;
+        let batchFailedCount = 0;
+
         function resetBatchSyncUI() {
             batchSyncRunning = false;
             batchSyncCancelled = false;
             batchSyncedCount = 0;
             batchSkippedCount = 0;
+            batchPurgedCount = 0;
             batchFailedCount = 0;
 
             document.getElementById('batchStatSynced').textContent = '0';
             document.getElementById('batchStatSkipped').textContent = '0';
+            const elPurged = document.getElementById('batchStatPurged');
+            if (elPurged) elPurged.textContent = '0';
             document.getElementById('batchStatFailed').textContent = '0';
             document.getElementById('batchProgressBar').style.width = '0%';
             document.getElementById('batchProgressPercent').textContent = '0%';
@@ -1908,12 +1943,17 @@
 
             const modeRadio = document.querySelector('input[name="batchSyncMode"]:checked');
             const mode = modeRadio ? modeRadio.value : 'incomplete';
+            const autoPurge = document.getElementById('batchSyncAutoPurgeDead')?.checked ?? true;
 
             batchSyncRunning = true;
             batchSyncCancelled = false;
             batchSyncedCount = 0;
             batchSkippedCount = 0;
+            batchPurgedCount = 0;
             batchFailedCount = 0;
+
+            const elPurged = document.getElementById('batchStatPurged');
+            if (elPurged) elPurged.textContent = '0';
 
             document.getElementById('batchSyncConfigSection').style.display = 'none';
             document.getElementById('btnBatchSyncAction').disabled = true;
@@ -1926,7 +1966,7 @@
             if (headerIcon) headerIcon.classList.add('fa-spin');
 
             const total = batchSyncQueue.length;
-            appendBatchLog(`🚀 Fila iniciada no modo: ${mode === 'incomplete' ? 'Apenas galerias incompletas' : 'Todos os produtos'}. Total: ${total} itens.`, 'info');
+            appendBatchLog(`🚀 Fila iniciada (${mode === 'incomplete' ? 'Apenas galerias incompletas' : 'Todos os produtos'}). Auto-exclusão 404: ${autoPurge ? 'Ativa' : 'Desativada'}. Total: ${total} itens.`, 'info');
 
             for (let i = 0; i < total; i++) {
                 if (batchSyncCancelled) {
@@ -1951,9 +1991,12 @@
                             const chkData = await chkRes.json();
                             if (chkData && chkData.available === false && chkData.reason === 'not_found') {
                                 wasDeleted = true;
+                                batchPurgedCount++;
+                                if (elPurged) elPurged.textContent = batchPurgedCount;
                                 appendBatchLog(`[${stepNum}/${total}] 🗑️ Produto #${item.id} (${item.title}): Página Não Encontrada no fornecedor — excluído automaticamente!`, 'warning');
-                                const cardEl = document.querySelector(`[data-product-id="${item.id}"]`);
+                                const cardEl = document.querySelector(`[data-product-id="${item.id}"]`) || document.getElementById(`prod-card-${item.id}`);
                                 if (cardEl) cardEl.remove();
+                                delete dropshipProductsMedia[String(item.id)];
                             }
                         } catch (e) {}
                     }
@@ -1968,11 +2011,32 @@
 
                 // Valida se possui identificador oficial numérico
                 if (!item.aliexpress_id || !/^\d{10,20}$/.test(item.aliexpress_id)) {
-                    batchSkippedCount++;
-                    document.getElementById('batchStatSkipped').textContent = batchSkippedCount;
-                    appendBatchLog(`[${stepNum}/${total}] Produto #${item.id} (${item.title}): ID do fornecedor simulado ou inválido (${item.aliexpress_id}). Ignorado.`, 'warning');
-                    updateBatchProgress(stepNum, total, percent, `Ignorado: #${item.id}`);
-                    continue;
+                    if (autoPurge) {
+                        batchPurgedCount++;
+                        if (elPurged) elPurged.textContent = batchPurgedCount;
+                        appendBatchLog(`[${stepNum}/${total}] 🗑️ Produto #${item.id} (${item.title}): ID de fornecedor inexistente/simulado -> Excluído automaticamente!`, 'warning');
+                        updateBatchProgress(stepNum, total, percent, `Excluído: #${item.id}`);
+                        try {
+                            const delForm = new FormData();
+                            delForm.append('csrf_token', dropshipCsrfToken);
+                            delForm.append('ajax', '1');
+                            await fetch(baseAdminUrl + '/product/' + item.id + '/delete', {
+                                method: 'POST',
+                                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                                body: delForm
+                            });
+                            const cardEl = document.querySelector(`[data-product-id="${item.id}"]`) || document.getElementById(`prod-card-${item.id}`);
+                            if (cardEl) cardEl.remove();
+                            delete dropshipProductsMedia[String(item.id)];
+                        } catch (e) {}
+                        continue;
+                    } else {
+                        batchSkippedCount++;
+                        document.getElementById('batchStatSkipped').textContent = batchSkippedCount;
+                        appendBatchLog(`[${stepNum}/${total}] Produto #${item.id} (${item.title}): ID do fornecedor simulado ou inválido (${item.aliexpress_id}). Ignorado.`, 'warning');
+                        updateBatchProgress(stepNum, total, percent, `Ignorado: #${item.id}`);
+                        continue;
+                    }
                 }
 
                 // Executa a requisição assíncrona unitária para este produto
@@ -1983,6 +2047,7 @@
                     const formData = new FormData();
                     formData.append('csrf_token', dropshipCsrfToken);
                     formData.append('ajax', '1');
+                    formData.append('auto_purge', autoPurge ? '1' : '0');
 
                     const res = await fetch(baseAdminUrl + '/product/' + item.id + '/sync-images', {
                         method: 'POST',
@@ -1995,9 +2060,12 @@
 
                     const data = await res.json();
                     if (data && data.deleted) {
+                        batchPurgedCount++;
+                        if (elPurged) elPurged.textContent = batchPurgedCount;
                         appendBatchLog(`[${stepNum}/${total}] 🗑️ Produto #${item.id}: ${data.message || 'Página Não Encontrada — excluído automaticamente.'}`, 'warning');
-                        const cardEl = document.querySelector(`[data-product-id="${item.id}"]`);
+                        const cardEl = document.querySelector(`[data-product-id="${item.id}"]`) || document.getElementById(`prod-card-${item.id}`);
                         if (cardEl) cardEl.remove();
+                        delete dropshipProductsMedia[String(item.id)];
                     } else if (data && data.temporary_block) {
                         batchSkippedCount++;
                         document.getElementById('batchStatSkipped').textContent = batchSkippedCount;
@@ -2010,14 +2078,52 @@
                         appendBatchLog(`[${stepNum}/${total}] Produto #${item.id} atualizado com sucesso! ${item.images_count} fotos${priceLog}`, 'success');
                         updateCardImagesUi(item.id, data.main_image_url || '', data.images || []);
                     } else {
-                        batchFailedCount++;
-                        document.getElementById('batchStatFailed').textContent = batchFailedCount;
-                        appendBatchLog(`[${stepNum}/${total}] Falha no Produto #${item.id}: ${(data && data.message) ? data.message : 'Erro na requisição'}`, 'error');
+                        if (autoPurge) {
+                            batchPurgedCount++;
+                            if (elPurged) elPurged.textContent = batchPurgedCount;
+                            appendBatchLog(`[${stepNum}/${total}] 🗑️ Produto #${item.id} (${item.title}): Falha ao obter imagens no fornecedor -> Excluído automaticamente!`, 'warning');
+                            try {
+                                const delForm = new FormData();
+                                delForm.append('csrf_token', dropshipCsrfToken);
+                                delForm.append('ajax', '1');
+                                await fetch(baseAdminUrl + '/product/' + item.id + '/delete', {
+                                    method: 'POST',
+                                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                                    body: delForm
+                                });
+                                const cardEl = document.querySelector(`[data-product-id="${item.id}"]`) || document.getElementById(`prod-card-${item.id}`);
+                                if (cardEl) cardEl.remove();
+                                delete dropshipProductsMedia[String(item.id)];
+                            } catch (e) {}
+                        } else {
+                            batchFailedCount++;
+                            document.getElementById('batchStatFailed').textContent = batchFailedCount;
+                            appendBatchLog(`[${stepNum}/${total}] Falha no Produto #${item.id}: ${(data && data.message) ? data.message : 'Erro na requisição'}`, 'error');
+                        }
                     }
                 } catch (err) {
-                    batchFailedCount++;
-                    document.getElementById('batchStatFailed').textContent = batchFailedCount;
-                    appendBatchLog(`[${stepNum}/${total}] Erro de rede no Produto #${item.id}: ${err.message}`, 'error');
+                    if (autoPurge) {
+                        batchPurgedCount++;
+                        if (elPurged) elPurged.textContent = batchPurgedCount;
+                        appendBatchLog(`[${stepNum}/${total}] 🗑️ Produto #${item.id}: Erro de rede/anúncio inacessível -> Excluído automaticamente!`, 'warning');
+                        try {
+                            const delForm = new FormData();
+                            delForm.append('csrf_token', dropshipCsrfToken);
+                            delForm.append('ajax', '1');
+                            await fetch(baseAdminUrl + '/product/' + item.id + '/delete', {
+                                method: 'POST',
+                                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                                body: delForm
+                            });
+                            const cardEl = document.querySelector(`[data-product-id="${item.id}"]`) || document.getElementById(`prod-card-${item.id}`);
+                            if (cardEl) cardEl.remove();
+                            delete dropshipProductsMedia[String(item.id)];
+                        } catch (e) {}
+                    } else {
+                        batchFailedCount++;
+                        document.getElementById('batchStatFailed').textContent = batchFailedCount;
+                        appendBatchLog(`[${stepNum}/${total}] Erro de rede no Produto #${item.id}: ${err.message}`, 'error');
+                    }
                 }
 
                 // Pausa suave de 250ms entre produtos para estabilidade da conexão
@@ -2034,7 +2140,7 @@
             document.getElementById('batchSyncStatusBadge').textContent = 'Concluído 100%';
             document.getElementById('batchSyncStatusBadge').style.color = '#10b981';
 
-            appendBatchLog(`🎉 Processo 100% finalizado! Atualizados: ${batchSyncedCount} | Preservados: ${batchSkippedCount} | Falhas: ${batchFailedCount}.`, 'success');
+            appendBatchLog(`🎉 Processo 100% finalizado! Atualizados: ${batchSyncedCount} | Preservados: ${batchSkippedCount} | Excluídos (404/Mortos): ${batchPurgedCount} | Falhas: ${batchFailedCount}.`, 'success');
 
             document.getElementById('btnBatchSyncDone').style.display = 'inline-flex';
             document.getElementById('btnBatchSyncCancel').textContent = 'Fechar';
@@ -2162,5 +2268,271 @@
             });
         }
     });
+    </script>
+
+    <!-- Modal Relatório de Diagnóstico & Auditoria do Catálogo -->
+    <div id="modalCatalogAudit" style="display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(0,0,0,0.85); backdrop-filter: blur(6px); align-items: center; justify-content: center; padding: 20px;">
+        <div style="background: #0f172a; border: 1px solid rgba(69, 243, 255, 0.4); border-radius: 14px; width: 100%; max-width: 820px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0,0,0,0.9); overflow: hidden;">
+            
+            <!-- Header -->
+            <div style="background: linear-gradient(135deg, rgba(69, 243, 255, 0.12) 0%, rgba(37, 99, 235, 0.18) 100%); border-bottom: 1px solid rgba(255,255,255,0.08); padding: 18px 24px; display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="background: linear-gradient(135deg, #45f3ff, #2563eb); color: #0f172a; width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800; box-shadow: 0 4px 12px rgba(69, 243, 255, 0.35);">
+                        <i class="fas fa-file-medical-alt"></i>
+                    </div>
+                    <div>
+                        <h3 style="margin: 0; font-size: 17px; font-weight: 700; color: #fff;">Relatório Automático de Auditoria do Catálogo</h3>
+                        <div style="font-size: 12px; color: #94a3b8;">Classificação de procedência logística (Brasil / China), saúde de links e integridade de fotos</div>
+                    </div>
+                </div>
+                <button type="button" onclick="closeCatalogAuditModal()" style="background: none; border: none; color: #94a3b8; font-size: 22px; cursor: pointer; padding: 4px; line-height: 1;">&times;</button>
+            </div>
+
+            <!-- Body -->
+            <div style="padding: 20px 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; flex: 1;">
+                
+                <!-- KPI Grid -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px;">
+                    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px; text-align: center;">
+                        <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 600;">Total Analisado</div>
+                        <div id="auditKpiTotal" style="font-size: 22px; font-weight: 800; color: #fff; font-family: monospace; margin-top: 2px;">0</div>
+                    </div>
+                    <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 12px; text-align: center;">
+                        <div style="font-size: 11px; color: #6ee7b7; text-transform: uppercase; font-weight: 600;">🇧🇷 Do Brasil</div>
+                        <div id="auditKpiBrazil" style="font-size: 22px; font-weight: 800; color: #10b981; font-family: monospace; margin-top: 2px;">0</div>
+                    </div>
+                    <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; padding: 12px; text-align: center;">
+                        <div style="font-size: 11px; color: #7dd3fc; text-transform: uppercase; font-weight: 600;">🇨🇳 Do China</div>
+                        <div id="auditKpiChina" style="font-size: 22px; font-weight: 800; color: #38bdf8; font-family: monospace; margin-top: 2px;">0</div>
+                    </div>
+                    <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 12px; text-align: center;">
+                        <div style="font-size: 11px; color: #fca5a5; text-transform: uppercase; font-weight: 600;">⚠️ Não Encontrados</div>
+                        <div id="auditKpiDead" style="font-size: 22px; font-weight: 800; color: #ef4444; font-family: monospace; margin-top: 2px;">0</div>
+                    </div>
+                    <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 12px; text-align: center;">
+                        <div style="font-size: 11px; color: #fde68a; text-transform: uppercase; font-weight: 600;">🛒 Prontos p/ Venda</div>
+                        <div id="auditKpiReady" style="font-size: 22px; font-weight: 800; color: #fbbf24; font-family: monospace; margin-top: 2px;">0</div>
+                    </div>
+                </div>
+
+                <!-- Lista Formatada em Linhas Numeradas -->
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 12px; font-weight: 700; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.5px;">
+                            Levantamento Item por Item (Auditoria Operacional):
+                        </span>
+                        <span id="auditCopyFeedback" style="display: none; font-size: 12px; color: #10b981; font-weight: 700;">
+                            <i class="fas fa-check"></i> Relatório copiado para a área de transferência!
+                        </span>
+                    </div>
+                    <div id="auditReportListContainer" style="max-height: 380px; overflow-y: auto; background: #070a10; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 14px 18px; font-family: monospace; font-size: 13px; line-height: 1.8; color: #e2e8f0;">
+                        <!-- Injetado dinamicamente -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div style="background: rgba(0,0,0,0.3); border-top: 1px solid rgba(255,255,255,0.08); padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <button type="button" id="btnPurgeInvalidAudit" onclick="purgeAllInvalidAuditProducts()" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border: none; color: #fff; padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(239,68,68,0.3);">
+                    <i class="fas fa-trash-alt"></i> Excluir Todos os Inválidos (<span id="auditPurgeCount">0</span> itens)
+                </button>
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" onclick="copyCatalogAuditReport()" style="background: rgba(69, 243, 255, 0.15); border: 1px solid rgba(69, 243, 255, 0.4); color: #45f3ff; padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-copy"></i> Copiar Relatório Formatado
+                    </button>
+                    <button type="button" onclick="closeCatalogAuditModal()" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                        Fechar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    let auditDeadProductIds = [];
+    let lastGeneratedAuditText = '';
+
+    function openCatalogAuditModal() {
+        const modal = document.getElementById('modalCatalogAudit');
+        if (!modal) return;
+
+        const items = Object.values(dropshipProductsMedia || {});
+        auditDeadProductIds = [];
+        let total = items.length;
+        let brCount = 0;
+        let cnCount = 0;
+        let globalCount = 0;
+        let deadCount = 0;
+
+        let htmlRows = [];
+        let textRows = [];
+
+        items.forEach(function(item, idx) {
+            const num = idx + 1;
+            const isReal = item.isRealId && /^\d{10,24}$/.test(String(item.aliexpressId || ''));
+            let status = '';
+            let badgeHtml = '';
+
+            // Se não possuir ID oficial válido, é considerado anúncio não encontrado / inativo
+            if (!isReal) {
+                status = 'Página não encontrada.';
+                badgeHtml = '<span style="color: #ef4444; font-weight: 700;">❌ Página não encontrada.</span>';
+                deadCount++;
+                auditDeadProductIds.push(item.id);
+            } else if (item.isNational || item.origin === 'BR') {
+                status = 'Do Brasil.';
+                badgeHtml = '<span style="color: #10b981; font-weight: 700;">🇧🇷 Do Brasil.</span>';
+                brCount++;
+            } else if (item.isChina || item.origin === 'CN') {
+                status = 'Do China.';
+                badgeHtml = '<span style="color: #38bdf8; font-weight: 700;">🇨🇳 Do China.</span>';
+                cnCount++;
+            } else {
+                status = 'Do Global.';
+                badgeHtml = '<span style="color: #cbd5e1; font-weight: 700;">🌐 Do Global.</span>';
+                globalCount++;
+            }
+
+            textRows.push(`${num}. ${item.title}: ${status}`);
+            htmlRows.push(`
+                <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 4px 0; border-bottom: 1px dashed rgba(255,255,255,0.05);">
+                    <div style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${item.title}">
+                        <strong style="color: #94a3b8;">${num}.</strong> ${item.title}
+                    </div>
+                    <div style="white-space: nowrap;">${badgeHtml}</div>
+                </div>
+            `);
+        });
+
+        const readyCount = total - deadCount;
+        textRows.push(`\nTotal: ${readyCount} Prontos para Venda.`);
+
+        lastGeneratedAuditText = textRows.join('\n');
+
+        // Atualiza contadores visuais
+        document.getElementById('auditKpiTotal').textContent = total;
+        document.getElementById('auditKpiBrazil').textContent = brCount;
+        document.getElementById('auditKpiChina').textContent = cnCount;
+        document.getElementById('auditKpiDead').textContent = deadCount;
+        document.getElementById('auditKpiReady').textContent = readyCount;
+        document.getElementById('auditPurgeCount').textContent = deadCount;
+
+        const btnPurge = document.getElementById('btnPurgeInvalidAudit');
+        if (btnPurge) {
+            btnPurge.disabled = (deadCount === 0);
+            btnPurge.style.opacity = (deadCount === 0) ? '0.5' : '1';
+            btnPurge.style.cursor = (deadCount === 0) ? 'not-allowed' : 'pointer';
+        }
+
+        const container = document.getElementById('auditReportListContainer');
+        if (container) {
+            if (htmlRows.length) {
+                container.innerHTML = htmlRows.join('') + `
+                    <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.15); display: flex; justify-content: space-between; align-items: center; font-weight: 800;">
+                        <span style="color: #fbbf24;">Total Prontos para Venda:</span>
+                        <span style="color: #10b981; font-size: 15px;">${readyCount} itens ativos</span>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = '<div style="text-align: center; color: #94a3b8; padding: 20px;">Nenhum produto cadastrado no catálogo para auditoria.</div>';
+            }
+        }
+
+        modal.style.display = 'flex';
+    }
+
+    function closeCatalogAuditModal() {
+        const modal = document.getElementById('modalCatalogAudit');
+        if (modal) modal.style.display = 'none';
+    }
+
+    function copyCatalogAuditReport() {
+        if (!lastGeneratedAuditText) return;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(lastGeneratedAuditText).then(() => {
+                showCopyFeedback();
+            }).catch(() => {
+                fallbackCopy(lastGeneratedAuditText);
+            });
+        } else {
+            fallbackCopy(lastGeneratedAuditText);
+        }
+    }
+
+    function fallbackCopy(text) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+            document.execCommand('copy');
+            showCopyFeedback();
+        } catch (e) {
+            alert('Não foi possível copiar automaticamente. Selecione e copie o texto manualmente.');
+        }
+        document.body.removeChild(ta);
+    }
+
+    function showCopyFeedback() {
+        const fb = document.getElementById('auditCopyFeedback');
+        if (fb) {
+            fb.style.display = 'inline-flex';
+            setTimeout(() => { fb.style.display = 'none'; }, 3000);
+        }
+    }
+
+    async function purgeAllInvalidAuditProducts() {
+        if (!auditDeadProductIds.length) {
+            alert('Nenhum produto inválido identificado para exclusão.');
+            return;
+        }
+
+        if (!confirm(`Deseja realmente excluir todos os ${auditDeadProductIds.length} produtos inválidos/com página não encontrada do seu catálogo?`)) {
+            return;
+        }
+
+        const btn = document.getElementById('btnPurgeInvalidAudit');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Excluindo produtos inválidos...';
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append('csrf_token', dropshipCsrfToken);
+            formData.append('ajax', '1');
+            formData.append('ids', JSON.stringify(auditDeadProductIds));
+
+            const res = await fetch(<?= json_encode($baseUrl . '/admin/dropship/purge-invalid-products', JSON_UNESCAPED_SLASHES) ?>, {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                body: formData
+            });
+
+            const data = await res.json();
+            if (res.ok && data.success) {
+                // Remove todos os cards da tela
+                auditDeadProductIds.forEach(function(id) {
+                    const cardEl = document.querySelector(`[data-product-id="${id}"]`) || document.getElementById(`prod-card-${id}`);
+                    if (cardEl) cardEl.remove();
+                    delete dropshipProductsMedia[String(id)];
+                });
+
+                alert(`Sucesso: ${data.deleted_count || auditDeadProductIds.length} produtos inválidos foram expurgados com sucesso!`);
+                openCatalogAuditModal(); // re-renderiza o modal atualizado
+            } else {
+                alert('Erro ao excluir produtos: ' + ((data && data.message) ? data.message : 'Erro na requisição'));
+            }
+        } catch (err) {
+            alert('Erro de rede ao excluir: ' + err.message);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-trash-alt"></i> Excluir Todos os Inválidos (' + auditDeadProductIds.length + ' itens)';
+            }
+        }
+    }
     </script>
 </div>
