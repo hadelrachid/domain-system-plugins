@@ -222,7 +222,7 @@
     </div>
 
     <script>
-    (function() {
+    function initDomainDropAdminScripts() {
         var adminRemSeconds = <?= $adminRemSeconds ?>;
         var hElem = document.getElementById('adminTimerH');
         var mElem = document.getElementById('adminTimerM');
@@ -524,7 +524,13 @@
                 });
             });
         }
-    })();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initDomainDropAdminScripts);
+    } else {
+        initDomainDropAdminScripts();
+    }
     </script>
 
     <!-- Quick Operations: 1-Click Miner, Single Product Import & Browser Code Ingestion -->
@@ -592,19 +598,19 @@
             </form>
 
             <!-- Barra de Progresso em Tempo Real (0% até 100%) -->
-            <div id="oneClickMinerProgressBox" style="display: none; margin-top: 14px; padding: 14px; background: rgba(0,0,0,0.35); border: 1px solid rgba(255, 71, 71, 0.35); border-radius: 6px;">
+            <div id="oneClickMinerProgressBox" style="display: none; margin-top: 14px; padding: 14px 16px; background: rgba(0,0,0,0.55); border: 1px solid rgba(255, 71, 71, 0.45); border-radius: 8px; box-shadow: 0 4px 16px rgba(255, 71, 71, 0.15);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <span id="oneClickMinerStatus" style="font-size: 12px; font-weight: 600; color: #ff8038; display: flex; align-items: center; gap: 6px;">
+                    <span id="oneClickMinerStatus" style="font-size: 13px; font-weight: 700; color: #ff8038; display: flex; align-items: center; gap: 8px;">
                         <i class="fas fa-spinner fa-spin"></i> Conectando à AliExpress API...
                     </span>
-                    <span id="oneClickMinerPercent" style="font-size: 13px; font-weight: 700; color: #fff;">0%</span>
+                    <span id="oneClickMinerPercent" style="font-size: 14px; font-weight: 800; color: #10b981; font-family: monospace;">0%</span>
                 </div>
-                <div style="width: 100%; height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden;">
-                    <div id="oneClickMinerProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #ff4747 0%, #ff8038 60%, #10b981 100%); transition: width 0.35s ease; border-radius: 4px;"></div>
+                <div style="width: 100%; height: 10px; background: rgba(255,255,255,0.1); border-radius: 5px; overflow: hidden; position: relative;">
+                    <div id="oneClickMinerProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #ff4747 0%, #ff8038 50%, #10b981 100%); transition: width 0.35s ease; border-radius: 5px;"></div>
                 </div>
-                <div id="oneClickMinerDetail" style="margin-top: 6px; font-size: 11px; color: var(--text-muted, #94a3b8); display: flex; justify-content: space-between;">
+                <div id="oneClickMinerDetail" style="margin-top: 8px; font-size: 12px; color: var(--text-muted, #94a3b8); display: flex; justify-content: space-between;">
                     <span id="oneClickMinerStage">Preparando mineração...</span>
-                    <span id="oneClickMinerCount">0 itens</span>
+                    <span id="oneClickMinerCount" style="color: #cbd5e1; font-weight: 600;">0 itens</span>
                 </div>
             </div>
         </div>

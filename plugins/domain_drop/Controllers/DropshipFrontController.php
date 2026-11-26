@@ -333,7 +333,12 @@ class DropshipFrontController
         $categories = $this->catalogRepo->getCategories();
 
         // Resposta ultra-rápida de AJAX para o Palco Dinâmico (Sem recarregar página nem pular para cima!)
-        if ($request->input('ajax') === '1' || $request->header('X-Requested-With') === 'XMLHttpRequest') {
+        $isAjaxFront = ($request->input('ajax') === '1')
+            || (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower((string)$_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
+            || (method_exists($request, 'isAjax') && $request->isAjax())
+            || (method_exists($request, 'header') && strtolower((string)$request->header('X-Requested-With', '')) === 'xmlhttprequest');
+
+        if ($isAjaxFront) {
             ob_start();
             include dirname(__DIR__) . '/views/front/stage.php';
             $stageHtml = ob_get_clean();

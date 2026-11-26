@@ -99,7 +99,7 @@ class DropshipAdminController
     public function mine(Request $request): ResponseInterface
     {
         $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
-        $isAjax = $request->isAjax() || strtolower((string)$request->header('X-Requested-With')) === 'xmlhttprequest';
+        $isAjax = $this->isAjaxOrJson($request);
 
         if (!$this->verifyCsrf($request)) {
             if ($isAjax) {
@@ -1170,9 +1170,15 @@ class DropshipAdminController
 
     private function isAjaxOrJson(Request $request): bool
     {
-        return str_contains((string)$request->header('Accept', ''), 'application/json')
+        $serverAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower((string)$_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+        $reqIsAjax = method_exists($request, 'isAjax') && $request->isAjax();
+        $hasHeader = method_exists($request, 'header');
+
+        return $serverAjax
+            || $reqIsAjax
             || (bool)$request->input('ajax', false)
-            || ($request->header('X-Requested-With') === 'XMLHttpRequest');
+            || ($hasHeader && str_contains((string)$request->header('Accept', ''), 'application/json'))
+            || ($hasHeader && strtolower((string)$request->header('X-Requested-With', '')) === 'xmlhttprequest');
     }
 
     private function parseCurrency(string|float|int|null $value): float
