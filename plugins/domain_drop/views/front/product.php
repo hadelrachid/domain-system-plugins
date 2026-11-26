@@ -19,7 +19,7 @@ if ($product->hasVariants()) {
 if (empty($allImages) && !empty($product->mainImageUrl)) {
     $allImages = [$product->mainImageUrl];
 }
-$isAdult = str_contains($product->category, '+18') || stripos($product->category, 'sex shop') !== false;
+$isAdult = false;
 $productWeightGrams = method_exists($product, 'getEstimatedWeightInGrams') ? $product->getEstimatedWeightInGrams() : 200;
 $productExpressPrice = method_exists($product, 'calculateExpressShippingPrice') ? $product->calculateExpressShippingPrice(1) : 19.90;
 $productFormattedWeight = method_exists($product, 'getFormattedWeight') ? $product->getFormattedWeight(1) : '200g';

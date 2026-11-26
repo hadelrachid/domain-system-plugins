@@ -77,11 +77,10 @@ interface ProductMiningServiceInterface
      * - Acessórios para Veículos
      * - Moda, Roupas & Vestuário
      * - Moda Íntima, Lingeries & Pijamas
-     * - Sex Shop & Produtos Adultos (+18)
      * 
      * Atualiza o catálogo, registra a data/hora de conclusão e retorna o resumo estatístico.
      * 
-     * @param int $itemsPerCategory Quantidade de produtos frescos minerados por categoria (padrão 10 = ~90 a 100 produtos no ciclo diário de 24h)
+     * @param int $itemsPerCategory Quantidade de produtos frescos minerados por categoria (padrão 10 = ~80 a 100 produtos no ciclo diário de 24h)
      * @return array<string, mixed> Resumo da rodada executada
      */
     public function runDailyAutomatedRotation(int $itemsPerCategory = 10): array;

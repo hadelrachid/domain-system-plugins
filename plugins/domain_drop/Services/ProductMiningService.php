@@ -37,7 +37,6 @@ class ProductMiningService implements ProductMiningServiceInterface
         'Peças & Acessórios Automotivos',
         'Roupas, Bolsas & Calçados',
         'Roupa Íntima & Pijamas',
-        'Novidades & Uso Especial',
     ];
 
     private ProductLinkScraperInterface $linkScraper;
@@ -350,7 +349,6 @@ class ProductMiningService implements ProductMiningServiceInterface
             'Moda, Roupas & Vestuário'          => ['vestido feminino casual verao elegante brasil', 'camisa social masculina manga longa linho brasil', 'camiseta basica 100 algodao unissex slim brasil', 'jaqueta jeans masculina feminina oversize casual brasil', 'calca jeans feminina masculina skinny stretch brasil', 'calca jogger streetwear cargo bolsos unissex brasil', 'jaqueta corta vento impermeavel capuz ciclismo brasil', 'conjunto moletom masculino feminino agasalho inverno brasil', 'blusa feminina casual verao elegante brasil', 'tenis esportivo corrida caminhada respiravel leve brasil', 'bolsa feminina transversal tiracolo couro vintage brasil', 'mochila executiva impermeavel antifurto usb brasil'],
             'Moda Fitness, Leggings & Academia' => ['legging suplex feminina', 'macacao fitness feminino', 'conjunto academia feminino', 'macaquinho fitness treino', 'short suplex academia', 'top fitness sustentacao', 'calca legging empina bumbum', 'body feminino canelado'],
             'Moda Íntima, Lingeries & Pijamas'  => ['conjunto lingerie renda floral sutiã calcinha luxo brasil', 'sutia sem costura sustentacao push up confortavel brasil', 'pijama feminino cetim seda camisola renda brasil', 'kit cuecas boxer modal sem costura respiravel brasil', 'meia calca termica translucida forrada peluciada brasil', 'kit calcinhas sem costura invisivel algodao brasil', 'espartilho modelador cinta feminina compressao brasil'],
-            'Sex Shop & Produtos Adultos (+18)' => ['vibrador liquido estimulador feminino discreto brasil', 'massageador varinha magica corporal silencioso brasil', 'estimulador sucção clitoriana silicone recarregavel brasil', 'oleo corporal beijavel aromaterapia massagem brasil'],
         ];
 
         // Mapeia apelidos canônicos para garantir acesso direto e bidirecional
@@ -362,7 +360,6 @@ class ProductMiningService implements ProductMiningServiceInterface
         $searchTerms['Peças & Acessórios Automotivos'] = $searchTerms['Acessórios para Veículos'];
         $searchTerms['Roupas, Bolsas & Calçados']      = $searchTerms['Moda, Roupas & Vestuário'];
         $searchTerms['Roupa Íntima & Pijamas']         = $searchTerms['Moda Íntima, Lingeries & Pijamas'];
-        $searchTerms['Novidades & Uso Especial']       = $searchTerms['Sex Shop & Produtos Adultos (+18)'];
 
         $termList = $searchTerms[$commercialCat] ?? ($searchTerms[$canonicalCat] ?? null);
         if (empty($termList)) {
@@ -1523,7 +1520,6 @@ class ProductMiningService implements ProductMiningServiceInterface
             'Peças & Acessórios Automotivos' => 'Acessórios para Veículos',
             'Roupas, Bolsas & Calçados'      => 'Moda, Roupas & Vestuário',
             'Roupa Íntima & Pijamas'         => 'Moda Íntima, Lingeries & Pijamas',
-            'Novidades & Uso Especial'       => 'Sex Shop & Produtos Adultos (+18)',
         ];
         $curatedKey = $aliasMap[$category] ?? $commercialCat;
         $pool = $catalog[$commercialCat] ?? ($catalog[$curatedKey] ?? ($catalog[$category] ?? ($catalog['Moda, Roupas & Vestuário'] ?? reset($catalog))));

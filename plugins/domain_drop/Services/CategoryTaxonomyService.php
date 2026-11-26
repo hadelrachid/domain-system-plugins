@@ -42,7 +42,6 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
             self::CAT_FASHION,
             self::CAT_FITNESS,
             self::CAT_LINGERIE,
-            self::CAT_ADULT,
         ];
     }
 
@@ -68,7 +67,6 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
             self::CAT_FASHION    => [200000345, 200000343, 200000346, 200000347, 200000344, 200000348, 1524, 322],
             self::CAT_FITNESS    => [200000785, 200000349, 200000345, 200000780],
             self::CAT_LINGERIE   => [200574005, 200000851, 200000858, 200000780, 200000778, 200000779, 200000781],
-            self::CAT_ADULT      => [200000532],
             default              => [44],
         };
     }
@@ -193,12 +191,6 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
                 'kit calcinhas sem costura invisivel algodao',
                 'espartilho modelador cinta feminina compressao'
             ],
-            self::CAT_ADULT      => [
-                'massageador muscular eletrico pistola relaxamento corporal',
-                'massageador cervical pescoco ombros calor',
-                'rolo de massagem miofascial fisioterapia yoga',
-                'almofada massageadora postural lombar eletrica'
-            ],
             default              => ['eletronicos utilidades brasil'],
         };
     }
@@ -228,9 +220,9 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
             return 'Moda Íntima, Lingeries & Pijamas';
         }
 
-        // 2. Sex Shop & Adulto
-        if (str_contains($clean, 'sex shop') || str_contains($clean, 'sexshop') || str_contains($clean, 'adulto') || str_contains($clean, '18') || str_contains($clean, 'novidade') || str_contains($clean, 'especial') || str_contains($clean, 'erotic') || str_contains($clean, 'erótic')) {
-            return 'Sex Shop & Produtos Adultos (+18)';
+        // 2. Massagem & Bem-Estar Corporal
+        if (str_contains($clean, 'massageador') || str_contains($clean, 'relaxamento') || str_contains($clean, 'miofascial') || str_contains($clean, 'massagem')) {
+            return 'Beleza, Cuidados & Estilo';
         }
 
         // 3. Moda, Roupas & Vestuário
@@ -296,9 +288,9 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
             return self::CAT_LINGERIE;
         }
 
-        // 2. Novidades & Uso Especial / Adulto (ID 200000532)
-        if (str_contains($clean, 'sex shop') || str_contains($clean, 'sexshop') || str_contains($clean, 'adulto') || str_contains($clean, '18') || str_contains($clean, 'vibrat') || str_contains($clean, 'massageador') || str_contains($clean, 'novidade') || str_contains($clean, 'especial')) {
-            return self::CAT_ADULT;
+        // 2. Massagem & Bem-Estar Corporal
+        if (str_contains($clean, 'massageador') || str_contains($clean, 'relaxamento') || str_contains($clean, 'miofascial') || str_contains($clean, 'massagem')) {
+            return self::CAT_BEAUTY;
         }
 
         // 3. Roupas, Bolsas & Calçados (IDs 200000345, 200000343, 1524, 322)
@@ -359,9 +351,9 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
             return self::CAT_LINGERIE;
         }
 
-        // 2. Novidades & Uso Especial / Adulto (+18)
-        if (preg_match('/\b(sex shop|sexshop|adulto|\+18|vibratório|vibratorio|vibratória|vibratoria|vibração|vibracao|massageador|amendoim|estimulador|plug|lubrificante|uso especial)\b/iu', $t)) {
-            return self::CAT_ADULT;
+        // 2. Massagem, Fisioterapia & Bem-Estar Corporal
+        if (preg_match('/\b(massageador|massageadora|relaxamento muscular|miofascial|pistola de massagem|almofada massageadora)\b/iu', $t)) {
+            return self::CAT_BEAUTY;
         }
 
         // 3. Roupas, Bolsas & Calçados
@@ -502,24 +494,13 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
             )";
         }
 
-        // 2. Novidades & Uso Especial / Adulto (+18) (ID 200000532)
-        if (str_contains($clean, 'sex shop') || str_contains($clean, 'sexshop') || str_contains($clean, 'adulto') || str_contains($clean, '18') || str_contains($clean, 'vibrat') || str_contains($clean, 'massageador') || str_contains($clean, 'novidade') || str_contains($clean, 'especial')) {
+        // 2. Massagem & Bem-Estar Corporal
+        if (str_contains($clean, 'massageador') || str_contains($clean, 'massagem') || str_contains($clean, 'relaxamento') || str_contains($clean, 'miofascial')) {
             return "(
-                category IN ('Novidades & Uso Especial', 'Novidades e  uso especial', 'Sex Shop & Produtos Adultos (+18)', 'Sex Shop')
-                OR category LIKE '%Novidades%'
-                OR category LIKE '%Especial%'
-                OR category LIKE '%Sex Shop%'
-                OR category LIKE '%Adulto%'
-                OR category LIKE '%+18%'
-                OR title LIKE '%Vibrat%'
+                category IN ('Beleza, Saúde & Maquiagem', 'Beleza, Cuidados & Estilo', 'Saúde e beleza')
                 OR title LIKE '%Massageador%'
-                OR title LIKE '%Amendoim%'
                 OR title LIKE '%Relaxamento Muscular%'
                 OR title LIKE '%Rolo De Massagem%'
-                OR title LIKE '%Estimulador%'
-                OR title LIKE '%Sensual%'
-                OR title LIKE '%Erótica%'
-                OR title LIKE '%Erotica%'
             )";
         }
 

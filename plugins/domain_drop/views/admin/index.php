@@ -145,7 +145,7 @@
                 <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">
                     Último ciclo: <strong style="color: #fff;"><?= htmlspecialchars((string)($cycleInfo['last_cycle_date'] ?? 'Pendente')) ?></strong>
                     &nbsp;•&nbsp; 
-                    9 Categorias Oficiais: <span style="color: #F0D060;">Eletrônicos, Casa, Beleza, Ferramentas, Pet Shop, Veículos, Moda, Lingerie, Sex Shop</span>
+                    8 Categorias Oficiais: <span style="color: #F0D060;">Eletrônicos, Casa, Beleza, Ferramentas, Pet Shop, Veículos, Moda, Lingerie</span>
                     &nbsp;•&nbsp;
                     Capacidade: <span style="color: #10b981; font-weight: 600;">80 a 100 itens / 24h</span>
                     &nbsp;•&nbsp;
@@ -243,8 +243,7 @@
             'Acessórios para Veículos',
             'Moda, Roupas & Vestuário',
             'Moda Fitness, Leggings & Academia',
-            'Moda Íntima, Lingeries & Pijamas',
-            'Sex Shop & Bem-Estar'
+            'Moda Íntima, Lingeries & Pijamas'
         ];
 
         window.runProgressiveMiningCycle = function(options) {
@@ -625,7 +624,6 @@
                             <option value="Moda, Roupas & Vestuário">Moda, Roupas & Vestuário</option>
                             <option value="Moda Fitness, Leggings & Academia">Moda Fitness, Leggings & Academia</option>
                             <option value="Moda Íntima, Lingeries & Pijamas">Moda Íntima, Lingeries & Pijamas</option>
-                            <option value="Sex Shop & Produtos Adultos (+18)">🔞 Sex Shop & Produtos Adultos (+18)</option>
                         </select>
                     </div>
                     <div>

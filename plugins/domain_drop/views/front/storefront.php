@@ -153,22 +153,6 @@ $canonicalUrl = $baseUrl . $pageBaseRoute . ($page > 1 ? '?page=' . $page : '');
                     <a href="<?= htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8') ?>/loja" style="padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; text-decoration: none; background: rgba(212,175,55,0.12); color: #F0D060; border: 1px solid rgba(212,175,55,0.35);">← Catálogo Geral</a>
                 </div>
             </div>
-        <?php elseif ($dedicatedSection === 'sexshop'): ?>
-            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; width: 100%; justify-content: space-between;">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(239,68,68,0.16); border: 1px solid rgba(239,68,68,0.45); display: flex; align-items: center; justify-content: center; font-size: 18px;">
-                        🔞
-                    </div>
-                    <div>
-                        <div style="font-size: 11px; font-weight: 700; color: #f87171; text-transform: uppercase; letter-spacing: 0.8px;">Seção Restrita +18 • AliExpress SDK (ID 200000532)</div>
-                        <div style="font-size: 14px; font-weight: 800; color: #fff;">Sex Shop, Bem-Estar Íntimo &amp; Uso Especial (Embalagem Discreta)</div>
-                    </div>
-                </div>
-                <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-                    <a href="<?= htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8') ?>/moda-intima" style="padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; text-decoration: none; background: rgba(236,72,153,0.14); color: #f472b6; border: 1px solid rgba(236,72,153,0.35);">👗 Moda &amp; Lingeries</a>
-                    <a href="<?= htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8') ?>/loja" style="padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; text-decoration: none; background: rgba(212,175,55,0.12); color: #F0D060; border: 1px solid rgba(212,175,55,0.35);">← Catálogo Geral</a>
-                </div>
-            </div>
         <?php else: ?>
         <div style="display: flex; align-items: center; gap: 10px;">
             <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(212,175,55,0.15); border: 1px solid rgba(212,175,55,0.4); display: flex; align-items: center; justify-content: center; font-size: 18px;">
@@ -182,7 +166,6 @@ $canonicalUrl = $baseUrl . $pageBaseRoute . ($page > 1 ? '?page=' . $page : '');
 
         <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex: 1; justify-content: flex-end;">
             <a href="<?= htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8') ?>/moda-intima" style="padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; text-decoration: none; background: rgba(236,72,153,0.14); color: #f472b6; border: 1px solid rgba(236,72,153,0.35); white-space: nowrap;">👗 Moda &amp; Íntima</a>
-            <a href="<?= htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8') ?>/sexshop" style="padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; text-decoration: none; background: rgba(239,68,68,0.14); color: #f87171; border: 1px solid rgba(239,68,68,0.35); white-space: nowrap;">🔞 Sex Shop (+18)</a>
             <!-- Combobox Principal de Categorias (Atualiza o Palco Dinâmico sem recarregar a página!) -->
             <select id="storeCategoryCombobox" class="store-combobox-select" onchange="if(this.value) filterCatalogDynamically(this.value);">
                 <option value="<?= $baseUrl ?>/loja" <?= empty($selectedCategory) ? 'selected' : '' ?>>
@@ -214,9 +197,6 @@ $canonicalUrl = $baseUrl . $pageBaseRoute . ($page > 1 ? '?page=' . $page : '');
                 </option>
                 <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Roupa Íntima & Pijamas') ?>" <?= (stripos($selectedCategory, 'lingerie') !== false || stripos($selectedCategory, 'íntima') !== false || stripos($selectedCategory, 'intima') !== false || stripos($selectedCategory, 'pijama') !== false) ? 'selected' : '' ?>>
                     👙 Roupa Íntima & Pijamas
-                </option>
-                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Novidades & Uso Especial') ?>" <?= (stripos($selectedCategory, 'novidade') !== false || stripos($selectedCategory, 'especial') !== false || stripos($selectedCategory, 'sex shop') !== false || stripos($selectedCategory, '+18') !== false) ? 'selected' : '' ?>>
-                    🔞 Novidades & Uso Especial
                 </option>
             </select>
 
