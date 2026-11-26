@@ -374,9 +374,13 @@ class ProductMiningService implements ProductMiningServiceInterface
             $shipParam = '&shipFrom=CN';
         }
 
-        // Tentativas e acertos: testa os termos da categoria até obter retorno válido
+        $catIds = $this->taxonomy->getAliExpressCategoryIds($canonicalCat);
+        $primaryCatId = !empty($catIds) ? (int)$catIds[0] : null;
+        $catParam = $primaryCatId ? "&catId={$primaryCatId}" : '';
+
+        // Tentativas e acertos: testa os termos da categoria com catId rígido até obter retorno válido
         foreach ($termList as $searchTerm) {
-            $searchUrl = "https://pt.aliexpress.com/w/wholesale-" . urlencode($searchTerm) . ".html?country=BR&locale=pt_BR&currency=BRL" . $shipParam . "&isrefine=y";
+            $searchUrl = "https://pt.aliexpress.com/w/wholesale-" . urlencode($searchTerm) . ".html?country=BR&locale=pt_BR&currency=BRL" . $shipParam . $catParam . "&isrefine=y";
             $fetched = $this->fetchLiveSearchHtml($searchUrl);
             if ($fetched && is_string($fetched) && strlen($fetched) > 1000) {
                 $html = $fetched;
