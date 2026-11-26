@@ -898,9 +898,24 @@
                             </div>
                         <?php endif; ?>
 
-                        <div style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">
-                            <?= htmlspecialchars($prod->category ?: 'Dropship') ?>
-                        </div>
+                        <?php 
+                        $isNational = (!empty($prod->attributes['origem_brasil']) || (isset($prod->attributes['ship_from']) && $prod->attributes['ship_from'] === 'BR'));
+                        $isChina = (!empty($prod->attributes['origem_china']) || (isset($prod->attributes['ship_from']) && $prod->attributes['ship_from'] === 'CN'));
+                        $prodVideoUrl = !empty($prod->attributes['video_url']) ? (string)$prod->attributes['video_url'] : '';
+                        if ($prodVideoUrl === '' && !empty($prod->description) && preg_match('/<source\s+src="([^"]+\.mp4[^"]*)"/i', $prod->description, $mVm)) {
+                            $prodVideoUrl = $mVm[1];
+                        }
+                        ?>
+
+                        <?php if (!empty($prodVideoUrl)): ?>
+                            <div style="position: absolute; top: 10px; left: 10px; background: rgba(147, 51, 234, 0.9); backdrop-filter: blur(4px); color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.4);" title="Vídeo demonstrativo em alta definição disponível">
+                                <i class="fas fa-play-circle"></i> Vídeo HD
+                            </div>
+                        <?php else: ?>
+                            <div style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">
+                                <?= htmlspecialchars($prod->category ?: 'Dropship') ?>
+                            </div>
+                        <?php endif; ?>
 
                         <?php $galleryCount = !empty($prod->images) ? count($prod->images) : (!empty($prod->mainImageUrl) ? 1 : 0); ?>
                         <div id="prod-imgs-badge-<?= (int)($prod->id ?? 0) ?>" style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); color: #45f3ff; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; display: <?= $galleryCount > 1 ? 'flex' : 'none' ?>; align-items: center; gap: 4px;">
@@ -913,16 +928,17 @@
                             </div>
                         <?php endif; ?>
 
-                        <?php 
-                        $isNational = (!empty($prod->attributes['origem_brasil']) || (isset($prod->attributes['ship_from']) && $prod->attributes['ship_from'] === 'BR'));
-                        ?>
                         <?php if ($isNational): ?>
                             <div style="position: absolute; bottom: 10px; right: 10px; background: rgba(16, 185, 129, 0.9); backdrop-filter: blur(4px); color: #fff; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; display: flex; align-items: center; gap: 4px;" title="Produto em Entreposto no Brasil / Envio Nacional (3 a 7 dias)">
                                 <span>🇧🇷</span> BR
                             </div>
-                        <?php else: ?>
+                        <?php elseif ($isChina): ?>
                             <div style="position: absolute; bottom: 10px; right: 10px; background: rgba(59, 130, 246, 0.9); backdrop-filter: blur(4px); color: #fff; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; display: flex; align-items: center; gap: 4px;" title="Importação Direta / Entreposto Central AliExpress (China) Remessa Conforme DDP">
                                 <span>🇨🇳</span> CN
+                            </div>
+                        <?php else: ?>
+                            <div style="position: absolute; bottom: 10px; right: 10px; background: rgba(100, 116, 139, 0.9); backdrop-filter: blur(4px); color: #fff; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; display: flex; align-items: center; gap: 4px;" title="Origem Internacional Certificada com Rastreamento">
+                                <span>🌐</span> GLOBAL
                             </div>
                         <?php endif; ?>
                     </div>
@@ -981,6 +997,11 @@
                                     <i class="fas fa-external-link-alt"></i> Link
                                 </a>
                                 <?php if ($prod->id !== null): ?>
+                                    <?php if (!empty($prodVideoUrl)): ?>
+                                        <a href="<?= $baseUrl ?>/admin/dropship/download-video?id=<?= (int)$prod->id ?>" style="height: 26px; padding: 0 8px; font-size: 11px; font-weight: 700; color: #c084fc; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.4); border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; text-decoration: none; box-sizing: border-box; line-height: 1;" title="Baixar Vídeo MP4 do fornecedor para anúncios no TikTok, Reels e WhatsApp">
+                                            <i class="fas fa-video"></i> Vídeo
+                                        </a>
+                                    <?php endif; ?>
                                     <button type="button" onclick="openPriceModal(<?= (int)$prod->id ?>, <?= htmlspecialchars(json_encode($prod->title)) ?>, <?= (float)$prod->costPriceUsd ?>, <?= (float)round($prod->costPriceUsd * $rate, 2) ?>, <?= (float)$prod->salePriceBrl ?>)" style="height: 26px; padding: 0 8px; font-size: 11px; font-weight: 600; color: #fbbf24; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; box-sizing: border-box; line-height: 1;" title="Editar Custo e Preço de Venda">
                                         <i class="fas fa-tags"></i> Preço
                                     </button>
@@ -1175,6 +1196,19 @@
                             <i class="fas fa-sync-alt"></i> Sincronizar do AliExpress
                         </button>
                     </div>
+                </div>
+
+                <!-- Bloco de Vídeo Demonstrativo MP4 Oficial -->
+                <div id="imagesModalVideoBox" style="display: none; margin-bottom: 16px; padding: 12px; background: rgba(147, 51, 234, 0.1); border: 1px solid rgba(147, 51, 234, 0.35); border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                        <span style="font-size: 13px; font-weight: 700; color: #c084fc; display: flex; align-items: center; gap: 6px;">
+                            <i class="fas fa-play-circle"></i> Vídeo Demonstrativo Oficial (MP4)
+                        </span>
+                        <a id="imagesModalVideoDownloadBtn" href="#" class="btn" style="background: linear-gradient(135deg, #a855f7, #7c3aed); border: none; color: #fff; padding: 5px 12px; border-radius: 5px; font-size: 12px; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(168, 85, 247, 0.3);">
+                            <i class="fas fa-download"></i> Baixar Arquivo MP4
+                        </a>
+                    </div>
+                    <video id="imagesModalVideoPlayer" controls playsinline preload="metadata" style="width: 100%; max-height: 240px; border-radius: 6px; background: #000; display: block;"></video>
                 </div>
 
                 <div id="imagesModalGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 12px; margin-bottom: 18px;"></div>
@@ -1464,18 +1498,24 @@
             if (!empty($p->mainImageUrl) && !in_array($p->mainImageUrl, $imgs, true)) {
                 array_unshift($imgs, $p->mainImageUrl);
             }
+            $vUrl = !empty($p->attributes['video_url']) ? (string)$p->attributes['video_url'] : '';
+            if ($vUrl === '' && !empty($p->description) && preg_match('/<source\s+src="([^"]+\.mp4[^"]*)"/i', $p->description, $mVm)) {
+                $vUrl = $mVm[1];
+            }
             $mediaMap[(string)(int)$p->id] = [
-                'id'           => (int)$p->id,
-                'title'        => (string)$p->title,
-                'aliexpressId' => (string)$p->aliexpressId,
-                'mainImageUrl' => (string)($p->mainImageUrl ?: ($imgs[0] ?? '')),
-                'images'       => $imgs,
+                'id'               => (int)$p->id,
+                'title'            => (string)$p->title,
+                'aliexpressId'     => (string)$p->aliexpressId,
+                'mainImageUrl'     => (string)($p->mainImageUrl ?: ($imgs[0] ?? '')),
+                'videoUrl'         => $vUrl,
+                'downloadVideoUrl' => $baseUrl . '/admin/dropship/download-video?id=' . (int)$p->id,
+                'images'           => $imgs,
             ];
         }
         ?>
         const dropshipCsrfToken = <?= json_encode($csrfToken, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
         const dropshipProductsMedia = <?= json_encode($mediaMap, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_SLASHES) ?>;
-        let activeImagesState = { id: null, title: '', aliexpressId: '', mainImageUrl: '', images: [] };
+        let activeImagesState = { id: null, title: '', aliexpressId: '', mainImageUrl: '', videoUrl: '', downloadVideoUrl: '', images: [] };
 
         function setImagesModalStatus(msg, type) {
             const el = document.getElementById('imagesModalStatus');
@@ -1511,6 +1551,8 @@
                 title: item.title,
                 aliexpressId: item.aliexpressId,
                 mainImageUrl: item.mainImageUrl,
+                videoUrl: item.videoUrl || '',
+                downloadVideoUrl: item.downloadVideoUrl || '',
                 images: Array.isArray(item.images) ? item.images.slice() : []
             };
 
@@ -1525,6 +1567,25 @@
                     : 'https://www.aliexpress.com/wholesale?SearchText=' + encodeURIComponent(activeImagesState.title));
             document.getElementById('imagesModalNewUrl').value = '';
             setImagesModalStatus('', 'info');
+
+            const videoBox = document.getElementById('imagesModalVideoBox');
+            const videoPlayer = document.getElementById('imagesModalVideoPlayer');
+            const videoDlBtn = document.getElementById('imagesModalVideoDownloadBtn');
+            if (videoBox && videoPlayer) {
+                if (activeImagesState.videoUrl) {
+                    videoBox.style.display = 'block';
+                    videoPlayer.src = activeImagesState.videoUrl;
+                    if (videoDlBtn) {
+                        videoDlBtn.href = activeImagesState.downloadVideoUrl || activeImagesState.videoUrl;
+                    }
+                } else {
+                    videoBox.style.display = 'none';
+                    videoPlayer.pause();
+                    videoPlayer.removeAttribute('src');
+                    videoPlayer.load();
+                }
+            }
+
             renderImagesModalGrid();
 
             document.getElementById('imagesEditModal').style.display = 'flex';
@@ -1533,6 +1594,12 @@
         function closeImagesModal() {
             const modal = document.getElementById('imagesEditModal');
             if (modal) modal.style.display = 'none';
+            const videoPlayer = document.getElementById('imagesModalVideoPlayer');
+            if (videoPlayer) {
+                videoPlayer.pause();
+                videoPlayer.removeAttribute('src');
+                videoPlayer.load();
+            }
         }
 
         function renderImagesModalGrid() {

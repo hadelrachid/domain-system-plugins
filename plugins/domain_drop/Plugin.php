@@ -297,6 +297,10 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
             return new \DomainSystem\Plugins\domain_drop\Services\CuratedCatalogProvider();
         });
 
+        $runtime->singleton(\DomainSystem\Plugins\domain_drop\Contracts\WarehouseOriginResolverInterface::class, function () {
+            return new \DomainSystem\Plugins\domain_drop\Services\WarehouseOriginResolver();
+        });
+
         $runtime->singleton(ProductMiningServiceInterface::class, function () use ($runtime) {
             return new ProductMiningService(
                 apiClient: $runtime->make(AliExpressApiClientInterface::class),
@@ -306,7 +310,8 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
                 linkScraper: $runtime->make(ProductLinkScraperInterface::class),
                 demandMetricsRepo: $runtime->make(\DomainSystem\Plugins\domain_drop\Contracts\DemandMetricsRepositoryInterface::class),
                 taxonomy: $runtime->make(CategoryTaxonomyInterface::class),
-                catalogProvider: $runtime->make(\DomainSystem\Plugins\domain_drop\Contracts\CuratedCatalogProviderInterface::class)
+                catalogProvider: $runtime->make(\DomainSystem\Plugins\domain_drop\Contracts\CuratedCatalogProviderInterface::class),
+                originResolver: $runtime->make(\DomainSystem\Plugins\domain_drop\Contracts\WarehouseOriginResolverInterface::class)
             );
         });
 
@@ -484,6 +489,7 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
             $router->addRoute('POST', '/admin/dropship/publish-drafts', [DropshipAdminController::class, 'publishDrafts'], 'domain_drop', ['admin']);
             $router->addRoute('POST', '/admin/dropship/acquire-new', [DropshipAdminController::class, 'acquireNew'], 'domain_drop', ['admin']);
             $router->addRoute('POST', '/admin/dropship/save-pricing', [DropshipAdminController::class, 'savePricing'], 'domain_drop', ['admin']);
+            $router->addRoute('GET', '/admin/dropship/download-video', [DropshipAdminController::class, 'downloadVideo'], 'domain_drop', ['admin']);
             $router->addRoute('GET', '/admin/dropship/sync-queue', [DropshipAdminController::class, 'syncQueue'], 'domain_drop', ['admin']);
             $router->addRoute('POST', '/admin/dropship/sync-all-images', [DropshipAdminController::class, 'syncAllImages'], 'domain_drop', ['admin']);
             $router->addRoute('POST', '/admin/dropship/delete/{id}', [DropshipAdminController::class, 'delete'], 'domain_drop', ['admin']);
@@ -569,7 +575,9 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
                                 $productDto = $catRepo->findById($itemId);
                                 if ($productDto !== null) {
                                     $sellerInfo = $productDto->getSellerInfo();
-                                    $isBr = !empty($sellerInfo['is_brazil']);
+                                    $isBr = !empty($sellerInfo['is_brazil'])
+                                        || !empty($productDto->attributes['origem_brasil'])
+                                        || (($productDto->attributes['ship_from'] ?? '') === 'BR');
                                     $sellerOrigin = $isBr ? 'BR' : 'CN';
                                     $expectedDays = $isBr ? 7 : 25;
                                     $sellerName = (string)($sellerInfo['store_name'] ?? '');

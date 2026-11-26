@@ -359,6 +359,27 @@ if ($eanCode !== '') {
         </div>
     </div>
 
+    <!-- Dedicated Product Demonstration Video (HTML5) -->
+    <?php
+    $productVideoUrl = !empty($product->attributes['video_url']) ? (string)$product->attributes['video_url'] : '';
+    if ($productVideoUrl === '' && !empty($product->description) && preg_match('/<source\s+src="([^"]+\.mp4[^"]*)"/i', $product->description, $mVidP)) {
+        $productVideoUrl = $mVidP[1];
+    }
+    ?>
+    <?php if (!empty($productVideoUrl)): ?>
+        <div style="background: #171d22; border: 1px solid rgba(168, 85, 247, 0.35); border-radius: 12px; padding: 24px; margin-bottom: 30px; box-shadow: 0 4px 20px rgba(0,0,0,0.35);">
+            <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px;">
+                <i class="fas fa-play-circle" style="color: #a855f7;"></i> Vídeo Demonstrativo do Produto
+            </h3>
+            <div style="max-width: 680px; margin: 0 auto; border-radius: 8px; overflow: hidden; background: #000; box-shadow: 0 8px 24px rgba(0,0,0,0.6);">
+                <video controls playsinline preload="metadata" style="width: 100%; height: auto; max-height: 440px; display: block;" poster="<?= htmlspecialchars($product->mainImageUrl ?? '') ?>">
+                    <source src="<?= htmlspecialchars($productVideoUrl) ?>" type="video/mp4">
+                    Seu navegador não suporta reprodução de vídeo.
+                </video>
+            </div>
+        </div>
+    <?php endif; ?>
+
     <!-- Full Description & Persuasive Copy -->
     <div style="background: #171d22; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 28px; margin-bottom: 40px;">
         <h2 style="font-size: 20px; font-weight: 700; color: #fff; margin: 0 0 20px 0; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px;">
@@ -367,7 +388,7 @@ if ($eanCode !== '') {
         <div style="font-size: 15px; line-height: 1.8; color: #cbd5e1;">
             <?php
             $rawProductDesc = method_exists($product, 'getEnrichedDescription') ? (string)$product->getEnrichedDescription() : (string)$product->description;
-            $safeProductDesc = strip_tags($rawProductDesc, '<p><br><ul><ol><li><strong><b><em><i><h3><h4><h5><h6><span><div>');
+            $safeProductDesc = strip_tags($rawProductDesc, '<p><br><ul><ol><li><strong><b><em><i><h3><h4><h5><h6><span><div><video><source>');
             $safeProductDesc = preg_replace('/\s+on[a-z]+\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', $safeProductDesc) ?? '';
             $safeProductDesc = preg_replace('/(?:javascript|vbscript|data):/i', '', $safeProductDesc) ?? '';
             echo $safeProductDesc;

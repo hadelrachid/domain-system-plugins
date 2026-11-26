@@ -226,6 +226,73 @@ class DropshipAdminController
         return Response::redirect($baseUrl . '/admin/dropship');
     }
 
+    /**
+     * Download direto do vídeo do produto em MP4 (SRP / Streaming limpo).
+     * Permite que o administrador baixe o criativo oficial em alta resolução
+     * para veiculação de anúncios em redes sociais (TikTok, Reels, Facebook Ads, WhatsApp).
+     */
+    public function downloadVideo(Request $request): ResponseInterface
+    {
+        $id = (int)$request->input('id', 0);
+        $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
+
+        if ($id <= 0) {
+            $this->session->setFlash('error', 'ID do produto inválido.');
+            return Response::redirect($baseUrl . '/admin/dropship');
+        }
+
+        $product = $this->catalogRepo->findById($id);
+        if ($product === null) {
+            $this->session->setFlash('error', 'Produto não encontrado.');
+            return Response::redirect($baseUrl . '/admin/dropship');
+        }
+
+        $videoUrl = (string)($product->attributes['video_url'] ?? '');
+        if ($videoUrl === '' && !empty($product->description)) {
+            if (preg_match('/<source\s+src="([^"]+\.mp4[^"]*)"/i', $product->description, $mVid)) {
+                $videoUrl = $mVid[1];
+            }
+        }
+
+        if ($videoUrl === '') {
+            $this->session->setFlash('error', 'Este produto não possui arquivo de vídeo cadastrado pelo fornecedor.');
+            return Response::redirect($baseUrl . '/admin/dropship');
+        }
+
+        if (str_starts_with($videoUrl, '//')) {
+            $videoUrl = 'https:' . $videoUrl;
+        }
+
+        $cleanSlug = preg_replace('/[^a-zA-Z0-9_-]/', '-', $product->slug ?: 'produto') ?: 'video';
+        $filename = "{$cleanSlug}-video.mp4";
+
+        if (!headers_sent()) {
+            header('Content-Type: video/mp4');
+            header('Content-Disposition: attachment; filename="' . $filename . '"');
+            header('Cache-Control: public, must-revalidate, max-age=0');
+            header('Pragma: public');
+        }
+
+        // Streaming direto do vídeo via cURL sem estourar memória do PHP
+        $ch = curl_init($videoUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($curl, $data) {
+            echo $data;
+            if (ob_get_level() > 0) {
+                @ob_flush();
+            }
+            flush();
+            return strlen($data);
+        });
+        curl_exec($ch);
+        curl_close($ch);
+        exit;
+    }
+
     public function settings(Request $request): ResponseInterface
     {
         $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';

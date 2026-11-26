@@ -12,11 +12,13 @@ use DomainSystem\Plugins\domain_drop\Contracts\CurrencyConverterInterface;
 use DomainSystem\Plugins\domain_drop\Contracts\DropshipCatalogRepositoryInterface;
 use DomainSystem\Plugins\domain_drop\Contracts\ProductLinkScraperInterface;
 use DomainSystem\Plugins\domain_drop\Contracts\ProductMiningServiceInterface;
+use DomainSystem\Plugins\domain_drop\Contracts\WarehouseOriginResolverInterface;
 use DomainSystem\Plugins\domain_drop\DTO\DropshipProductDto;
 use DomainSystem\Plugins\domain_drop\DTO\ScrapedProductDto;
 use DomainSystem\Plugins\domain_drop\Services\CategoryTaxonomyService;
 use DomainSystem\Plugins\domain_drop\Services\CuratedCatalogProvider;
 use DomainSystem\Plugins\domain_drop\Services\Validation\MiningValidationHub;
+use DomainSystem\Plugins\domain_drop\Services\WarehouseOriginResolver;
 use RuntimeException;
 use Throwable;
 
@@ -44,6 +46,7 @@ class ProductMiningService implements ProductMiningServiceInterface
     private ?\DomainSystem\Plugins\domain_drop\Contracts\DemandMetricsRepositoryInterface $demandMetricsRepo;
     private CuratedCatalogProviderInterface $catalogProvider;
     private MiningValidationHub $validationHub;
+    private WarehouseOriginResolverInterface $originResolver;
 
     public function __construct(
         private readonly AliExpressApiClientInterface $apiClient,
@@ -55,7 +58,8 @@ class ProductMiningService implements ProductMiningServiceInterface
         ?\DomainSystem\Plugins\domain_drop\Contracts\DemandMetricsRepositoryInterface $demandMetricsRepo = null,
         ?CategoryTaxonomyInterface $taxonomy = null,
         ?CuratedCatalogProviderInterface $catalogProvider = null,
-        ?MiningValidationHub $validationHub = null
+        ?MiningValidationHub $validationHub = null,
+        ?WarehouseOriginResolverInterface $originResolver = null
     ) {
         $this->taxonomy = $taxonomy ?? new CategoryTaxonomyService();
         $this->linkScraper = $linkScraper ?? new AliExpressLinkScraperService($this->taxonomy);
@@ -63,6 +67,7 @@ class ProductMiningService implements ProductMiningServiceInterface
         $this->demandMetricsRepo = $demandMetricsRepo;
         $this->catalogProvider = $catalogProvider ?? new CuratedCatalogProvider();
         $this->validationHub = $validationHub ?? new MiningValidationHub();
+        $this->originResolver = $originResolver ?? new WarehouseOriginResolver();
     }
 
     public function getValidationHub(): MiningValidationHub
@@ -372,11 +377,11 @@ class ProductMiningService implements ProductMiningServiceInterface
         $catIds = $this->taxonomy->getAliExpressCategoryIds($canonicalCat);
         $primaryCatId = !empty($catIds) ? (int)$catIds[0] : null;
         $catParam = $primaryCatId ? "&catId={$primaryCatId}" : '';
+        $shipFromParam = ($warehouseOrigin === 'BR') ? '&shipFromCountry=BR' : '';
 
-        // Executa busca global sem parâmetros restritivos de entreposto na URL
-        // (Isso evita que o mecanismo chinês do AliExpress retorne 0 itens ou anúncios de joias)
+        // Executa busca com parâmetro de entreposto oficial (&shipFromCountry=BR) quando solicitado Brasil
         foreach ($termList as $searchTerm) {
-            $searchUrl = "https://pt.aliexpress.com/w/wholesale-" . urlencode($searchTerm) . ".html?country=BR&locale=pt_BR&currency=BRL" . $catParam . "&isrefine=y";
+            $searchUrl = "https://pt.aliexpress.com/w/wholesale-" . urlencode($searchTerm) . ".html?country=BR&locale=pt_BR&currency=BRL" . $catParam . $shipFromParam . "&isrefine=y";
             $fetched = $this->fetchLiveSearchHtml($searchUrl);
             if ($fetched && is_string($fetched) && strlen($fetched) > 1000) {
                 $html = $fetched;
@@ -428,43 +433,35 @@ class ProductMiningService implements ProductMiningServiceInterface
                 ?? ($this->catalogProvider->getCatalog()[$canonicalCat] ?? []);
         }
 
-        // 3. Separação em Memória no Container (Arquitetura Container-First):
-        // Detecta quais itens possuem estoque ou entrega no Brasil (Local Supply)
+        // 3. Separação em Memória no Container (Arquitetura Container-First com 3 Estados: BR, CN, UNKNOWN):
+        // Detecta quais itens possuem estoque físico ou entrega nacional no Brasil (Local Supply / local_flag)
         $brazilItems = [];
         $globalItems = [];
+        $unknownItems = [];
         foreach ($cleanItems as $raw) {
             $rawTitle = trim((string)($raw['title']['displayTitle'] ?? ($raw['title']['title'] ?? ($raw['product_title'] ?? ''))));
-            $isBr = $this->isRawItemShippedFromBrazil($raw, $rawTitle);
-            $raw['_is_brazil'] = $isBr;
-            if ($isBr) {
+            $originCode = $this->originResolver->resolve($raw, $rawTitle);
+            $raw['_origin_code'] = $originCode;
+            $raw['_is_brazil'] = ($originCode === WarehouseOriginResolverInterface::ORIGIN_BR);
+            if ($originCode === WarehouseOriginResolverInterface::ORIGIN_BR) {
                 $brazilItems[] = $raw;
-            } else {
+            } elseif ($originCode === WarehouseOriginResolverInterface::ORIGIN_CN) {
                 $globalItems[] = $raw;
+            } else {
+                $unknownItems[] = $raw;
             }
         }
 
-        // 4. Seleção e Priorização dos Candidatos conforme Entreposto Solicitado
+        // 4. Seleção e Priorização dos Candidatos conforme Entreposto Solicitado (Resolução Claude & ChatGPT)
         $candidateList = [];
         if ($warehouseOrigin === 'BR') {
-            // Apenas Brasil: Prioriza todo o estoque nacional detectado
+            // Apenas Brasil: rigor absoluto, ZERO contaminação de estoque chinês ou de origem não comprovada!
             $candidateList = $brazilItems;
-
-            // Se a busca ao vivo retornou menos itens nacionais que o limite, complementa
-            // DIRETAMENTE com os itens mais vendidos reais da busca ao vivo (DDP Remessa Conforme),
-            // garantindo que TODOS os produtos minerados sejam 100% REAIS com imagens ativas e links válidos!
-            if (count($candidateList) < $limit) {
-                foreach ($globalItems as $globalItem) {
-                    if (count($candidateList) >= $limit) {
-                        break;
-                    }
-                    $candidateList[] = $globalItem;
-                }
-            }
         } elseif ($warehouseOrigin === 'CN') {
             $candidateList = $globalItems;
         } else {
-            // ALL / Global: Brasil sempre no topo da vitrine, seguido pelos importados
-            $candidateList = array_merge($brazilItems, $globalItems);
+            // ALL / Global: Brasil sempre no topo da vitrine, seguido pelos importados China e demais
+            $candidateList = array_merge($brazilItems, $globalItems, $unknownItems);
         }
 
         if (empty($candidateList)) {
@@ -588,18 +585,26 @@ class ProductMiningService implements ProductMiningServiceInterface
                     ? "{$ordersCount} vendidos"
                     : ($ordersCountKnown ? '0 vendidos' : 'vendas não informadas');
 
-                $isItemBr = !empty($raw['_is_brazil']) || $this->isRawItemShippedFromBrazil($raw, $rawTitle);
+                $originCode = (string)($raw['_origin_code'] ?? $this->originResolver->resolve($raw, $rawTitle));
+                $isItemBr = ($originCode === WarehouseOriginResolverInterface::ORIGIN_BR);
+                $isItemCn = ($originCode === WarehouseOriginResolverInterface::ORIGIN_CN);
 
                 $attributes = [
-                    'Origem'            => $isItemBr ? 'Estoque Nacional (Brasil) - Envio em 3 a 7 dias' : 'Entreposto Central AliExpress (China) - Remessa Conforme DDP',
+                    'Origem'            => match ($originCode) {
+                        'BR' => 'Estoque Nacional (Brasil) - Envio em 3 a 7 dias',
+                        'CN' => 'Entreposto Central AliExpress (China) - Remessa Conforme DDP',
+                        default => 'Origem Internacional Certificada com Rastreamento',
+                    },
                     'Categoria'         => $commercialCat,
                     'Garantia'          => '90 dias contra defeitos de fabricação',
-                    'Envio'             => $isItemBr ? 'Envio Nacional Rápido (Correios / Transportadora)' : 'Rastreamento Expresso com Seguro DDP',
+                    'Envio'             => $isItemBr ? 'Envio Nacional Rápido (Correios / Transportadora Nacional)' : 'Rastreamento Expresso com Seguro DDP',
                     'Avaliações'        => "{$rating} estrelas ({$salesLabel})",
                     'Vendas_Informadas' => $ordersCountKnown ? 'sim' : 'nao',
-                    'ship_from'         => $isItemBr ? 'BR' : 'CN',
+                    'ship_from'         => $originCode,
                     'origem_brasil'     => $isItemBr,
                     'entreposto_brasil' => $isItemBr,
+                    'origem_china'      => $isItemCn,
+                    'entreposto_china'  => $isItemCn,
                     'despacho_nacional' => $isItemBr ? 'Estoque no Brasil (Entreposto Nacional)' : null,
                     'video_url'         => $videoUrl,
                     'has_video'         => !empty($videoUrl),
@@ -756,54 +761,9 @@ class ProductMiningService implements ProductMiningServiceInterface
     /**
      * Valida se o produto do AliExpress realmente possui estoque ou vendedor no Brasil.
      */
-    protected function isRawItemShippedFromBrazil(array $raw, string $title): bool
+    public function isRawItemShippedFromBrazil(array $raw, string $title = ''): bool
     {
-        $cleanTitle = mb_strtolower(trim($title), 'UTF-8');
-
-        if (!empty($raw['origem_brasil']) || !empty($raw['entreposto_brasil'])) {
-            return true;
-        }
-
-        $shipFrom = strtoupper((string)($raw['ship_from'] ?? ($raw['delivery']['shippingFrom'] ?? ($raw['send_goods_country_code'] ?? ''))));
-        if (in_array($shipFrom, ['BR', 'BRAZIL', 'BRASIL'], true)) {
-            return true;
-        }
-
-        if (strtoupper((string)($raw['store_country_code'] ?? ($raw['ae_store_info']['store_country_code'] ?? ''))) === 'BR') {
-            return true;
-        }
-
-        if (!empty($raw['tagList']) && is_array($raw['tagList'])) {
-            foreach ($raw['tagList'] as $t) {
-                $tagStr = is_string($t) ? $t : (string)($t['tag'] ?? '');
-                if (stripos($tagStr, 'LOCAL_DELIVERY') !== false || stripos($tagStr, 'BR') !== false || stripos($tagStr, 'DESPACHO_BRASIL') !== false) {
-                    return true;
-                }
-            }
-        }
-
-        if (!empty($raw['sellingPoints']) && is_array($raw['sellingPoints'])) {
-            foreach ($raw['sellingPoints'] as $sp) {
-                $tagText = mb_strtolower(trim((string)($sp['tagContent']['tagText'] ?? '')), 'UTF-8');
-                if (str_contains($tagText, 'brasil') || str_contains($tagText, 'nacional') || str_contains($tagText, 'estoque no brasil') || str_contains($tagText, 'enviado do brasil') || str_contains($tagText, '3 a 7 dias')) {
-                    return true;
-                }
-            }
-        }
-
-        // Título explícito de vendedor local do Brasil (Brás, SP, Nacional)
-        if (str_contains($cleanTitle, 'estoque brasil')
-            || str_contains($cleanTitle, 'envio do brasil')
-            || str_contains($cleanTitle, 'pronta entrega')
-            || str_contains($cleanTitle, 'estoque no brasil')
-            || str_contains($cleanTitle, 'nacional brasil')
-            || str_contains($cleanTitle, 'são paulo')
-            || str_contains($cleanTitle, 'sp brasil')
-        ) {
-            return true;
-        }
-
-        return false;
+        return $this->originResolver->isShippedFromBrazil($raw, $title);
     }
 
     /**
@@ -2508,7 +2468,7 @@ class ProductMiningService implements ProductMiningServiceInterface
         ];
     }
 
-    private function updateConfigField(string $key, mixed $value): void
+    public function updateConfigField(string $key, mixed $value): void
     {
         $file = $this->getConfigFilePath();
         $config = $this->loadConfig();

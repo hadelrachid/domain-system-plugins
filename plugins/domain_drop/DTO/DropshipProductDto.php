@@ -61,6 +61,8 @@ final class DropshipProductDto
             'store_name'    => $storeName,
             'warehouse'     => $isNational ? 'Entreposto Nacional (Brasil)' : 'Centro Internacional',
             'aliexpress_id' => $this->aliexpressId,
+            'is_brazil'     => $isNational,
+            'ship_from'     => $isNational ? 'BR' : 'CN',
         ];
     }
 

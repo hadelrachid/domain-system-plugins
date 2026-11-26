@@ -112,4 +112,13 @@ interface ProductMiningServiceInterface
      * @return array<string, mixed> Relatório estatístico da varredura
      */
     public function runPriceAndStockSync(int $batchLimit = 50): array;
+
+    /**
+     * Atualiza um campo de metadados nas configurações de mineração.
+     *
+     * @param string $key
+     * @param mixed $value
+     * @return void
+     */
+    public function updateConfigField(string $key, mixed $value): void;
 }
