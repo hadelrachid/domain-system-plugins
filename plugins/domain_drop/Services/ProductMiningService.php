@@ -449,33 +449,9 @@ class ProductMiningService implements ProductMiningServiceInterface
             // Apenas Brasil: Prioriza todo o estoque nacional detectado
             $candidateList = $brazilItems;
 
-            // Se a busca ao vivo retornou menos itens nacionais que o limite, complementa com itens curados nacionais
-            if (count($candidateList) < $limit) {
-                $curatedCat = $this->catalogProvider->getCatalog()[$commercialCat] 
-                    ?? ($this->catalogProvider->getCatalog()[$canonicalCat] ?? []);
-                foreach ($curatedCat as $curated) {
-                    if (count($candidateList) >= $limit) {
-                        break;
-                    }
-                    if (!empty($curated['origem_brasil']) || (!empty($curated['ship_from']) && $curated['ship_from'] === 'BR')) {
-                        $pId = (string)($curated['product_id'] ?? ($curated['productId'] ?? ''));
-                        $alreadyIn = false;
-                        foreach ($candidateList as $c) {
-                            $existingId = (string)($c['productId'] ?? ($c['product_id'] ?? ($c['item_id'] ?? '')));
-                            if ($existingId === $pId) {
-                                $alreadyIn = true;
-                                break;
-                            }
-                        }
-                        if (!$alreadyIn) {
-                            $curated['_is_brazil'] = true;
-                            $candidateList[] = $curated;
-                        }
-                    }
-                }
-            }
-
-            // Se ainda faltar, complementa com os itens mais vendidos da categoria (Remessa Conforme DDP)
+            // Se a busca ao vivo retornou menos itens nacionais que o limite, complementa
+            // DIRETAMENTE com os itens mais vendidos reais da busca ao vivo (DDP Remessa Conforme),
+            // garantindo que TODOS os produtos minerados sejam 100% REAIS com imagens ativas e links válidos!
             if (count($candidateList) < $limit) {
                 foreach ($globalItems as $globalItem) {
                     if (count($candidateList) >= $limit) {
@@ -529,6 +505,36 @@ class ProductMiningService implements ProductMiningServiceInterface
                 }
 
                 $images = [$mainImg];
+                $videoUrl = null;
+
+                // Enriquecimento com Galeria Completa (Full HD) e Vídeo do Produto
+                $itemHtml = $this->fetchItemDetailHtml($aeId);
+                if ($itemHtml !== null) {
+                    // 1. Galeria Completa (imagePathList)
+                    if (preg_match('/"imagePathList":(\[[^\]]+\])/', $itemHtml, $mGallery)) {
+                        $decodedGallery = json_decode($mGallery[1], true);
+                        if (is_array($decodedGallery)) {
+                            foreach ($decodedGallery as $gImg) {
+                                $cleanGImg = $this->cleanImageUrl((string)$gImg);
+                                if (str_starts_with($cleanGImg, '//')) {
+                                    $cleanGImg = 'https:' . $cleanGImg;
+                                }
+                                if ($cleanGImg !== '' && !in_array($cleanGImg, $images, true)) {
+                                    $images[] = $cleanGImg;
+                                }
+                            }
+                        }
+                    }
+                    // 2. Extração de Vídeo do Produto (.mp4 / videoUrl / mediaUrl / videoUid)
+                    if (preg_match('/https?:\/\/[a-zA-Z0-9_\-\.\/]+\.mp4[^\s"\'<>)]*/i', $itemHtml, $mVideo)) {
+                        $videoUrl = $mVideo[0];
+                    } elseif (preg_match('/["\'](?:productVideoUrl|videoUrl|mediaUrl)["\']\s*:\s*["\'](https?:\/\/[^"\']+)["\']/i', $itemHtml, $mVideo2)) {
+                        $videoUrl = $mVideo2[1];
+                    } elseif (preg_match('/["\']videoUid["\']\s*:\s*["\']([^"\']+)["\']/i', $itemHtml, $mVideo3)) {
+                        $videoUrl = "https://video.aliexpress-media.com/play/u/ae_sg_item/{$mVideo3[1]}/p/1/e/6/t/10301/{$mVideo3[1]}.mp4";
+                    }
+                }
+
                 if (!empty($raw['images']) && is_array($raw['images'])) {
                     foreach ($raw['images'] as $imgObj) {
                         $u = is_array($imgObj) ? ($imgObj['imgUrl'] ?? '') : (string)$imgObj;
@@ -595,7 +601,12 @@ class ProductMiningService implements ProductMiningServiceInterface
                     'origem_brasil'     => $isItemBr,
                     'entreposto_brasil' => $isItemBr,
                     'despacho_nacional' => $isItemBr ? 'Estoque no Brasil (Entreposto Nacional)' : null,
+                    'video_url'         => $videoUrl,
+                    'has_video'         => !empty($videoUrl),
                 ];
+                if (!empty($videoUrl)) {
+                    $attributes['Vídeo Demonstrativo'] = 'Disponível em Alta Definição';
+                }
                 if (!empty($raw['sellingPoints']) && is_array($raw['sellingPoints'])) {
                     foreach ($raw['sellingPoints'] as $sp) {
                         $tagText = trim((string)($sp['tagContent']['tagText'] ?? ''));
@@ -607,6 +618,16 @@ class ProductMiningService implements ProductMiningServiceInterface
                 }
 
                 $salesCopy = $this->aiEnricher->generateSalesCopy($polishedTitle, $attributes);
+                if (!empty($videoUrl)) {
+                    $videoEmbed = '
+<div style="margin: 18px 0; border-radius: 8px; overflow: hidden; background: #000; text-align: center; border: 1px solid rgba(255,255,255,0.15);">
+    <video controls playsinline preload="metadata" style="max-width: 100%; max-height: 400px; border-radius: 8px;" poster="' . htmlspecialchars($mainImg, ENT_QUOTES, 'UTF-8') . '">
+        <source src="' . htmlspecialchars($videoUrl, ENT_QUOTES, 'UTF-8') . '" type="video/mp4">
+        Seu navegador não suporta reprodução de vídeo.
+    </video>
+</div>';
+                    $salesCopy = $videoEmbed . $salesCopy;
+                }
 
                 $dto = new DropshipProductDto(
                     aliexpressId: $aeId,
@@ -807,6 +828,37 @@ class ProductMiningService implements ProductMiningServiceInterface
         curl_close($ch);
 
         return is_string($html) && $html !== '' ? $html : null;
+    }
+
+    /**
+     * Executa requisição HTTPS para a página de detalhe público do produto (/item/{id}.html)
+     * para extrair a galeria completa de imagens (imagePathList) e arquivos de vídeo (.mp4).
+     */
+    protected function fetchItemDetailHtml(string $productId): ?string
+    {
+        $cleanId = trim($productId);
+        if ($cleanId === '' || !is_numeric($cleanId)) {
+            return null;
+        }
+
+        $url = "https://pt.aliexpress.com/item/{$cleanId}.html";
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 6);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language: pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Cookie: aep_usuc_f=region=BR&site=bra&b_locale=pt_BR&c_tp=BRL; xman_us_f=x_locale=pt_BR; intl_locale=pt_BR;',
+        ]);
+        $html = curl_exec($ch);
+        curl_close($ch);
+
+        return is_string($html) && strlen($html) > 500 ? $html : null;
     }
 
     public function importSingleProduct(string|int $productIdOrUrl): DropshipProductDto
