@@ -1007,12 +1007,9 @@
                             </div>
 
                             <?php if ($prod->id !== null): ?>
-                                <form action="<?= $baseUrl ?>/admin/dropship/delete/<?= (int)$prod->id ?>" method="POST" onsubmit="return confirm('Deseja realmente remover este produto do catálogo?');" style="margin: 0; display: inline-flex; vertical-align: middle;">
-                                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
-                                    <button type="submit" style="height: 26px; padding: 0 8px; font-size: 11px; font-weight: 600; color: #ef4444; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; box-sizing: border-box; line-height: 1;" title="Excluir produto do catálogo">
-                                        <i class="fas fa-trash-alt"></i> Excluir
-                                    </button>
-                                </form>
+                                <button type="button" onclick="openDeleteProductModal(<?= (int)$prod->id ?>, <?= htmlspecialchars(json_encode($prod->title), ENT_QUOTES, 'UTF-8') ?>)" style="height: 26px; padding: 0 8px; font-size: 11px; font-weight: 600; color: #ef4444; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; box-sizing: border-box; line-height: 1;" title="Excluir produto do catálogo">
+                                    <i class="fas fa-trash-alt"></i> Excluir
+                                </button>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -2272,9 +2269,123 @@
         window.startBatchSync = startBatchSync;
         window.cancelBatchSync = cancelBatchSync;
         window.finishAndReload = finishAndReload;
+        let targetDeleteProductId = null;
+
+        function openDeleteProductModal(id, title) {
+            targetDeleteProductId = id;
+            const titleEl = document.getElementById('modalDeleteProductTitle');
+            if (titleEl) titleEl.textContent = title || ('Produto #' + id);
+            const modal = document.getElementById('modalDeleteProduct');
+            if (modal) modal.style.display = 'flex';
+        }
+
+        function closeDeleteProductModal() {
+            targetDeleteProductId = null;
+            const modal = document.getElementById('modalDeleteProduct');
+            if (modal) modal.style.display = 'none';
+        }
+
+        async function executeProductDelete() {
+            if (!targetDeleteProductId) return;
+            const id = targetDeleteProductId;
+            const btn = document.getElementById('btnConfirmDeleteProduct');
+            const origHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Excluindo...';
+            }
+
+            try {
+                const fd = new FormData();
+                fd.append('csrf_token', dropshipCsrfToken);
+                fd.append('ajax', '1');
+
+                const res = await fetch(baseAdminUrl + '/product/' + id + '/delete', {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                    body: fd
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    closeDeleteProductModal();
+                    const cardEl = document.querySelector(`[data-product-id="${id}"]`) || document.getElementById(`prod-card-${id}`);
+                    if (cardEl) {
+                        cardEl.style.transition = 'all 0.3s ease';
+                        cardEl.style.opacity = '0';
+                        cardEl.style.transform = 'scale(0.95)';
+                        setTimeout(() => cardEl.remove(), 300);
+                    }
+                    if (window.dropshipProductsMedia) {
+                        delete window.dropshipProductsMedia[String(id)];
+                    }
+                    showToastFeedback('🗑️ ' + (data.message || 'Produto excluído com sucesso do catálogo!'), 'success');
+                } else {
+                    showToastFeedback('Falha ao excluir produto: ' + ((data && data.message) ? data.message : 'Erro na requisição'), 'error');
+                }
+            } catch (e) {
+                showToastFeedback('Erro de comunicação: ' + e.message, 'error');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = origHtml;
+                }
+            }
+        }
+
+        function showToastFeedback(message, type) {
+            const toast = document.getElementById('dsToastFeedback');
+            const icon = document.getElementById('dsToastIcon');
+            const msg = document.getElementById('dsToastMsg');
+            if (!toast) return;
+
+            if (icon) icon.textContent = (type === 'error') ? '❌' : ((type === 'warning') ? '⚠️' : '✅');
+            if (msg) msg.textContent = message || '';
+            toast.style.borderColor = (type === 'error') ? 'rgba(239,68,68,0.6)' : ((type === 'warning') ? 'rgba(245,158,11,0.6)' : 'rgba(69,243,255,0.4)');
+            toast.style.display = 'inline-flex';
+
+            clearTimeout(window._dsToastTimeout);
+            window._dsToastTimeout = setTimeout(() => {
+                toast.style.display = 'none';
+            }, 3500);
+        }
+
+        window.openDeleteProductModal = openDeleteProductModal;
+        window.closeDeleteProductModal = closeDeleteProductModal;
+        window.executeProductDelete = executeProductDelete;
+        window.showToastFeedback = showToastFeedback;
         window.downloadCurrentModalVideo = downloadCurrentModalVideo;
         window.downloadCardVideo = downloadCardVideo;
     </script>
+
+    <!-- Modal Profissional de Exclusão Individual de Produto -->
+    <div id="modalDeleteProduct" style="display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(0,0,0,0.82); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 20px;">
+        <div style="background: #111722; border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 12px; width: 100%; max-width: 480px; padding: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.85); animation: dsModalIn 0.2s ease;">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 14px;">
+                <div style="width: 42px; height: 42px; border-radius: 10px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); display: flex; align-items: center; justify-content: center; color: #ef4444; font-size: 18px; flex-shrink: 0;">
+                    <i class="fas fa-trash-alt"></i>
+                </div>
+                <div>
+                    <h3 style="margin: 0; color: #fff; font-size: 16px; font-weight: 700;">Remover Produto do Catálogo</h3>
+                    <p style="margin: 2px 0 0 0; color: #94a3b8; font-size: 12px;">Confirme se deseja desativar e excluir este item da loja.</p>
+                </div>
+            </div>
+            <div id="modalDeleteProductTitle" style="background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #cbd5e1; font-weight: 600; margin-bottom: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="button" onclick="closeDeleteProductModal()" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 8px 16px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;">
+                    Cancelar
+                </button>
+                <button type="button" id="btnConfirmDeleteProduct" onclick="executeProductDelete()" style="background: linear-gradient(135deg, #ef4444, #dc2626); border: none; color: #fff; padding: 8px 20px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 14px rgba(239,68,68,0.35);">
+                    <i class="fas fa-trash-alt"></i> Excluir Produto
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Flutuante Profissional -->
+    <div id="dsToastFeedback" style="display: none; position: fixed; bottom: 24px; right: 24px; z-index: 100000; background: #0f172a; border: 1px solid rgba(69, 243, 255, 0.4); border-radius: 8px; padding: 12px 18px; color: #fff; font-size: 13px; font-weight: 600; box-shadow: 0 10px 30px rgba(0,0,0,0.7); align-items: center; gap: 10px; animation: dsModalIn 0.25s ease;">
+        <span id="dsToastIcon">✅</span>
+        <span id="dsToastMsg">Operação realizada com sucesso!</span>
+    </div>
 
     <!-- Modal Limpar Catálogo -->
     <div id="modalClearCatalog" style="display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(0,0,0,0.85); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 20px;">

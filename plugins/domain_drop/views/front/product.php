@@ -25,6 +25,14 @@ $productExpressPrice = method_exists($product, 'calculateExpressShippingPrice') 
 $productFormattedWeight = method_exists($product, 'getFormattedWeight') ? $product->getFormattedWeight(1) : '200g';
 $eanCode = method_exists($product, 'getEanCode') ? $product->getEanCode() : '';
 
+$productVideoUrl = !empty($product->attributes['video_url']) ? (string)$product->attributes['video_url'] : '';
+if ($productVideoUrl === '' && !empty($product->attributes['product_video_url'])) {
+    $productVideoUrl = (string)$product->attributes['product_video_url'];
+}
+if ($productVideoUrl === '' && !empty($product->description) && preg_match('/<source\s+src="([^"]+\.mp4[^"]*)"/i', $product->description, $mVidP)) {
+    $productVideoUrl = $mVidP[1];
+}
+
 $schemaOffers = [
     '@type'           => 'Offer',
     'url'             => (str_starts_with($baseUrl, 'http') ? $baseUrl : 'https://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $baseUrl) . '/produto/' . $product->slug,
@@ -84,23 +92,39 @@ if ($eanCode !== '') {
         
         <!-- Gallery Column -->
         <div>
-            <!-- Main Image Stage with Zoom trigger -->
-            <div id="main-product-stage" onclick="openVisualBookLightbox(currentActiveImageIndex)" class="main-stage-box" style="background: #0c0f12; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; overflow: hidden; height: 420px; display: flex; align-items: center; justify-content: center; margin-bottom: 14px; position: relative; cursor: zoom-in; box-shadow: 0 10px 30px rgba(0,0,0,0.4);">
+            <!-- Main Image Stage with Zoom trigger and Integrated Video Player -->
+            <div id="main-product-stage" onclick="handleStageClick(event)" class="main-stage-box" style="background: #0c0f12; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; overflow: hidden; height: 420px; display: flex; align-items: center; justify-content: center; margin-bottom: 14px; position: relative; cursor: zoom-in; box-shadow: 0 10px 30px rgba(0,0,0,0.4);">
                 <?php if (!empty($product->mainImageUrl)): ?>
                     <img id="main-product-img" src="<?= htmlspecialchars($product->mainImageUrl) ?>" alt="<?= htmlspecialchars($product->title) ?>" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1526738549149-8e07eca6c147?w=600&auto=format&fit=crop&q=80';" style="max-width: 100%; max-height: 100%; object-fit: contain; transition: transform 0.25s ease;">
-                    <div style="position: absolute; bottom: 12px; right: 12px; background: rgba(11,15,23,0.85); color: #F0D060; border: 1px solid rgba(212,175,55,0.4); padding: 5px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; display: flex; align-items: center; gap: 5px; pointer-events: none; backdrop-filter: blur(4px);">
+                    <div id="main-stage-zoom-badge" style="position: absolute; bottom: 12px; right: 12px; background: rgba(11,15,23,0.85); color: #F0D060; border: 1px solid rgba(212,175,55,0.4); padding: 5px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; display: flex; align-items: center; gap: 5px; pointer-events: none; backdrop-filter: blur(4px);">
                         <span>🔍</span> <span>Toque para Ampliar</span>
                     </div>
                 <?php else: ?>
-                    <div style="font-size: 50px;">📦</div>
+                    <div id="main-product-fallback" style="font-size: 50px;">📦</div>
+                <?php endif; ?>
+
+                <?php if (!empty($productVideoUrl)): ?>
+                    <video id="main-product-video" controls playsinline preload="metadata" style="display: none; width: 100%; height: 100%; max-height: 420px; background: #000; object-fit: contain;" poster="<?= htmlspecialchars($product->mainImageUrl ?? '') ?>">
+                        <source src="<?= htmlspecialchars($productVideoUrl) ?>" type="video/mp4">
+                        Seu navegador não suporta reprodução de vídeo.
+                    </video>
+                    <button type="button" id="btnPlayMainStageVideo" onclick="selectProductVideo('<?= htmlspecialchars($productVideoUrl, ENT_QUOTES) ?>', event)" style="position: absolute; top: 14px; left: 14px; background: linear-gradient(135deg, #9333ea 0%, #7c3aed 100%); color: #fff; border: 1px solid rgba(168,85,247,0.6); padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; box-shadow: 0 4px 15px rgba(147,51,234,0.4); z-index: 10; transition: transform 0.2s ease;">
+                        <span>▶</span> <span>Assistir Vídeo</span>
+                    </button>
                 <?php endif; ?>
             </div>
 
-            <!-- Horizontal Thumbnails Strip -->
-            <?php if (count($allImages) > 1): ?>
+            <!-- Horizontal Thumbnails Strip (Fotos + Vídeo) -->
+            <?php if (count($allImages) > 1 || !empty($productVideoUrl)): ?>
                 <div style="display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px;" class="custom-scroll">
+                    <?php if (!empty($productVideoUrl)): ?>
+                        <div id="thumb-video-item" class="product-thumb-item" onclick="selectProductVideo('<?= htmlspecialchars($productVideoUrl, ENT_QUOTES) ?>', event)" style="width: 72px; height: 72px; background: #180e28; border: 2px solid rgba(168, 85, 247, 0.7); border-radius: 8px; overflow: hidden; cursor: pointer; flex-shrink: 0; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; box-shadow: 0 2px 8px rgba(147,51,234,0.3); transition: all 0.2s ease;" title="Assistir Vídeo do Produto">
+                            <span style="font-size: 22px; color: #c084fc; line-height: 1;">▶</span>
+                            <span style="font-size: 10px; font-weight: 800; color: #e9d5ff; text-transform: uppercase; letter-spacing: 0.5px;">Vídeo</span>
+                        </div>
+                    <?php endif; ?>
                     <?php foreach ($allImages as $idx => $thumb): ?>
-                        <div class="product-thumb-item <?= $idx === 0 ? 'active' : '' ?>" data-index="<?= $idx ?>" onclick="selectProductImage(<?= $idx ?>, '<?= htmlspecialchars($thumb, ENT_QUOTES) ?>')" style="width: 72px; height: 72px; background: #0c0f12; border: 2px solid <?= $idx === 0 ? '#D4AF37' : 'rgba(255,255,255,0.12)' ?>; border-radius: 8px; overflow: hidden; cursor: pointer; flex-shrink: 0; transition: border-color 0.2s ease, transform 0.2s ease;">
+                        <div class="product-thumb-item photo-thumb-item <?= ($idx === 0) ? 'active' : '' ?>" data-index="<?= $idx ?>" onclick="selectProductImage(<?= $idx ?>, '<?= htmlspecialchars($thumb, ENT_QUOTES) ?>')" style="width: 72px; height: 72px; background: #0c0f12; border: 2px solid <?= ($idx === 0) ? '#D4AF37' : 'rgba(255,255,255,0.12)' ?>; border-radius: 8px; overflow: hidden; cursor: pointer; flex-shrink: 0; transition: border-color 0.2s ease, transform 0.2s ease;">
                             <img src="<?= htmlspecialchars($thumb) ?>" style="width: 100%; height: 100%; object-fit: cover;">
                         </div>
                     <?php endforeach; ?>
@@ -632,18 +656,83 @@ if ($eanCode !== '') {
 <script>
 var productGalleryImages = <?= json_encode($allImages, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
 var currentActiveImageIndex = 0;
+var isVideoActive = false;
+
+function handleStageClick(event) {
+    if (isVideoActive) {
+        return;
+    }
+    openVisualBookLightbox(currentActiveImageIndex);
+}
+
+function selectProductVideo(videoUrl, event) {
+    if (event) {
+        event.stopPropagation();
+    }
+    isVideoActive = true;
+    var mainImg = document.getElementById('main-product-img');
+    var mainVideo = document.getElementById('main-product-video');
+    var zoomBadge = document.getElementById('main-stage-zoom-badge');
+    var playBtn = document.getElementById('btnPlayMainStageVideo');
+    var stage = document.getElementById('main-product-stage');
+
+    if (stage) stage.style.cursor = 'default';
+    if (mainImg) mainImg.style.display = 'none';
+    if (zoomBadge) zoomBadge.style.display = 'none';
+    if (playBtn) playBtn.style.display = 'none';
+    if (mainVideo) {
+        mainVideo.style.display = 'block';
+        if (!mainVideo.src || mainVideo.src === '' || mainVideo.src === window.location.href) {
+            mainVideo.src = videoUrl;
+        }
+        mainVideo.play().catch(function() {});
+    }
+
+    document.querySelectorAll('.photo-thumb-item').forEach(function(el) {
+        el.classList.remove('active');
+        el.style.borderColor = 'rgba(255,255,255,0.12)';
+    });
+    var videoThumb = document.getElementById('thumb-video-item');
+    if (videoThumb) {
+        videoThumb.classList.add('active');
+        videoThumb.style.borderColor = '#c084fc';
+        videoThumb.style.boxShadow = '0 0 12px rgba(168,85,247,0.7)';
+    }
+}
 
 function selectProductImage(index, url) {
+    isVideoActive = false;
     currentActiveImageIndex = index;
     var mainImg = document.getElementById('main-product-img');
+    var mainVideo = document.getElementById('main-product-video');
+    var zoomBadge = document.getElementById('main-stage-zoom-badge');
+    var playBtn = document.getElementById('btnPlayMainStageVideo');
+    var stage = document.getElementById('main-product-stage');
+
+    if (stage) stage.style.cursor = 'zoom-in';
+    if (mainVideo) {
+        mainVideo.pause();
+        mainVideo.style.display = 'none';
+    }
+    if (zoomBadge) zoomBadge.style.display = 'flex';
+    if (playBtn) playBtn.style.display = 'inline-flex';
     if (mainImg) {
+        mainImg.style.display = 'block';
         mainImg.style.opacity = '0.3';
         setTimeout(function() {
             mainImg.src = url;
             mainImg.style.opacity = '1';
         }, 120);
     }
-    document.querySelectorAll('.product-thumb-item').forEach(function(el, i) {
+
+    var videoThumb = document.getElementById('thumb-video-item');
+    if (videoThumb) {
+        videoThumb.classList.remove('active');
+        videoThumb.style.borderColor = 'rgba(168, 85, 247, 0.7)';
+        videoThumb.style.boxShadow = 'none';
+    }
+
+    document.querySelectorAll('.photo-thumb-item').forEach(function(el, i) {
         if (i === index) {
             el.classList.add('active');
             el.style.borderColor = '#D4AF37';
