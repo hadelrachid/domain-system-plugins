@@ -359,10 +359,11 @@
                         try {
                             return JSON.parse(text);
                         } catch (e) {
+                            var errMsg = 'Resposta inválida do servidor (HTTP ' + res.status + ')';
                             if (text.indexOf('<html') !== -1 || text.indexOf('<!DOCTYPE') !== -1) {
-                                return { success: true, mined_count: parseInt(itemsPerCategory, 10) || 5 };
+                                errMsg = 'O servidor retornou uma página HTML em vez de JSON (possível erro de sessão ou timeout).';
                             }
-                            throw e;
+                            throw new Error(errMsg);
                         }
                     });
                 })
@@ -510,16 +511,11 @@
                         try {
                             return JSON.parse(text);
                         } catch (e) {
+                            var errMsg = 'Resposta inválida do servidor (HTTP ' + res.status + ')';
                             if (text.indexOf('<html') !== -1 || text.indexOf('<!DOCTYPE') !== -1) {
-                                return {
-                                    success: true,
-                                    count: limit,
-                                    mined_count: limit,
-                                    category: category,
-                                    message: 'Mineração concluída com sucesso!'
-                                };
+                                errMsg = 'O servidor retornou uma página HTML em vez de JSON (possível erro de sessão ou timeout).';
                             }
-                            throw e;
+                            throw new Error(errMsg);
                         }
                     });
                 })
@@ -1833,6 +1829,7 @@
         let batchSyncCancelled = false;
         let batchSyncedCount = 0;
         let batchSkippedCount = 0;
+        let batchPurgedCount = 0;
         let batchFailedCount = 0;
 
         function escapeBatchHtml(str) {
@@ -1877,11 +1874,6 @@
             const modal = document.getElementById('batchSyncModal');
             if (modal) modal.style.display = 'none';
         }
-
-        let batchSyncedCount = 0;
-        let batchSkippedCount = 0;
-        let batchPurgedCount = 0;
-        let batchFailedCount = 0;
 
         function resetBatchSyncUI() {
             batchSyncRunning = false;

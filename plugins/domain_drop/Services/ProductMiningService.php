@@ -601,13 +601,11 @@ class ProductMiningService implements ProductMiningServiceInterface
 
                 $attributes = [
                     'Origem'            => match ($originCode) {
-                        'BR' => 'Estoque Nacional (Brasil) - Envio em 3 a 7 dias',
-                        'CN' => 'Entreposto Central AliExpress (China) - Remessa Conforme DDP',
-                        default => 'Origem Internacional Certificada com Rastreamento',
+                        'BR' => 'Despacho Nacional (Brasil)',
+                        'CN' => 'Despacho Internacional (China)',
+                        default => 'Origem a Confirmar no Fornecedor',
                     },
                     'Categoria'         => $commercialCat,
-                    'Garantia'          => '90 dias contra defeitos de fabricação',
-                    'Envio'             => $isItemBr ? 'Envio Nacional Rápido (Correios / Transportadora Nacional)' : 'Rastreamento Expresso com Seguro DDP',
                     'Avaliações'        => "{$rating} estrelas ({$salesLabel})",
                     'Vendas_Informadas' => $ordersCountKnown ? 'sim' : 'nao',
                     'ship_from'         => $originCode,

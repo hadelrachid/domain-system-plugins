@@ -62,18 +62,6 @@ class WarehouseOriginResolver implements WarehouseOriginResolverInterface
                 if ($source === 'local_flag' || $tagId === 'local_flag') {
                     return self::ORIGIN_BR;
                 }
-
-                $tagText = mb_strtolower(trim((string)($sp['tagContent']['tagText'] ?? '')), 'UTF-8');
-                if ($tagText !== '') {
-                    if (str_contains($tagText, 'brasil') 
-                        || str_contains($tagText, 'nacional') 
-                        || str_contains($tagText, 'estoque no brasil') 
-                        || str_contains($tagText, 'enviado do brasil') 
-                        || str_contains($tagText, '3 a 7 dias')
-                    ) {
-                        return self::ORIGIN_BR;
-                    }
-                }
             }
         }
 
@@ -98,34 +86,7 @@ class WarehouseOriginResolver implements WarehouseOriginResolverInterface
             }
         }
 
-        // 6. Verificação no título (se fornecido)
-        $rawTitleCandidate = $title;
-        if (empty($rawTitleCandidate)) {
-            if (isset($rawItem['title'])) {
-                if (is_array($rawItem['title'])) {
-                    $rawTitleCandidate = (string)($rawItem['title']['displayTitle'] ?? ($rawItem['title']['title'] ?? ''));
-                } else {
-                    $rawTitleCandidate = (string)$rawItem['title'];
-                }
-            } elseif (isset($rawItem['product_title'])) {
-                $rawTitleCandidate = (string)$rawItem['product_title'];
-            }
-        }
-        $cleanTitle = mb_strtolower(trim((string)$rawTitleCandidate), 'UTF-8');
-        if ($cleanTitle !== '') {
-            if (str_contains($cleanTitle, 'estoque brasil')
-                || str_contains($cleanTitle, 'estoque no brasil')
-                || str_contains($cleanTitle, 'envio do brasil')
-                || str_contains($cleanTitle, 'pronta entrega')
-                || str_contains($cleanTitle, 'nacional brasil')
-                || str_contains($cleanTitle, 'armazem brasil')
-                || str_contains($cleanTitle, 'armazém brasil')
-            ) {
-                return self::ORIGIN_BR;
-            }
-        }
-
-        // 7. Confirmação de Entreposto Central China (Cross-Border)
+        // 6. Confirmação de Entreposto Central China (Cross-Border)
         if (in_array($shipFrom, ['CN', 'CHINA'], true) 
             || !empty($rawItem['origem_china']) 
             || !empty($rawItem['remessa_conforme'])

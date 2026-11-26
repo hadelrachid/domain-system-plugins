@@ -66,14 +66,10 @@ class ContentIntegrityGuard implements ProductValidationGuardInterface
             ?? ($firstImgFromArray ?? '')))))
         ));
 
-        if ($mainImg === '' && (!empty($rawData['product_id']) || !empty($rawData['itemId']))) {
-            $mainImg = 'https://ae-pic-a1.aliexpress-media.com/kf/default_' . substr(md5($id), 0, 8) . '.jpg';
-        }
-
         if ($mainImg === '') {
             return ValidationResult::fail(
                 $this->getName(),
-                'URL da imagem principal do produto não foi informada.',
+                'URL da imagem principal do produto não foi informada ou está ausente.',
                 ['main_image_url' => '']
             );
         }
