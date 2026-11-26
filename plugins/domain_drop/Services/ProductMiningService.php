@@ -341,7 +341,7 @@ class ProductMiningService implements ProductMiningServiceInterface
             'Ferramentas & Utilidades'          => ['alicate desencapador fios multifuncional brasil', 'trena laser digital medidor fita metrica brasil', 'parafusadeira eletrica recarregavel sem fio brasil', 'canivete tatico multifuncional sobrevivencia brasil', 'chave universal precisao multifuncoes bits brasil', 'lanterna tatica led potente militar recarregavel brasil'],
             'Pet Shop & Pets Virais'            => ['coleira led luminosa cachorro recarregavel usb brasil', 'bebedouro fonte automatica pet gato cachorro brasil', 'escova a vapor pet removedora pelos gatos caes brasil', 'brinquedo interativo inteligente pet gato brasil', 'cama nuvem calmante pelucia cachorro pet brasil', 'cortador unhas pet com led iluminador brasil'],
             'Acessórios para Veículos'          => ['suporte celular veicular carregador inducao magsafe brasil', 'aspirador automotivo portatil potente sem fio brasil', 'transmissor bluetooth veicular fm usb aux brasil', 'compressor ar portatil eletrico pneus carro brasil', 'fita led interna veicular sensor som rgb brasil', 'camera veicular dvr gravador painel brasil'],
-            'Moda, Roupas & Vestuário'          => ['vestido feminino casual verao elegante brasil', 'camisa social masculina manga longa linho brasil', 'camiseta basica 100 algodao unissex slim brasil', 'jaqueta jeans masculina feminina oversize casual brasil', 'calca jeans feminina masculina skinny stretch brasil', 'calca jogger streetwear cargo bolsos unissex brasil', 'jaqueta corta vento impermeavel capuz ciclismo brasil', 'conjunto moletom masculino feminino agasalho inverno brasil', 'blusa feminina casual verao elegante brasil', 'tenis esportivo corrida caminhada respiravel leve brasil', 'bolsa feminina transversal tiracolo couro vintage brasil', 'mochila executiva impermeavel antifurto usb brasil'],
+            'Moda, Roupas & Vestuário'          => ['macacao feminino longo casual verao brasil', 'calca legging feminina cintura alta suplex brasil', 'vestido feminino casual verao elegante brasil', 'camisa social masculina manga longa linho brasil', 'conjunto feminino cropped e calca brasil', 'camiseta basica 100 algodao unissex slim brasil', 'jaqueta jeans masculina feminina oversize casual brasil', 'calca jeans feminina masculina skinny stretch brasil', 'calca jogger streetwear cargo bolsos unissex brasil', 'jaqueta corta vento impermeavel capuz ciclismo brasil', 'conjunto moletom masculino feminino agasalho inverno brasil', 'blusa feminina casual verao elegante brasil', 'tenis esportivo corrida caminhada respiravel leve brasil', 'bolsa feminina transversal tiracolo couro vintage brasil', 'mochila executiva impermeavel antifurto usb brasil'],
             'Moda Íntima, Lingeries & Pijamas'  => ['conjunto lingerie renda floral sutiã calcinha luxo brasil', 'sutia sem costura sustentacao push up confortavel brasil', 'pijama feminino cetim seda camisola renda brasil', 'kit cuecas boxer modal sem costura respiravel brasil', 'meia calca termica translucida forrada peluciada brasil', 'kit calcinhas sem costura invisivel algodao brasil', 'espartilho modelador cinta feminina compressao brasil'],
             'Sex Shop & Produtos Adultos (+18)' => ['vibrador liquido estimulador feminino discreto brasil', 'massageador varinha magica corporal silencioso brasil', 'estimulador sucção clitoriana silicone recarregavel brasil', 'oleo corporal beijavel aromaterapia massagem brasil'],
         ];
@@ -356,6 +356,16 @@ class ProductMiningService implements ProductMiningServiceInterface
         $searchTerms['Roupas, Bolsas & Calçados']      = $searchTerms['Moda, Roupas & Vestuário'];
         $searchTerms['Roupa Íntima & Pijamas']         = $searchTerms['Moda Íntima, Lingeries & Pijamas'];
         $searchTerms['Novidades & Uso Especial']       = $searchTerms['Sex Shop & Produtos Adultos (+18)'];
+        $searchTerms['Moda Fitness, Leggings & Academia'] = [
+            'calca legging feminina cintura alta suplex brasil',
+            'macacao fitness feminino academia brasil',
+            'conjunto academia feminino fitness brasil',
+            'short legging suplex academia brasil',
+            'top fitness sustentacao academia brasil',
+            'macaquinho fitness corrida feminino brasil',
+            'calca legging sem costura empina bumbum brasil',
+            'body feminino macacao canelado brasil'
+        ];
 
         $termList = $searchTerms[$commercialCat] ?? ($searchTerms[$canonicalCat] ?? null);
         if (empty($termList)) {
@@ -369,9 +379,9 @@ class ProductMiningService implements ProductMiningServiceInterface
 
         $shipParam = '';
         if ($warehouseOrigin === 'BR') {
-            $shipParam = '&shipFrom=BR';
+            $shipParam = '&shipFrom=BR&selectedShippedFrom=BR&shippedFrom=BR';
         } elseif ($warehouseOrigin === 'CN') {
-            $shipParam = '&shipFrom=CN';
+            $shipParam = '&shipFrom=CN&selectedShippedFrom=CN';
         }
 
         $catIds = $this->taxonomy->getAliExpressCategoryIds($canonicalCat);
@@ -441,6 +451,20 @@ class ProductMiningService implements ProductMiningServiceInterface
                     continue;
                 }
 
+                // 1. Guarda Semântica: Elimina produtos patrocinados intrusos (ex: pulseiras/joias quando busca lingerie)
+                if (!$this->isItemRelevantToCategory($rawTitle, $commercialCat)) {
+                    continue;
+                }
+
+                // 2. Guarda Estrita de Entreposto quando 'Apenas Brasil' for selecionado
+                $isItemBr = $this->isRawItemShippedFromBrazil($raw, $rawTitle);
+                if ($warehouseOrigin === 'BR' && !$isItemBr) {
+                    continue;
+                }
+                if ($warehouseOrigin === 'CN' && $isItemBr) {
+                    continue;
+                }
+
                 $rawMainImg = (string)($raw['image']['imgUrl'] ?? '');
                 if ($rawMainImg === '') {
                     continue;
@@ -505,13 +529,26 @@ class ProductMiningService implements ProductMiningServiceInterface
                     ? "{$ordersCount} vendidos"
                     : ($ordersCountKnown ? '0 vendidos' : 'vendas não informadas');
 
+                $isItemBr = ($warehouseOrigin === 'BR')
+                    || !empty($raw['origem_brasil'])
+                    || (!empty($raw['delivery']['shippingFrom']) && in_array(strtolower((string)$raw['delivery']['shippingFrom']), ['br', 'brazil', 'brasil'], true))
+                    || (!empty($raw['ship_from']) && in_array(strtoupper((string)$raw['ship_from']), ['BR', 'BRAZIL', 'BRASIL'], true))
+                    || (!empty($raw['send_goods_country_code']) && strtoupper((string)$raw['send_goods_country_code']) === 'BR')
+                    || str_contains(mb_strtolower($rawTitle, 'UTF-8'), 'brasil')
+                    || str_contains(mb_strtolower($rawTitle, 'UTF-8'), 'nacional')
+                    || str_contains(mb_strtolower($rawTitle, 'UTF-8'), 'pronta entrega');
+
                 $attributes = [
-                    'Origem'            => 'Estoque Brasil / Remessa Conforme',
+                    'Origem'            => $isItemBr ? 'Estoque Nacional (Brasil) - Envio em 3 a 7 dias' : 'Entreposto Central AliExpress (China)',
                     'Categoria'         => $commercialCat,
                     'Garantia'          => '90 dias contra defeitos de fabricação',
-                    'Envio'             => 'Rastreamento Expresso com Seguro',
+                    'Envio'             => $isItemBr ? 'Envio Nacional Rápido (Correios / Transportadora)' : 'Rastreamento Expresso com Seguro DDP',
                     'Avaliações'        => "{$rating} estrelas ({$salesLabel})",
                     'Vendas_Informadas' => $ordersCountKnown ? 'sim' : 'nao',
+                    'ship_from'         => $isItemBr ? 'BR' : 'CN',
+                    'origem_brasil'     => $isItemBr,
+                    'entreposto_brasil' => $isItemBr,
+                    'despacho_nacional' => $isItemBr ? 'Estoque no Brasil (Entreposto Nacional)' : null,
                 ];
                 if (!empty($raw['sellingPoints']) && is_array($raw['sellingPoints'])) {
                     foreach ($raw['sellingPoints'] as $sp) {
@@ -562,6 +599,112 @@ class ProductMiningService implements ProductMiningServiceInterface
         }
 
         return $mined;
+    }
+
+    /**
+     * Valida relevância semântica do título do produto para eliminar itens patrocinados intrusos (ex: joias em moda íntima).
+     */
+    protected function isItemRelevantToCategory(string $title, string $category): bool
+    {
+        $clean = mb_strtolower(trim($title), 'UTF-8');
+        $commercialCat = self::toCommercialCategory($category);
+
+        if ($commercialCat === 'Moda Íntima, Lingeries & Pijamas' || str_contains($commercialCat, 'Íntima')) {
+            $forbidden = ['pulseira', 'brinco', 'colar', 'anel', 'jóia', 'joia', 'bijuteria', 'relogio', 'smartwatch', 'fone', 'headphone', 'parafusadeira', 'alicate', 'ferramenta', 'lampada', 'cabo usb', 'carregador', 'drone', 'projetor', 'chaveiro', 'suporte veicular'];
+            foreach ($forbidden as $bad) {
+                if (str_contains($clean, $bad)) {
+                    return false;
+                }
+            }
+            $allowed = ['lingerie', 'sutia', 'sutiã', 'calcinha', 'pijama', 'cueca', 'boxer', 'renda', 'cetim', 'camisola', 'baby doll', 'espartilho', 'corset', 'meia', 'top', 'cinta', 'soutien', 'bojo', 'robe', 'short doll', 'tangas', 'fio dental', 'modal', 'sem costura'];
+            foreach ($allowed as $good) {
+                if (str_contains($clean, $good)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        if ($commercialCat === 'Moda, Roupas & Vestuário' || $commercialCat === 'Moda Fitness, Leggings & Academia') {
+            $forbidden = ['fone', 'smartwatch', 'relogio', 'parafusadeira', 'alicate', 'ferramenta', 'lampada', 'pulseira', 'brinco', 'colar', 'jóia', 'joia'];
+            foreach ($forbidden as $bad) {
+                if (str_contains($clean, $bad)) {
+                    return false;
+                }
+            }
+            $allowed = ['vestido', 'camisa', 'camiseta', 'calca', 'calça', 'jaqueta', 'casaco', 'moletom', 'macacao', 'macacão', 'legging', 'jeans', 'short', 'saia', 'cropped', 'blusa', 'suplex', 'fitness', 'academia', 'agasalho', 'tenis', 'tênis', 'sapato', 'bolsa', 'mochila', 'macaquinho', 'suéter'];
+            foreach ($allowed as $good) {
+                if (str_contains($clean, $good)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        if ($commercialCat === 'Eletrônicos & Gadget') {
+            $forbidden = ['calcinha', 'sutiã', 'lingerie', 'vestido', 'saia', 'batom', 'maquiagem'];
+            foreach ($forbidden as $bad) {
+                if (str_contains($clean, $bad)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        return true;
+    }
+
+    /**
+     * Valida se o produto do AliExpress realmente possui estoque ou vendedor no Brasil.
+     */
+    protected function isRawItemShippedFromBrazil(array $raw, string $title): bool
+    {
+        $cleanTitle = mb_strtolower(trim($title), 'UTF-8');
+
+        if (!empty($raw['origem_brasil']) || !empty($raw['entreposto_brasil'])) {
+            return true;
+        }
+
+        $shipFrom = strtoupper((string)($raw['ship_from'] ?? ($raw['delivery']['shippingFrom'] ?? ($raw['send_goods_country_code'] ?? ''))));
+        if (in_array($shipFrom, ['BR', 'BRAZIL', 'BRASIL'], true)) {
+            return true;
+        }
+
+        if (strtoupper((string)($raw['store_country_code'] ?? ($raw['ae_store_info']['store_country_code'] ?? ''))) === 'BR') {
+            return true;
+        }
+
+        if (!empty($raw['tagList']) && is_array($raw['tagList'])) {
+            foreach ($raw['tagList'] as $t) {
+                $tagStr = is_string($t) ? $t : (string)($t['tag'] ?? '');
+                if (stripos($tagStr, 'LOCAL_DELIVERY') !== false || stripos($tagStr, 'BR') !== false || stripos($tagStr, 'DESPACHO_BRASIL') !== false) {
+                    return true;
+                }
+            }
+        }
+
+        if (!empty($raw['sellingPoints']) && is_array($raw['sellingPoints'])) {
+            foreach ($raw['sellingPoints'] as $sp) {
+                $tagText = mb_strtolower(trim((string)($sp['tagContent']['tagText'] ?? '')), 'UTF-8');
+                if (str_contains($tagText, 'brasil') || str_contains($tagText, 'nacional') || str_contains($tagText, 'estoque no brasil') || str_contains($tagText, 'enviado do brasil') || str_contains($tagText, '3 a 7 dias')) {
+                    return true;
+                }
+            }
+        }
+
+        // Título explícito de vendedor local do Brasil (Brás, SP, Nacional)
+        if (str_contains($cleanTitle, 'estoque brasil')
+            || str_contains($cleanTitle, 'envio do brasil')
+            || str_contains($cleanTitle, 'pronta entrega')
+            || str_contains($cleanTitle, 'estoque no brasil')
+            || str_contains($cleanTitle, 'nacional brasil')
+            || str_contains($cleanTitle, 'são paulo')
+            || str_contains($cleanTitle, 'sp brasil')
+        ) {
+            return true;
+        }
+
+        return false;
     }
 
     /**

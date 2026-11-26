@@ -199,7 +199,7 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
         }
 
         // 3. Moda, Roupas & Vestuário
-        if (str_contains($clean, 'roupa') || str_contains($clean, 'vestu') || str_contains($clean, 'calcado') || str_contains($clean, 'calçado') || str_contains($clean, 'casaco') || str_contains($clean, 'jaqueta') || str_contains($clean, 'calca') || str_contains($clean, 'calça') || str_contains($clean, 'camisa') || str_contains($clean, 'camiseta') || str_contains($clean, 'vestido') || str_contains($clean, 'blusa') || str_contains($clean, 'tenis') || str_contains($clean, 'tênis') || str_contains($clean, 'bolsa') || str_contains($clean, 'mochila') || str_contains($clean, 'carteira') || str_contains($clean, 'moda')) {
+        if (str_contains($clean, 'roupa') || str_contains($clean, 'vestu') || str_contains($clean, 'calcado') || str_contains($clean, 'calçado') || str_contains($clean, 'casaco') || str_contains($clean, 'jaqueta') || str_contains($clean, 'calca') || str_contains($clean, 'calça') || str_contains($clean, 'camisa') || str_contains($clean, 'camiseta') || str_contains($clean, 'vestido') || str_contains($clean, 'blusa') || str_contains($clean, 'tenis') || str_contains($clean, 'tênis') || str_contains($clean, 'bolsa') || str_contains($clean, 'mochila') || str_contains($clean, 'carteira') || str_contains($clean, 'legging') || str_contains($clean, 'macacao') || str_contains($clean, 'macacão') || str_contains($clean, 'fitness') || str_contains($clean, 'academia') || str_contains($clean, 'moda')) {
             return 'Moda, Roupas & Vestuário';
         }
 
@@ -257,7 +257,7 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
         }
 
         // 3. Roupas, Bolsas & Calçados (IDs 200000345, 200000343, 1524, 322)
-        if (str_contains($clean, 'roupa') || str_contains($clean, 'vestuario') || str_contains($clean, 'vestuário') || str_contains($clean, 'casaco') || str_contains($clean, 'jaqueta') || str_contains($clean, 'mochila') || str_contains($clean, 'bolsa') || str_contains($clean, 'carteira') || str_contains($clean, 'sapato') || str_contains($clean, 'tenis') || str_contains($clean, 'tênis') || str_contains($clean, 'calcado') || str_contains($clean, 'calçado') || (str_contains($clean, 'moda') && !str_contains($clean, 'intima') && !str_contains($clean, 'íntima'))) {
+        if (str_contains($clean, 'roupa') || str_contains($clean, 'vestuario') || str_contains($clean, 'vestuário') || str_contains($clean, 'casaco') || str_contains($clean, 'jaqueta') || str_contains($clean, 'mochila') || str_contains($clean, 'bolsa') || str_contains($clean, 'carteira') || str_contains($clean, 'sapato') || str_contains($clean, 'tenis') || str_contains($clean, 'tênis') || str_contains($clean, 'calcado') || str_contains($clean, 'calçado') || str_contains($clean, 'legging') || str_contains($clean, 'macacao') || str_contains($clean, 'macacão') || str_contains($clean, 'fitness') || str_contains($clean, 'academia') || (str_contains($clean, 'moda') && !str_contains($clean, 'intima') && !str_contains($clean, 'íntima'))) {
             return self::CAT_FASHION;
         }
 

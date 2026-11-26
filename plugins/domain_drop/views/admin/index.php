@@ -617,6 +617,7 @@
                             <option value="Pet Shop & Pets Virais">Pet Shop & Pets Virais</option>
                             <option value="Acessórios para Veículos">Acessórios para Veículos</option>
                             <option value="Moda, Roupas & Vestuário">Moda, Roupas & Vestuário</option>
+                            <option value="Moda Fitness, Leggings & Academia">Moda Fitness, Leggings & Academia</option>
                             <option value="Moda Íntima, Lingeries & Pijamas">Moda Íntima, Lingeries & Pijamas</option>
                             <option value="Sex Shop & Produtos Adultos (+18)">🔞 Sex Shop & Produtos Adultos (+18)</option>
                         </select>
