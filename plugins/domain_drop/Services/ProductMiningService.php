@@ -13,6 +13,8 @@ use DomainSystem\Plugins\domain_drop\Contracts\DropshipCatalogRepositoryInterfac
 use DomainSystem\Plugins\domain_drop\Contracts\ProductLinkScraperInterface;
 use DomainSystem\Plugins\domain_drop\Contracts\ProductMiningServiceInterface;
 use DomainSystem\Plugins\domain_drop\Contracts\WarehouseOriginResolverInterface;
+use DomainSystem\Plugins\domain_drop\Contracts\Assembly\ProductAssemblyLineInterface;
+use DomainSystem\Plugins\domain_drop\Services\Assembly\ProductAssemblyLine;
 use DomainSystem\Plugins\domain_drop\DTO\DropshipProductDto;
 use DomainSystem\Plugins\domain_drop\DTO\ScrapedProductDto;
 use DomainSystem\Plugins\domain_drop\Services\CategoryTaxonomyService;
@@ -46,6 +48,7 @@ class ProductMiningService implements ProductMiningServiceInterface
     private CuratedCatalogProviderInterface $catalogProvider;
     private MiningValidationHub $validationHub;
     private WarehouseOriginResolverInterface $originResolver;
+    private ProductAssemblyLineInterface $assemblyLine;
 
     public function __construct(
         private readonly AliExpressApiClientInterface $apiClient,
@@ -58,7 +61,8 @@ class ProductMiningService implements ProductMiningServiceInterface
         ?CategoryTaxonomyInterface $taxonomy = null,
         ?CuratedCatalogProviderInterface $catalogProvider = null,
         ?MiningValidationHub $validationHub = null,
-        ?WarehouseOriginResolverInterface $originResolver = null
+        ?WarehouseOriginResolverInterface $originResolver = null,
+        ?ProductAssemblyLineInterface $assemblyLine = null
     ) {
         $this->taxonomy = $taxonomy ?? new CategoryTaxonomyService();
         $this->linkScraper = $linkScraper ?? new AliExpressLinkScraperService($this->taxonomy);
@@ -67,6 +71,16 @@ class ProductMiningService implements ProductMiningServiceInterface
         $this->catalogProvider = $catalogProvider ?? new CuratedCatalogProvider();
         $this->validationHub = $validationHub ?? new MiningValidationHub();
         $this->originResolver = $originResolver ?? new WarehouseOriginResolver();
+        $this->assemblyLine = $assemblyLine ?? ProductAssemblyLine::createStandard(
+            $this->apiClient,
+            $this->originResolver,
+            $this->currencyConverter
+        );
+    }
+
+    public function getAssemblyLine(): ProductAssemblyLineInterface
+    {
+        return $this->assemblyLine;
     }
 
     public function getValidationHub(): MiningValidationHub

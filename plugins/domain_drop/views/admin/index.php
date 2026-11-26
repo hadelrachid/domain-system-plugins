@@ -2153,6 +2153,24 @@
         function finishAndReload() {
             window.location.reload();
         }
+
+        // Exportação explícita e defensiva para o escopo global (window)
+        window.openPriceModal = openPriceModal;
+        window.closePriceModal = closePriceModal;
+        window.recalcMargin = recalcMargin;
+        window.applyMarkup = applyMarkup;
+        window.roundTo90 = roundTo90;
+        window.handlePriceSubmit = handlePriceSubmit;
+        window.openImagesModal = openImagesModal;
+        window.closeImagesModal = closeImagesModal;
+        window.addManualImageUrl = addManualImageUrl;
+        window.syncImagesNow = syncImagesNow;
+        window.handleImagesSave = handleImagesSave;
+        window.openBatchMediaSyncModal = openBatchMediaSyncModal;
+        window.closeBatchSyncModal = closeBatchSyncModal;
+        window.startBatchSync = startBatchSync;
+        window.cancelBatchSync = cancelBatchSync;
+        window.finishAndReload = finishAndReload;
     </script>
 
     <!-- Modal Limpar Catálogo -->
@@ -2524,5 +2542,11 @@
             }
         }
     }
+
+    // Exportação explícita e defensiva do modal de auditoria para o escopo global
+    window.openCatalogAuditModal = openCatalogAuditModal;
+    window.closeCatalogAuditModal = closeCatalogAuditModal;
+    window.copyCatalogAuditReport = copyCatalogAuditReport;
+    window.purgeAllInvalidAuditProducts = purgeAllInvalidAuditProducts;
     </script>
 </div>
