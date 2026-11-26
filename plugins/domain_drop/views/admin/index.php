@@ -1536,6 +1536,8 @@
         ?>
         const dropshipCsrfToken = <?= json_encode($csrfToken, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
         const dropshipProductsMedia = <?= json_encode($mediaMap, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_SLASHES) ?>;
+        window.dropshipProductsMedia = dropshipProductsMedia;
+        window.dropshipCsrfToken = dropshipCsrfToken;
         let activeImagesState = { id: null, title: '', aliexpressId: '', mainImageUrl: '', videoUrl: '', downloadVideoUrl: '', images: [] };
 
         function setImagesModalStatus(msg, type) {
@@ -2364,7 +2366,8 @@
         const modal = document.getElementById('modalCatalogAudit');
         if (!modal) return;
 
-        const items = Object.values(dropshipProductsMedia || {});
+        const mediaSource = window.dropshipProductsMedia || (typeof dropshipProductsMedia !== 'undefined' ? dropshipProductsMedia : {});
+        const items = Object.values(mediaSource);
         auditDeadProductIds = [];
         let total = items.length;
         let brCount = 0;
