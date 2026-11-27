@@ -45,12 +45,37 @@ class WarehouseOriginGuard implements ProductValidationGuardInterface
     {
         if (is_array($id)) {
             $rawData = $id;
-            $id = (string)($rawData['id'] ?? ($rawData['product_id'] ?? 'unknown'));
+            $rawId = $rawData['id'] ?? ($rawData['product_id'] ?? ($rawData['itemId'] ?? 'unknown'));
+            $id = is_scalar($rawId) ? (string)$rawId : 'unknown';
+        } elseif (!is_string($id)) {
+            $id = is_scalar($id) ? (string)$id : 'unknown';
         }
+
         $resolver = $this->originResolver ?? new WarehouseOriginResolver();
-        $targetOrigin = strtoupper((string)($this->defaultTargetOrigin ?? ($rawData['requested_warehouse_origin'] ?? ($rawData['target_warehouse_origin'] ?? 'ALL'))));
+        $targetOriginVal = $this->defaultTargetOrigin ?? ($rawData['requested_warehouse_origin'] ?? ($rawData['target_warehouse_origin'] ?? 'ALL'));
+        $targetOrigin = is_scalar($targetOriginVal) ? strtoupper(trim((string)$targetOriginVal)) : 'ALL';
         
-        $resolvedOrigin = $resolver->resolve($rawData, (string)($rawData['title'] ?? ($rawData['product_title'] ?? '')));
+        // Extração segura do título (pode vir como string ou array estruturado do AliExpress)
+        $rawTitle = '';
+        if (isset($rawData['title'])) {
+            if (is_string($rawData['title'])) {
+                $rawTitle = $rawData['title'];
+            } elseif (is_array($rawData['title'])) {
+                $rawTitle = (string)($rawData['title']['displayTitle'] ?? ($rawData['title']['title'] ?? ''));
+            }
+        } elseif (isset($rawData['product_title'])) {
+            if (is_string($rawData['product_title'])) {
+                $rawTitle = $rawData['product_title'];
+            } elseif (is_array($rawData['product_title'])) {
+                $rawTitle = (string)($rawData['product_title']['displayTitle'] ?? ($rawData['product_title']['title'] ?? ''));
+            }
+        } elseif (isset($rawData['subject']) && is_string($rawData['subject'])) {
+            $rawTitle = $rawData['subject'];
+        } elseif (isset($rawData['name']) && is_string($rawData['name'])) {
+            $rawTitle = $rawData['name'];
+        }
+
+        $resolvedOrigin = $resolver->resolve($rawData, $rawTitle);
 
         if ($targetOrigin === 'BR') {
             if ($resolvedOrigin !== WarehouseOriginResolverInterface::ORIGIN_BR) {

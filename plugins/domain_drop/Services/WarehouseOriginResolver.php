@@ -19,12 +19,11 @@ class WarehouseOriginResolver implements WarehouseOriginResolverInterface
     public function resolve(array $rawItem, ?string $title = null): string
     {
         // 0. Informação oficial do endpoint de frete (aliexpress.ds.freight.query - Pág. 229-230)
-        $freightShipFrom = strtoupper(trim((string)(
-            $rawItem['freight']['ship_from_country']
+        $freightVal = $rawItem['freight']['ship_from_country']
             ?? ($rawItem['freight_info']['ship_from_country']
             ?? ($rawItem['delivery_info']['ship_from_country']
-            ?? ($rawItem['ship_from_country'] ?? '')))
-        )));
+            ?? ($rawItem['ship_from_country'] ?? '')));
+        $freightShipFrom = is_scalar($freightVal) ? strtoupper(trim((string)$freightVal)) : '';
         if ($freightShipFrom === 'BR') {
             return self::ORIGIN_BR;
         }
@@ -41,12 +40,11 @@ class WarehouseOriginResolver implements WarehouseOriginResolverInterface
         }
 
         // 2. Campo de expedição física (ship_from / send_goods_country_code / delivery.shippingFrom / ship_from_country)
-        $shipFrom = strtoupper(trim((string)(
-            $rawItem['ship_from']
+        $shipVal = $rawItem['ship_from']
             ?? ($rawItem['send_goods_country_code']
             ?? ($rawItem['delivery']['shippingFrom']
-            ?? ($rawItem['ship_from_country'] ?? '')))
-        )));
+            ?? ($rawItem['ship_from_country'] ?? '')));
+        $shipFrom = is_scalar($shipVal) ? strtoupper(trim((string)$shipVal)) : '';
 
         if (in_array($shipFrom, ['BR', 'BRAZIL', 'BRASIL'], true)) {
             return self::ORIGIN_BR;
