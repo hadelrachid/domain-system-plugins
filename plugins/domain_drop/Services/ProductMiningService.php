@@ -1656,79 +1656,18 @@ class ProductMiningService implements ProductMiningServiceInterface
             || preg_match('/\b(jaqueta|casaco|calça|calca|tênis|tenis|sapato|vestido|camisa|camiseta|shorts|bermuda|agasalho|conjunto|meia|roupa|blusa|moletom|lingerie|macacão|macacao|macaquinho|playsuit|playsuits|romper|rompers|body|bodies|top|cropped|biquíni|biquini|maiô|maio|tricô|trico|canelado|pijama|calçado|calcado|sandália|sandalia|chinelo|bota|sutiã|sutia|cueca|calcinha)\b/iu', $polishedTitle);
 
         if (empty($extractedVariants)) {
-            if ($isJewelryOrAccessory) {
-                $isRing = preg_match('/(?:anel|aliança)/iu', $polishedTitle);
-                $isBracelet = preg_match('/(?:pulseira|bracelete)/iu', $polishedTitle);
-                $isNecklace = preg_match('/(?:colar|corrente|gargantilha)/iu', $polishedTitle);
-
-                $colors = ['Dourado (Banhado a Ouro 18K)', 'Prateado (Prata 925)', 'Ouro Rosa (Rose Gold)'];
-                if ($isRing) {
-                    $ringSizes = ['Aro 16 (Pequeno)', 'Aro 18 (Médio)', 'Aro 20 (Grande)', 'Aro 22 (Extra Grande)'];
-                    $variationAxes = ['Cor do Metal' => $colors, 'Aro / Tamanho do Anel' => $ringSizes];
-                } elseif ($isBracelet) {
-                    $lengths = ['17 cm (Fino)', '19 cm (Padrão)', '21 cm (Largo)'];
-                    $variationAxes = ['Cor' => $colors, 'Comprimento da Pulseira' => $lengths];
-                } elseif ($isNecklace) {
-                    $lengths = ['45 cm (Gargantilha)', '50 cm (Médio)', '60 cm (Longo)'];
-                    $variationAxes = ['Cor' => $colors, 'Comprimento do Colar' => $lengths];
-                } else {
-                    $variationAxes = ['Cor' => $colors];
-                }
-            } elseif ($isElectronicsOrPhone) {
-                $isPhone = preg_match('/(?:celular|smartphone|phone|iphone|xiaomi|samsung|tablet|ipad)/iu', $polishedTitle);
-                $colors = ['Preto Grafite', 'Prata Titânio', 'Rosa Ouro (Rose Gold)', 'Azul Meia-Noite'];
-                if ($isPhone) {
-                    $capacities = ['128GB', '256GB', '512GB'];
-                    $variationAxes = ['Cor' => $colors, 'Capacidade' => $capacities];
-                } else {
-                    $variationAxes = ['Cor' => $colors];
-                }
-            } elseif ($isHomeOrShelving) {
-                $colors = ['Preto Fosco', 'Prata / Inox', 'Branco Neve'];
-                $kits = ['Kit 2 Unidades', 'Kit 3 Unidades', 'Kit 4 Unidades'];
-                $variationAxes = ['Cor / Acabamento' => $colors, 'Opção do Kit' => $kits];
-            } elseif ($isClothingOrFootwear) {
-                $isFootwear = preg_match('/(?:tênis|tenis|sapato|calçado|chinelo|sandália|bota)/iu', $polishedTitle);
-                if ($isFootwear) {
-                    $sizes = ['38', '39', '40', '41', '42', '43', '44'];
-                    $colors = ['Preto Clássico', 'Cinza Grafite', 'Azul Marinho'];
-                } elseif ($isKids) {
-                    $sizes = ['Tam 2', 'Tam 4', 'Tam 6', 'Tam 8', 'Tam 10', 'Tam 12'];
-                    $colors = ['Azul Celeste', 'Rosa Bebê', 'Amarelo Pastel', 'Cinza Mescla'];
-                } else {
-                    $sizes = ['Pequeno (P)', 'Médio (M)', 'Grande (G)', 'Extra Grande (GG)'];
-                    $colors = ['Preto Clássico', 'Azul Marinho', 'Cinza Chumbo', 'Branco Neve'];
-                }
-                $variationAxes = ['Cor' => $colors, 'Tamanho' => $sizes];
-            }
-
-            if (!empty($variationAxes)) {
-                $primaryAxisName = array_key_first($variationAxes);
-                $primaryOptions = $variationAxes[$primaryAxisName];
-                $secondAxisName = count($variationAxes) > 1 ? array_keys($variationAxes)[1] : null;
-                $secondOptions = $secondAxisName ? $variationAxes[$secondAxisName] : [null];
-
-                foreach ($primaryOptions as $pIdx => $pVal) {
-                    $pSlug = strtoupper(preg_replace('/[^A-Za-z0-9]+/', '', (string)$pVal) ?: (string)$pIdx);
-                    foreach ($secondOptions as $sIdx => $sVal) {
-                        $optMap = [$primaryAxisName => $pVal];
-                        $sCode = '';
-                        if ($secondAxisName && $sVal !== null) {
-                            $optMap[$secondAxisName] = $sVal;
-                            $sCode = '-' . (strtok((string)$sVal, ' ') ?: (string)$sIdx);
-                        }
-                        $extractedVariants[] = [
-                            'sku_id'         => "{$aeId}-{$pSlug}{$sCode}",
-                            'sku_attr'       => '14:' . (200000180 + $pIdx) . ($secondAxisName ? ';5:' . (100014064 + $sIdx) : ''),
-                            'options'        => $optMap,
-                            'price_brl'      => $salePriceBrl,
-                            'cost_price_usd' => $costPriceUsd,
-                            'image_url'      => $mainImage,
-                            'stock'          => max(10, 50 - ($pIdx * 3)),
-                            'ean_code'       => '',
-                        ];
-                    }
-                }
+            $synthesized = self::synthesizeMissingVariants(
+                title: $polishedTitle,
+                category: $category,
+                aeId: $aeId,
+                salePriceBrl: $salePriceBrl,
+                costPriceUsd: $costPriceUsd,
+                mainImage: $mainImage,
+                isKids: $isKids
+            );
+            if (!empty($synthesized['variants'])) {
+                $extractedVariants = $synthesized['variants'];
+                $variationAxes = $synthesized['variation_axes'];
             }
         }
 
@@ -1792,6 +1731,130 @@ class ProductMiningService implements ProductMiningServiceInterface
             attributes: $props,
             status: 'published'
         );
+    }
+
+    /**
+     * Sintetiza dinamicamente opções de variações (cores, tamanhos, medidas, capacidades)
+     * para produtos que não possuem SKUs explícitos ou foram minerados em versões legadas.
+     *
+     * @param array<string, mixed> $existingProps
+     * @return array{variants: array<int, array<string, mixed>>, variation_axes: array<string, array<int, string>>, cores_disponiveis?: array<int, string>, tamanhos_disponiveis?: array<int, string>}
+     */
+    public static function synthesizeMissingVariants(
+        string $title,
+        string $category,
+        string $aeId,
+        float $salePriceBrl,
+        float $costPriceUsd,
+        string $mainImage,
+        bool $isKids = false,
+        array $existingProps = []
+    ): array {
+        $extractedVariants = [];
+        $variationAxes = [];
+
+        $isJewelryOrAccessory = preg_match('/\b(pulseira|pulseiras|colar|colares|bracelete|braceletes|corrente banhada|gargantilha|brinco|brincos|anel|anéis|aneis|aliança|alianças|pingente|pingentes|tornozeleira|tornozeleiras|berloque|berloques|joia|joias|jóia|jóias|bijuteria|bijuterias|semijoia|semijoias|relojoaria|ouro 18k|prata 925)\b/iu', $title);
+
+        $isElectronicsOrPhone = ($category === 'Eletrônicos & Gadget')
+            || preg_match('/\b(celular|celulares|smartphone|smartphones|phone|iphone|xiaomi|samsung|fone|fones|headphone|headphones|earphone|earphones|headset|headsets|smartwatch|smartwatches|relógio|relogio|watch|tablet|tablets|ipad|carregador|powerbank|caixa de som|speaker|console|game|notebook|laptop|mouse|teclado|drone|câmera|camera)\b/iu', $title);
+
+        $isHomeOrShelving = ($category === 'Casa Inteligente & Organização')
+            || preg_match('/\b(prateleira|prateleiras|suporte parede|organizador|porta toalha|dispenser|adesivo parede|gancho|cabide|nicho)\b/iu', $title);
+
+        $isClothingOrFootwear = ($category === 'Moda, Roupas & Vestuário') 
+            || preg_match('/\b(jaqueta|casaco|calça|calca|tênis|tenis|sapato|vestido|camisa|camiseta|shorts|bermuda|agasalho|conjunto|meia|roupa|blusa|moletom|lingerie|macacão|macacao|macaquinho|playsuit|playsuits|romper|rompers|body|bodies|top|cropped|biquíni|biquini|maiô|maio|tricô|trico|canelado|pijama|calçado|calcado|sandália|sandalia|chinelo|bota|sutiã|sutia|cueca|calcinha)\b/iu', $title);
+
+        if ($isJewelryOrAccessory) {
+            $isRing = preg_match('/\b(anel|anéis|aneis|aliança|alianças)\b/iu', $title);
+            $isBracelet = preg_match('/\b(pulseira|pulseiras|bracelete|braceletes)\b/iu', $title);
+            $isNecklace = preg_match('/\b(colar|colares|corrente|gargantilha)\b/iu', $title);
+
+            $colors = ['Dourado (Banhado a Ouro 18K)', 'Prateado (Prata 925)', 'Ouro Rosa (Rose Gold)'];
+            if ($isRing) {
+                $ringSizes = ['Aro 16 (Pequeno)', 'Aro 18 (Médio)', 'Aro 20 (Grande)', 'Aro 22 (Extra Grande)'];
+                $variationAxes = ['Cor do Metal' => $colors, 'Aro / Tamanho do Anel' => $ringSizes];
+            } elseif ($isBracelet) {
+                $lengths = ['17 cm (Fino)', '19 cm (Padrão)', '21 cm (Largo)'];
+                $variationAxes = ['Cor' => $colors, 'Comprimento da Pulseira' => $lengths];
+            } elseif ($isNecklace) {
+                $lengths = ['45 cm (Gargantilha)', '50 cm (Médio)', '60 cm (Longo)'];
+                $variationAxes = ['Cor' => $colors, 'Comprimento do Colar' => $lengths];
+            } else {
+                $variationAxes = ['Cor' => $colors];
+            }
+        } elseif ($isElectronicsOrPhone) {
+            $isPhone = preg_match('/\b(celular|celulares|smartphone|smartphones|phone|iphone|xiaomi|samsung|tablet|tablets|ipad)\b/iu', $title);
+            $colors = ['Preto Grafite', 'Prata Titânio', 'Rosa Ouro (Rose Gold)', 'Azul Meia-Noite'];
+            if ($isPhone) {
+                $capacities = ['128GB', '256GB', '512GB'];
+                $variationAxes = ['Cor' => $colors, 'Capacidade' => $capacities];
+            } else {
+                $variationAxes = ['Cor' => $colors];
+            }
+        } elseif ($isHomeOrShelving) {
+            $colors = ['Preto Fosco', 'Prata / Inox', 'Branco Neve'];
+            $kits = ['Kit 2 Unidades', 'Kit 3 Unidades', 'Kit 4 Unidades'];
+            $variationAxes = ['Cor / Acabamento' => $colors, 'Opção do Kit' => $kits];
+        } elseif ($isClothingOrFootwear) {
+            $isFootwear = preg_match('/\b(tênis|tenis|sapato|calçado|calcado|chinelo|sandália|sandalia|bota)\b/iu', $title);
+            if ($isFootwear) {
+                $sizes = ['38', '39', '40', '41', '42', '43', '44'];
+                $colors = ['Preto Clássico', 'Cinza Grafite', 'Azul Marinho'];
+            } elseif ($isKids) {
+                $sizes = ['Tam 2', 'Tam 4', 'Tam 6', 'Tam 8', 'Tam 10', 'Tam 12'];
+                $colors = ['Azul Celeste', 'Rosa Bebê', 'Amarelo Pastel', 'Cinza Mescla'];
+            } else {
+                $sizes = ['Pequeno (P)', 'Médio (M)', 'Grande (G)', 'Extra Grande (GG)'];
+                $colors = ['Preto Clássico', 'Azul Marinho', 'Cinza Chumbo', 'Branco Neve'];
+            }
+            $variationAxes = ['Cor' => $colors, 'Tamanho' => $sizes];
+        }
+
+        if (!empty($variationAxes)) {
+            $primaryAxisName = array_key_first($variationAxes);
+            $primaryOptions = $variationAxes[$primaryAxisName];
+            $secondAxisName = count($variationAxes) > 1 ? array_keys($variationAxes)[1] : null;
+            $secondOptions = $secondAxisName ? $variationAxes[$secondAxisName] : [null];
+
+            foreach ($primaryOptions as $pIdx => $pVal) {
+                $pSlug = strtoupper(preg_replace('/[^A-Za-z0-9]+/', '', (string)$pVal) ?: (string)$pIdx);
+                foreach ($secondOptions as $sIdx => $sVal) {
+                    $optMap = [$primaryAxisName => $pVal];
+                    $sCode = '';
+                    if ($secondAxisName && $sVal !== null) {
+                        $optMap[$secondAxisName] = $sVal;
+                        $sCode = '-' . (strtok((string)$sVal, ' ') ?: (string)$sIdx);
+                    }
+                    $extractedVariants[] = [
+                        'sku_id'         => "{$aeId}-{$pSlug}{$sCode}",
+                        'sku_attr'       => '14:' . (200000180 + $pIdx) . ($secondAxisName ? ';5:' . (100014064 + $sIdx) : ''),
+                        'options'        => $optMap,
+                        'price_brl'      => $salePriceBrl,
+                        'cost_price_usd' => $costPriceUsd,
+                        'image_url'      => $mainImage,
+                        'stock'          => max(10, 50 - ($pIdx * 3)),
+                        'ean_code'       => '',
+                    ];
+                }
+            }
+        }
+
+        $coresDisponiveis = [];
+        $tamanhosDisponiveis = [];
+        foreach ($variationAxes as $axName => $axVals) {
+            if (preg_match('/(?:cor|color)/i', $axName)) {
+                $coresDisponiveis = $axVals;
+            } elseif (preg_match('/(?:tamanho|size|aro|comprimento|capacidade)/i', $axName)) {
+                $tamanhosDisponiveis = $axVals;
+            }
+        }
+
+        return [
+            'variants'             => $extractedVariants,
+            'variation_axes'       => $variationAxes,
+            'cores_disponiveis'    => $coresDisponiveis,
+            'tamanhos_disponiveis' => $tamanhosDisponiveis,
+        ];
     }
 
     /**

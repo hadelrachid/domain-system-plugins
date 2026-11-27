@@ -580,6 +580,38 @@ class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
             }
         }
 
+        // Auto-Cura e Retrocompatibilidade de Variantes para Produtos Históricos no Banco de Dados
+        if (empty($attributes['variants'])) {
+            $cat = (string)($row['category'] ?? 'Geral');
+            $title = (string)($row['title'] ?? '');
+            $aeId = (string)($row['aliexpress_id'] ?? ($row['id'] ?? 'item'));
+            $priceBrl = (float)($row['sale_price_brl'] ?? 0.0);
+            $costUsd = (float)($row['cost_price_usd'] ?? 0.0);
+            $mainImg = (string)($row['main_image_url'] ?? '');
+            $isKids = isset($attributes['publico_alvo']) && str_contains(mb_strtolower((string)$attributes['publico_alvo'], 'UTF-8'), 'infantil');
+
+            $synthesized = \DomainSystem\Plugins\domain_drop\Services\ProductMiningService::synthesizeMissingVariants(
+                title: $title,
+                category: $cat,
+                aeId: $aeId,
+                salePriceBrl: $priceBrl,
+                costPriceUsd: $costUsd,
+                mainImage: $mainImg,
+                isKids: $isKids,
+                existingProps: $attributes
+            );
+            if (!empty($synthesized['variants'])) {
+                $attributes['variants'] = $synthesized['variants'];
+                $attributes['variation_axes'] = $synthesized['variation_axes'];
+                if (!empty($synthesized['cores_disponiveis'])) {
+                    $attributes['cores_disponiveis'] = $synthesized['cores_disponiveis'];
+                }
+                if (!empty($synthesized['tamanhos_disponiveis'])) {
+                    $attributes['tamanhos_disponiveis'] = $synthesized['tamanhos_disponiveis'];
+                }
+            }
+        }
+
         return new DropshipProductDto(
             aliexpressId: (string)$row['aliexpress_id'],
             title: (string)$row['title'],
