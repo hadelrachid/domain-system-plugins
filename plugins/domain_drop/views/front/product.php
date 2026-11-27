@@ -243,7 +243,15 @@ if ($eanCode !== '') {
                     <?php
                     $axes = $product->getVariationAxes();
                     $variantsList = $product->getVariants();
-                    $hasSizeOption = isset($axes['Tamanho']) || isset($axes['Tamanhos']) || isset($axes['Size']) || ($product->category === 'Moda, Roupas & Vestuário') || !empty($product->attributes['tabela_tamanhos']);
+                    $isFashionCategory = in_array($product->category, [
+                        'Moda, Roupas & Vestuário',
+                        'Roupas, Bolsas & Calçados',
+                        'Moda Íntima, Lingeries & Pijamas',
+                        'Moda Íntima & Lingerie',
+                        'Roupa Íntima & Pijamas',
+                        'Moda Fitness, Leggings & Academia',
+                    ], true) || !empty($product->attributes['tabela_tamanhos']) || preg_match('/\b(jaqueta|casaco|calça|calca|tênis|tenis|sapato|vestido|camisa|camiseta|shorts|bermuda|agasalho|conjunto|meia|roupa|blusa|moletom|lingerie|sutiã|sutia|calcinha|cueca)\b/iu', $product->title);
+                    $hasSizeOption = isset($axes['Tamanho']) || isset($axes['Tamanhos']) || isset($axes['Size']) || $isFashionCategory;
                     ?>
                     <!-- SELETORES DINÂMICOS DE VARIAÇÃO (CORES, TAMANHOS, MODELOS - PADRÃO SKU MATRIX) -->
                     <div id="product-variants-box" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 16px; margin-bottom: 20px;">
@@ -640,6 +648,49 @@ if ($eanCode !== '') {
                             <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">96 - 102</td>
                             <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">78 - 84</td>
                             <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">104 - 110</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Tabela Lingeries, Sutiãs & Moda Íntima -->
+        <div style="margin-bottom: 20px;">
+            <div style="font-size: 13px; font-weight: 700; color: #cbd5e1; margin-bottom: 8px;">👙 Lingeries, Sutiãs &amp; Moda Íntima (Tórax e Busto em cm):</div>
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: center;">
+                    <thead>
+                        <tr style="background: rgba(236, 72, 153, 0.15); color: #f472b6; font-weight: 700;">
+                            <th style="padding: 10px 8px; border: 1px solid rgba(255,255,255,0.1);">Tamanho</th>
+                            <th style="padding: 10px 8px; border: 1px solid rgba(255,255,255,0.1);">Manequim</th>
+                            <th style="padding: 10px 8px; border: 1px solid rgba(255,255,255,0.1);">Busto (cm)</th>
+                            <th style="padding: 10px 8px; border: 1px solid rgba(255,255,255,0.1);">Abaixo do Busto (cm)</th>
+                        </tr>
+                    </thead>
+                    <tbody style="color: #cbd5e1;">
+                        <tr>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08); font-weight: 700; color: #fff;">P</td>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">38 - 40</td>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">80 - 86</td>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">68 - 72</td>
+                        </tr>
+                        <tr style="background: rgba(255,255,255,0.02);">
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08); font-weight: 700; color: #fff;">M</td>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">42</td>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">87 - 92</td>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">73 - 77</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08); font-weight: 700; color: #fff;">G</td>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">44</td>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">93 - 98</td>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">78 - 82</td>
+                        </tr>
+                        <tr style="background: rgba(255,255,255,0.02);">
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08); font-weight: 700; color: #fff;">GG</td>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">46</td>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">99 - 105</td>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">83 - 87</td>
                         </tr>
                     </tbody>
                 </table>

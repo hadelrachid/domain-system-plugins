@@ -107,6 +107,29 @@ class ProductDetailExtractionStation implements AssemblyStationInterface
                     if (!empty($result['store_info'])) {
                         $context->set('store_info', $result['store_info']);
                     }
+                    if (!empty($result['ae_store_info'])) {
+                        $context->set('store_info', $result['ae_store_info']);
+                        $context->set('ae_store_info', $result['ae_store_info']);
+                    }
+
+                    // Extração de Propriedades Técnicas Oficiais (ae_item_property_dtos)
+                    if (!empty($result['ae_item_property_dtos'])) {
+                        $context->set('ae_item_property_dtos', $result['ae_item_property_dtos']);
+                    }
+                    if (!empty($result['properties'])) {
+                        $context->set('properties', $result['properties']);
+                    }
+
+                    // Extração de Guia e Tabela de Tamanhos Oficial
+                    $sizeChartData = $result['size_chart'] ?? ($result['size_chart_info'] ?? ($result['size_chart_url'] ?? null));
+                    if (!empty($sizeChartData)) {
+                        $context->set('size_chart', $sizeChartData);
+                    }
+
+                    // Extração de Destaques Comerciais
+                    if (!empty($result['sellingPoints'])) {
+                        $context->set('sellingPoints', $result['sellingPoints']);
+                    }
 
                     // Extração Oficial de Vídeo Demonstrativo (ae-product-management.pdf / ae_multimedia_info_dto)
                     $videoUrl = (string)$context->get('video_url', '');
