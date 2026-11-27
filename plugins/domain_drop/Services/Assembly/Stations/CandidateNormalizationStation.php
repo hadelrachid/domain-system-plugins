@@ -94,6 +94,35 @@ class CandidateNormalizationStation implements AssemblyStationInterface
             $context->set('orders_count', (int)$orders);
         }
 
+        // Preservação de atributos e estruturas pré-existentes do candidato
+        if (!empty($raw['variants'])) {
+            $context->set('variants', $raw['variants']);
+        }
+        if (!empty($raw['variation_axes'])) {
+            $context->set('variation_axes', $raw['variation_axes']);
+        }
+        if (!empty($raw['ae_item_sku_info_dtos'])) {
+            $context->set('ae_item_sku_info_dtos', $raw['ae_item_sku_info_dtos']);
+        }
+        if (!empty($raw['ae_item_property_dtos'])) {
+            $context->set('ae_item_property_dtos', $raw['ae_item_property_dtos']);
+        }
+        if (!empty($raw['properties'])) {
+            $context->set('properties', $raw['properties']);
+        }
+        if (!empty($raw['attributes'])) {
+            $context->set('attributes', $raw['attributes']);
+        }
+        if (!empty($raw['size_chart'])) {
+            $context->set('size_chart', $raw['size_chart']);
+        }
+        if (!empty($raw['sellingPoints'])) {
+            $context->set('sellingPoints', $raw['sellingPoints']);
+        }
+        if (!empty($raw['store_info'])) {
+            $context->set('store_info', $raw['store_info']);
+        }
+
         return $context->recordStationPass($this->getName(), [
             'id' => $id,
             'title_length' => mb_strlen($title)

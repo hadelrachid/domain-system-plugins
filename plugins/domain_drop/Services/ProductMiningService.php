@@ -637,6 +637,18 @@ class ProductMiningService implements ProductMiningServiceInterface
                 $isItemBr = ($originCode === WarehouseOriginResolverInterface::ORIGIN_BR);
                 $isItemCn = ($originCode === WarehouseOriginResolverInterface::ORIGIN_CN);
 
+                // Sintetiza variações completas (cores, tamanhos, medidas, etc.)
+                $isKids = str_contains(mb_strtolower($polishedTitle, 'UTF-8'), 'infantil');
+                $synthesized = self::synthesizeMissingVariants(
+                    title: $polishedTitle,
+                    category: $commercialCat,
+                    aeId: $aeId,
+                    salePriceBrl: $salePriceBrl,
+                    costPriceUsd: $costPriceUsd,
+                    mainImage: $mainImg,
+                    isKids: $isKids
+                );
+
                 $attributes = [
                     'Origem'            => match ($originCode) {
                         'BR' => 'Despacho Nacional (Brasil)',
@@ -654,6 +666,13 @@ class ProductMiningService implements ProductMiningServiceInterface
                     'despacho_nacional' => $isItemBr ? 'Estoque no Brasil (Entreposto Nacional)' : null,
                     'video_url'         => $videoUrl,
                     'has_video'         => !empty($videoUrl),
+                    'variants'          => $synthesized['variants'] ?? [],
+                    'variation_axes'    => $synthesized['variation_axes'] ?? [],
+                    'cores_disponiveis' => $synthesized['cores_disponiveis'] ?? [],
+                    'tamanhos_disponiveis' => $synthesized['tamanhos_disponiveis'] ?? [],
+                    'frete_gratis'      => true,
+                    'frete_padrao'      => 'Frete Grátis com Rastreamento Oficial',
+                    'frete_expresso'    => 'Envio Expresso Prioritário (Sedex)',
                 ];
                 if (!empty($videoUrl)) {
                     $attributes['Vídeo Demonstrativo'] = 'Disponível em Alta Definição';
@@ -667,6 +686,21 @@ class ProductMiningService implements ProductMiningServiceInterface
                         }
                     }
                 }
+
+                $attributes['especificacoes'] = [];
+                if (!empty($attributes['cores_disponiveis'])) {
+                    $attributes['especificacoes']['Cores Disponíveis'] = implode(', ', $attributes['cores_disponiveis']);
+                }
+                if (!empty($attributes['tamanhos_disponiveis'])) {
+                    $attributes['especificacoes']['Tamanhos / Medidas'] = implode(', ', $attributes['tamanhos_disponiveis']);
+                }
+                $attributes['especificacoes']['Público-Alvo'] = $isKids ? 'Infantil (Kids)' : 'Adulto (Unissex)';
+                $attributes['especificacoes']['Origem / Procedência'] = ($isItemBr)
+                    ? 'Estoque no Brasil 🇧🇷 (Entreposto Oficial Nacional)'
+                    : 'Importação Direta 🇨🇳 (Despacho Internacional Oficial)';
+                $attributes['especificacoes']['Frete & Entrega'] = 'Frete Grátis Oficial com Código de Rastreio dos Correios';
+                $attributes['especificacoes']['Garantia'] = 'Garantia de 7 dias para Troca ou Devolução Grátis (CDC/Procon)';
+                $attributes['ficha_tecnica'] = $attributes['especificacoes'];
 
                 $salesCopy = $this->aiEnricher->generateSalesCopy($polishedTitle, $attributes);
                 if (!empty($videoUrl)) {
@@ -1674,6 +1708,91 @@ class ProductMiningService implements ProductMiningServiceInterface
             if (!empty($synthesized['variants'])) {
                 $extractedVariants = $synthesized['variants'];
                 $variationAxes = $synthesized['variation_axes'];
+            }
+        }
+
+        // Se for vestuário ou calçado, NUNCA pode ficar sem TAMANHO ou sem COR (Princípio da Razoabilidade)
+        if ($isClothingOrFootwear) {
+            $hasSize = false;
+            $hasColor = false;
+            if (!empty($variationAxes)) {
+                foreach (array_keys($variationAxes) as $axKey) {
+                    if (preg_match('/(?:tamanho|size|medida|aro)/i', (string)$axKey)) {
+                        $hasSize = true;
+                    }
+                    if (preg_match('/(?:cor|color)/i', (string)$axKey)) {
+                        $hasColor = true;
+                    }
+                }
+            }
+
+            $isFootwear = (bool)preg_match('/\b(tênis|tenis|sapato|calçado|calcado|chinelo|sandália|sandalia|bota)\b/iu', $polishedTitle);
+            $isBraOrLingerie = (bool)(preg_match('/\b(sutiã|sutia|bra|bras|bralette|bralettes|bojo|push up|push-up|lingerie|calcinha|corset)\b/iu', $polishedTitle)
+                || in_array($category, ['Moda Íntima, Lingeries & Pijamas', 'Moda Íntima & Lingerie', 'Roupa Íntima & Pijamas'], true));
+
+            if ($isFootwear) {
+                $defaultSizes = ['38', '39', '40', '41', '42', '43', '44'];
+            } elseif ($isBraOrLingerie) {
+                $defaultSizes = ['P (38/40)', 'Médio (M / 42)', 'Grande (G / 44)', 'Extra Grande (GG / 46)'];
+            } elseif ($isKids) {
+                $defaultSizes = ['Tam 2', 'Tam 4', 'Tam 6', 'Tam 8', 'Tam 10', 'Tam 12'];
+            } else {
+                $defaultSizes = ['Pequeno (P)', 'Médio (M)', 'Grande (G)', 'Extra Grande (GG)'];
+            }
+
+            if (!$hasSize) {
+                $variationAxes['Tamanho'] = $defaultSizes;
+                if (empty($extractedVariants)) {
+                    $synthesized = self::synthesizeMissingVariants(
+                        title: $polishedTitle,
+                        category: $category,
+                        aeId: $aeId,
+                        salePriceBrl: $salePriceBrl,
+                        costPriceUsd: $costPriceUsd,
+                        mainImage: $mainImage,
+                        isKids: $isKids
+                    );
+                    $extractedVariants = $synthesized['variants'] ?? [];
+                    $variationAxes = $synthesized['variation_axes'] ?? $variationAxes;
+                } else {
+                    $expandedVariants = [];
+                    foreach ($extractedVariants as $exV) {
+                        foreach ($defaultSizes as $sIdx => $sz) {
+                            $szCode = strtoupper(preg_replace('/[^A-Za-z0-9]+/', '', (string)$sz) ?: (string)$sIdx);
+                            $vClone = $exV;
+                            $vClone['sku_id'] = ($exV['sku_id'] ?? $aeId) . '-' . $szCode;
+                            $vClone['options']['Tamanho'] = $sz;
+                            $expandedVariants[] = $vClone;
+                        }
+                    }
+                    $extractedVariants = $expandedVariants;
+                }
+            }
+
+            if (!$hasColor) {
+                if ($isBraOrLingerie) {
+                    $defaultColors = ['Preto Clássico', 'Nude / Bege', 'Branco Neve', 'Rosa Quartzo', 'Vinho Bordô'];
+                } elseif ($isKids) {
+                    $defaultColors = ['Azul Celeste', 'Rosa Bebê', 'Amarelo Pastel', 'Cinza Mescla'];
+                } elseif ($isFootwear) {
+                    $defaultColors = ['Preto Clássico', 'Cinza Grafite', 'Azul Marinho'];
+                } else {
+                    $defaultColors = ['Preto Clássico', 'Azul Marinho', 'Cinza Chumbo', 'Branco Neve'];
+                }
+                $variationAxes['Cor'] = $defaultColors;
+                if (!empty($extractedVariants)) {
+                    $expandedVariants = [];
+                    foreach ($extractedVariants as $exV) {
+                        foreach ($defaultColors as $cIdx => $clr) {
+                            $cCode = strtoupper(preg_replace('/[^A-Za-z0-9]+/', '', (string)$clr) ?: (string)$cIdx);
+                            $vClone = $exV;
+                            $vClone['sku_id'] = ($exV['sku_id'] ?? $aeId) . '-' . $cCode;
+                            $vClone['options']['Cor'] = $clr;
+                            $expandedVariants[] = $vClone;
+                        }
+                    }
+                    $extractedVariants = $expandedVariants;
+                }
             }
         }
 

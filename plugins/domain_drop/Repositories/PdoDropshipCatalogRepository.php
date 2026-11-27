@@ -581,9 +581,28 @@ class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
         }
 
         // Auto-Cura e Retrocompatibilidade de Variantes para Produtos Históricos no Banco de Dados
-        if (empty($attributes['variants'])) {
-            $cat = (string)($row['category'] ?? 'Geral');
-            $title = (string)($row['title'] ?? '');
+        $cat = (string)($row['category'] ?? 'Geral');
+        $title = (string)($row['title'] ?? '');
+        $isClothing = in_array($cat, [
+            'Moda, Roupas & Vestuário',
+            'Roupas, Bolsas & Calçados',
+            'Moda Íntima, Lingeries & Pijamas',
+            'Moda Íntima & Lingerie',
+            'Roupa Íntima & Pijamas',
+            'Moda Fitness, Leggings & Academia',
+        ], true) || preg_match('/\b(jaqueta|casaco|calça|calca|tênis|tenis|sapato|vestido|camisa|camiseta|shorts|bermuda|agasalho|conjunto|meia|roupa|blusa|moletom|lingerie|macacão|macacao|macaquinho|playsuit|playsuits|romper|rompers|body|bodies|top|cropped|biquíni|biquini|maiô|maio|tricô|trico|canelado|pijama|calçado|calcado|sandália|sandalia|chinelo|bota|sutiã|sutia|cueca|calcinha|bra|bras|bralette|bralettes|bojo|push up|push-up|corset|espartilho|underwear)\b/iu', $title);
+
+        $hasSize = false;
+        if (!empty($attributes['variation_axes']) && is_array($attributes['variation_axes'])) {
+            foreach (array_keys($attributes['variation_axes']) as $ax) {
+                if (preg_match('/(?:tamanho|size|medida|aro)/i', (string)$ax)) {
+                    $hasSize = true;
+                    break;
+                }
+            }
+        }
+
+        if (empty($attributes['variants']) || ($isClothing && !$hasSize)) {
             $aeId = (string)($row['aliexpress_id'] ?? ($row['id'] ?? 'item'));
             $priceBrl = (float)($row['sale_price_brl'] ?? 0.0);
             $costUsd = (float)($row['cost_price_usd'] ?? 0.0);
@@ -601,13 +620,33 @@ class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
                 existingProps: $attributes
             );
             if (!empty($synthesized['variants'])) {
-                $attributes['variants'] = $synthesized['variants'];
-                $attributes['variation_axes'] = $synthesized['variation_axes'];
-                if (!empty($synthesized['cores_disponiveis'])) {
-                    $attributes['cores_disponiveis'] = $synthesized['cores_disponiveis'];
-                }
-                if (!empty($synthesized['tamanhos_disponiveis'])) {
-                    $attributes['tamanhos_disponiveis'] = $synthesized['tamanhos_disponiveis'];
+                if ($isClothing && !$hasSize && !empty($attributes['variants'])) {
+                    // Se já tinha variantes de Cor, preserva e combina com os tamanhos sintetizados
+                    $sizes = $synthesized['variation_axes']['Tamanho'] ?? [];
+                    if (!empty($sizes)) {
+                        $attributes['variation_axes']['Tamanho'] = $sizes;
+                        $expanded = [];
+                        foreach ($attributes['variants'] as $v) {
+                            foreach ($sizes as $sIdx => $sz) {
+                                $szCode = strtoupper(preg_replace('/[^A-Za-z0-9]+/', '', (string)$sz) ?: (string)$sIdx);
+                                $vClone = $v;
+                                $vClone['sku_id'] = ($v['sku_id'] ?? $aeId) . '-' . $szCode;
+                                $vClone['options']['Tamanho'] = $sz;
+                                $expanded[] = $vClone;
+                            }
+                        }
+                        $attributes['variants'] = $expanded;
+                        $attributes['tamanhos_disponiveis'] = $sizes;
+                    }
+                } else {
+                    $attributes['variants'] = $synthesized['variants'];
+                    $attributes['variation_axes'] = $synthesized['variation_axes'];
+                    if (!empty($synthesized['cores_disponiveis'])) {
+                        $attributes['cores_disponiveis'] = $synthesized['cores_disponiveis'];
+                    }
+                    if (!empty($synthesized['tamanhos_disponiveis'])) {
+                        $attributes['tamanhos_disponiveis'] = $synthesized['tamanhos_disponiveis'];
+                    }
                 }
             }
         }
