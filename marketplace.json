@@ -1,5 +1,5 @@
 {
-    "updated_at": "2026-11-27T04:10:02+01:00",
+    "updated_at": "2026-11-27T04:12:48+01:00",
     "repository": "https://github.com/hadelrachid/domain-system-plugins",
     "plugins": {
         "academy": {
@@ -59,8 +59,8 @@
             "description": "Motor autônomo de dropshipping e mineração em Linha de Montagem SOLID integrado ao AliExpress Open Platform (App ISV 558628), configurações de card com tags de tamanho e cor, política de frete personalizada, precificação dinâmica e enriquecimento por IA.",
             "zip_filename": "domain_drop.zip",
             "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/domain_drop.zip",
-            "sha256": "22f0e5cfcf2911b8927fc00b49d55eabe91a715d346bff7bb1ab746360670c13",
-            "size_bytes": 715827
+            "sha256": "f8b63146f200e0e0744e5c5040ffb6863ba1f217159c67ba45dd9e4621a51409",
+            "size_bytes": 715874
         },
         "flextheme": {
             "slug": "flextheme",
