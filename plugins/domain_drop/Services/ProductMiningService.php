@@ -1652,8 +1652,14 @@ class ProductMiningService implements ProductMiningServiceInterface
         $isHomeOrShelving = ($category === 'Casa Inteligente & Organização')
             || preg_match('/\b(prateleira|prateleiras|suporte parede|organizador|porta toalha|dispenser|adesivo parede|gancho|cabide|nicho)\b/iu', $polishedTitle);
 
-        $isClothingOrFootwear = ($category === 'Moda, Roupas & Vestuário') 
-            || preg_match('/\b(jaqueta|casaco|calça|calca|tênis|tenis|sapato|vestido|camisa|camiseta|shorts|bermuda|agasalho|conjunto|meia|roupa|blusa|moletom|lingerie|macacão|macacao|macaquinho|playsuit|playsuits|romper|rompers|body|bodies|top|cropped|biquíni|biquini|maiô|maio|tricô|trico|canelado|pijama|calçado|calcado|sandália|sandalia|chinelo|bota|sutiã|sutia|cueca|calcinha)\b/iu', $polishedTitle);
+        $isClothingOrFootwear = in_array($category, [
+            'Moda, Roupas & Vestuário',
+            'Roupas, Bolsas & Calçados',
+            'Moda Íntima, Lingeries & Pijamas',
+            'Moda Íntima & Lingerie',
+            'Roupa Íntima & Pijamas',
+            'Moda Fitness, Leggings & Academia',
+        ], true) || preg_match('/\b(jaqueta|casaco|calça|calca|tênis|tenis|sapato|vestido|camisa|camiseta|shorts|bermuda|agasalho|conjunto|meia|roupa|blusa|moletom|lingerie|macacão|macacao|macaquinho|playsuit|playsuits|romper|rompers|body|bodies|top|cropped|biquíni|biquini|maiô|maio|tricô|trico|canelado|pijama|calçado|calcado|sandália|sandalia|chinelo|bota|sutiã|sutia|cueca|calcinha|bra|bras|bralette|bralettes|bojo|push up|push-up|corset|espartilho|underwear)\b/iu', $polishedTitle);
 
         if (empty($extractedVariants)) {
             $synthesized = self::synthesizeMissingVariants(
@@ -1761,8 +1767,14 @@ class ProductMiningService implements ProductMiningServiceInterface
         $isHomeOrShelving = ($category === 'Casa Inteligente & Organização')
             || preg_match('/\b(prateleira|prateleiras|suporte parede|organizador|porta toalha|dispenser|adesivo parede|gancho|cabide|nicho)\b/iu', $title);
 
-        $isClothingOrFootwear = ($category === 'Moda, Roupas & Vestuário') 
-            || preg_match('/\b(jaqueta|casaco|calça|calca|tênis|tenis|sapato|vestido|camisa|camiseta|shorts|bermuda|agasalho|conjunto|meia|roupa|blusa|moletom|lingerie|macacão|macacao|macaquinho|playsuit|playsuits|romper|rompers|body|bodies|top|cropped|biquíni|biquini|maiô|maio|tricô|trico|canelado|pijama|calçado|calcado|sandália|sandalia|chinelo|bota|sutiã|sutia|cueca|calcinha)\b/iu', $title);
+        $isClothingOrFootwear = in_array($category, [
+            'Moda, Roupas & Vestuário',
+            'Roupas, Bolsas & Calçados',
+            'Moda Íntima, Lingeries & Pijamas',
+            'Moda Íntima & Lingerie',
+            'Roupa Íntima & Pijamas',
+            'Moda Fitness, Leggings & Academia',
+        ], true) || preg_match('/\b(jaqueta|casaco|calça|calca|tênis|tenis|sapato|vestido|camisa|camiseta|shorts|bermuda|agasalho|conjunto|meia|roupa|blusa|moletom|lingerie|macacão|macacao|macaquinho|playsuit|playsuits|romper|rompers|body|bodies|top|cropped|biquíni|biquini|maiô|maio|tricô|trico|canelado|pijama|calçado|calcado|sandália|sandalia|chinelo|bota|sutiã|sutia|cueca|calcinha|bra|bras|bralette|bralettes|bojo|push up|push-up|corset|espartilho|underwear)\b/iu', $title);
 
         if ($isJewelryOrAccessory) {
             $isRing = preg_match('/\b(anel|anéis|aneis|aliança|alianças)\b/iu', $title);
@@ -1797,9 +1809,15 @@ class ProductMiningService implements ProductMiningServiceInterface
             $variationAxes = ['Cor / Acabamento' => $colors, 'Opção do Kit' => $kits];
         } elseif ($isClothingOrFootwear) {
             $isFootwear = preg_match('/\b(tênis|tenis|sapato|calçado|calcado|chinelo|sandália|sandalia|bota)\b/iu', $title);
+            $isBraOrLingerie = preg_match('/\b(sutiã|sutia|bra|bras|bralette|bralettes|bojo|push up|push-up|lingerie|calcinha|corset)\b/iu', $title)
+                || in_array($category, ['Moda Íntima, Lingeries & Pijamas', 'Moda Íntima & Lingerie', 'Roupa Íntima & Pijamas'], true);
+
             if ($isFootwear) {
                 $sizes = ['38', '39', '40', '41', '42', '43', '44'];
                 $colors = ['Preto Clássico', 'Cinza Grafite', 'Azul Marinho'];
+            } elseif ($isBraOrLingerie) {
+                $sizes = ['P (38/40)', 'Médio (M / 42)', 'Grande (G / 44)', 'Extra Grande (GG / 46)'];
+                $colors = ['Preto Clássico', 'Nude / Bege', 'Branco Neve', 'Rosa Quartzo', 'Vinho Bordô'];
             } elseif ($isKids) {
                 $sizes = ['Tam 2', 'Tam 4', 'Tam 6', 'Tam 8', 'Tam 10', 'Tam 12'];
                 $colors = ['Azul Celeste', 'Rosa Bebê', 'Amarelo Pastel', 'Cinza Mescla'];
