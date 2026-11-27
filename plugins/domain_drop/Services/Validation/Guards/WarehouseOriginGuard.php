@@ -20,9 +20,20 @@ use DomainSystem\Plugins\domain_drop\Services\WarehouseOriginResolver;
  */
 class WarehouseOriginGuard implements ProductValidationGuardInterface
 {
+    private ?WarehouseOriginResolverInterface $originResolver;
+    private ?string $defaultTargetOrigin;
+
     public function __construct(
-        private readonly ?WarehouseOriginResolverInterface $originResolver = null
+        WarehouseOriginResolverInterface|string|null $originResolverOrMode = null,
+        ?string $defaultTargetOrigin = null
     ) {
+        if (is_string($originResolverOrMode)) {
+            $this->originResolver = null;
+            $this->defaultTargetOrigin = $originResolverOrMode;
+        } else {
+            $this->originResolver = $originResolverOrMode;
+            $this->defaultTargetOrigin = $defaultTargetOrigin;
+        }
     }
 
     public function getName(): string
@@ -30,10 +41,14 @@ class WarehouseOriginGuard implements ProductValidationGuardInterface
         return 'warehouse_origin_guard';
     }
 
-    public function validate(string $id, array $rawData): ValidationResultInterface
+    public function validate(string|array $id, array $rawData = []): ValidationResultInterface
     {
+        if (is_array($id)) {
+            $rawData = $id;
+            $id = (string)($rawData['id'] ?? ($rawData['product_id'] ?? 'unknown'));
+        }
         $resolver = $this->originResolver ?? new WarehouseOriginResolver();
-        $targetOrigin = strtoupper((string)($rawData['requested_warehouse_origin'] ?? ($rawData['target_warehouse_origin'] ?? 'ALL')));
+        $targetOrigin = strtoupper((string)($this->defaultTargetOrigin ?? ($rawData['requested_warehouse_origin'] ?? ($rawData['target_warehouse_origin'] ?? 'ALL'))));
         
         $resolvedOrigin = $resolver->resolve($rawData, (string)($rawData['title'] ?? ($rawData['product_title'] ?? '')));
 

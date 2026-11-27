@@ -28,14 +28,31 @@ class ProductAssemblyLine implements ProductAssemblyLineInterface
      * @var array<int, AssemblyStationInterface>
      */
     private array $stations = [];
+    private array $defaultSharedOptions = [];
+    private array $lastRejections = [];
+    private array $lastTelemetry = [];
 
     /**
      * @param array<int, AssemblyStationInterface> $stations
      */
-    public function __construct(array $stations = [])
-    {
+    public function __construct(
+        array $stations = [],
+        ?string $warehouseMode = null,
+        ?float $exchangeRate = null,
+        ?float $markup = null
+    ) {
         foreach ($stations as $station) {
             $this->addStation($station);
+        }
+        if ($warehouseMode !== null) {
+            $this->defaultSharedOptions['warehouse'] = $warehouseMode;
+            $this->defaultSharedOptions['warehouseOrigin'] = $warehouseMode;
+        }
+        if ($exchangeRate !== null) {
+            $this->defaultSharedOptions['exchange_rate'] = $exchangeRate;
+        }
+        if ($markup !== null) {
+            $this->defaultSharedOptions['markup'] = $markup;
         }
     }
 
@@ -56,7 +73,7 @@ class ProductAssemblyLine implements ProductAssemblyLineInterface
         return new self([
             new CandidateNormalizationStation(),
             new ProductDetailExtractionStation($apiClient),
-            new FreightInspectionStation($originResolver),
+            new FreightInspectionStation($originResolver, null, $apiClient),
             new MediaSanitizationStation(),
             new FinancialPricingStation($currencyConverter),
             new CatalogPackagingStation()
@@ -83,6 +100,7 @@ class ProductAssemblyLine implements ProductAssemblyLineInterface
 
     public function runBatch(array $candidates, array $sharedOptions = []): array
     {
+        $sharedOptions = array_merge($this->defaultSharedOptions, $sharedOptions);
         $approved = [];
         $rejected = [];
         $telemetry = [
@@ -134,5 +152,37 @@ class ProductAssemblyLine implements ProductAssemblyLineInterface
             'rejected' => $rejected,
             'telemetry' => $telemetry
         ];
+    }
+
+    /**
+     * Executa a montagem em lote retornando objetos de produto compatíveis com a esteira.
+     *
+     * @param array<int, array> $candidates
+     * @return array<int, object>
+     */
+    public function assembleBatch(array $candidates): array
+    {
+        $batchResult = $this->runBatch($candidates, $this->defaultSharedOptions);
+        $this->lastRejections = $batchResult['rejected'];
+        $this->lastTelemetry = $batchResult['telemetry'];
+
+        $objects = [];
+        foreach ($batchResult['approved'] as $item) {
+            $obj = (object)$item;
+            $obj->aliexpressId = (string)($item['id'] ?? ($item['productId'] ?? ($item['aliexpressId'] ?? '')));
+            $objects[] = $obj;
+        }
+
+        return $objects;
+    }
+
+    public function getRejections(): array
+    {
+        return $this->lastRejections;
+    }
+
+    public function getTelemetry(): array
+    {
+        return $this->lastTelemetry;
     }
 }

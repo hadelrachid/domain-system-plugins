@@ -33,6 +33,13 @@ $courseTitle = htmlspecialchars((string)($course['title'] ?? 'Curso Academy'), E
 $courseId = (int)($course['id'] ?? 0);
 $courseImage = $courseImage ?? '';
 $coursePlatform = (string)($coursePlatform ?? ($course['external_platform'] ?? ''));
+$productVariants = $productVariants ?? [];
+$variationAxes = $variationAxes ?? [];
+$selectedVariant = $selectedVariant ?? null;
+$publicoAlvo = (string)($publicoAlvo ?? '');
+$productOrigin = (string)($productOrigin ?? '');
+$selectedSku = (string)($selectedSku ?? '');
+$hasVariants = !empty($variationAxes) && !empty($productVariants);
 $gateways = $gateways ?? [];
 $hasMercadoPago = false;
 $hasStripe = false;
@@ -149,13 +156,57 @@ $effectiveThumb = !empty($courseImage) ? $courseImage : $fallbackThumb;
                         <div style="flex: 1;">
                             <div style="color: #fff; font-weight: 700; font-size: 1.02rem; line-height: 1.35;"><?= $courseTitle ?></div>
                             <?php if ($isPhysicalOrDropship): ?>
-                                <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 4px;">
-                                    Valor unitário: <strong style="color: #cbd5e1;">R$ <?= $formattedUnit ?></strong>
+                                <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px;">
+                                    <?php if (!empty($publicoAlvo)): ?>
+                                        <span style="background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.35); color: #93c5fd; padding: 2px 7px; border-radius: 5px; font-size: 0.72rem; font-weight: 700;">
+                                            🧑 <?= htmlspecialchars($publicoAlvo) ?>
+                                        </span>
+                                    <?php endif; ?>
+                                    <span style="background: <?= !empty($productOrigin) && str_contains($productOrigin, 'Brasil') ? 'rgba(34,197,94,0.15)' : 'rgba(168,85,247,0.15)' ?>; border: 1px solid <?= !empty($productOrigin) && str_contains($productOrigin, 'Brasil') ? 'rgba(34,197,94,0.35)' : 'rgba(168,85,247,0.35)' ?>; color: <?= !empty($productOrigin) && str_contains($productOrigin, 'Brasil') ? '#4ade80' : '#c084fc' ?>; padding: 2px 7px; border-radius: 5px; font-size: 0.72rem; font-weight: 700;">
+                                        <?= htmlspecialchars(!empty($productOrigin) ? $productOrigin : '🌐 Importação Oficial') ?>
+                                    </span>
+                                </div>
+                                <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px;">
+                                    Valor unitário: <strong id="checkout_unit_price_val" style="color: #cbd5e1;">R$ <?= $formattedUnit ?></strong>
                                 </div>
                             <?php endif; ?>
                         </div>
                         <span id="checkout_subtotal_val" style="color: var(--accent-green); font-weight: 800; font-size: 1.05rem; white-space: nowrap;">R$ <?= $formattedTotal ?></span>
                     </div>
+
+                    <?php if ($isPhysicalOrDropship && $hasVariants): ?>
+                        <!-- Seletor de Variações de Roupas / Cores / Tamanhos no Checkout -->
+                        <div id="checkout_variant_selector_box" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.09); border-radius: 8px; padding: 12px; margin-bottom: 14px;">
+                            <div style="font-size: 0.78rem; font-weight: 700; color: #F0D060; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px;">
+                                <span>🎨 Variação Escolhida (Cor &amp; Tamanho)</span>
+                                <span id="checkout_variant_title_badge" style="color: #4ade80; font-size: 0.75rem; font-weight: 600;">
+                                    <?= htmlspecialchars($selectedVariant['title'] ?? 'Opção selecionada') ?>
+                                </span>
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px;">
+                                <?php foreach ($variationAxes as $axisName => $options): ?>
+                                    <div>
+                                        <label style="display: block; font-size: 0.72rem; color: #94a3b8; font-weight: 600; margin-bottom: 4px;"><?= htmlspecialchars($axisName) ?>:</label>
+                                        <select class="ds-field-input ds-checkout-variant-axis" data-axis="<?= htmlspecialchars($axisName) ?>" onchange="onCheckoutVariantAxisChange()" style="padding: 6px 10px; font-size: 0.82rem; height: 34px; background: #0c0f12; border-color: rgba(255,255,255,0.18); border-radius: 6px; color: #fff;">
+                                            <?php
+                                            $currentVal = $selectedVariant['options'][$axisName] ?? '';
+                                            foreach ($options as $optVal):
+                                                $isSelected = ($optVal === $currentVal);
+                                            ?>
+                                                <option value="<?= htmlspecialchars($optVal) ?>" <?= $isSelected ? 'selected' : '' ?>>
+                                                    <?= htmlspecialchars($optVal) ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    <?php elseif ($isPhysicalOrDropship && !empty($selectedVariant['title'])): ?>
+                        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 6px 10px; margin-bottom: 12px; font-size: 0.76rem; color: #94a3b8;">
+                            Modelo / Opção: <strong style="color: #4ade80;"><?= htmlspecialchars($selectedVariant['title']) ?></strong>
+                        </div>
+                    <?php endif; ?>
 
                     <?php if ($isPhysicalOrDropship && $sellerInfo !== null): ?>
                         <!-- Identificação do Vendedor / Fornecedor Exclusivo -->
@@ -252,7 +303,7 @@ $effectiveThumb = !empty($courseImage) ? $courseImage : $fallbackThumb;
             <div class="ds-card">
                 <h2 class="ds-card-title"><?= $isPhysicalOrDropship ? '📦 Dados de Entrega &amp; Pagamento' : '💳 Matrícula &amp; Forma de Pagamento' ?></h2>
                 <form id="checkout_form" onsubmit="handlePaymentSubmit(event)">
-                    <input type="hidden" id="item_sku" name="sku" value="<?= htmlspecialchars((string)($_GET['sku'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                    <input type="hidden" id="item_sku" name="sku" value="<?= htmlspecialchars((string)($selectedSku ?: ($_GET['sku'] ?? '')), ENT_QUOTES, 'UTF-8') ?>">
                     <?php if (!$isPhysicalOrDropship): ?>
                     <!-- Conta do Aluno na Área de Estudos (Estilo Udemy) -->
                     <div style="background: rgba(69,243,255,0.05); border: 1px solid rgba(69,243,255,0.28); border-radius: 10px; padding: 14px 16px; margin-bottom: 18px;">
@@ -491,6 +542,58 @@ $effectiveThumb = !empty($courseImage) ? $courseImage : $fallbackThumb;
         var selectedMethod = 'pix';
         var shippingExtraPrice = 0.0;
         var selectedShippingMethod = 'standard';
+        var checkoutVariantsData = <?= json_encode($productVariants, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+        var checkoutVariationAxes = <?= json_encode($variationAxes, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+
+        function onCheckoutVariantAxisChange() {
+            if (!checkoutVariantsData || checkoutVariantsData.length === 0) return;
+            var selects = document.querySelectorAll('.ds-checkout-variant-axis');
+            var selectedOpts = {};
+            selects.forEach(function(sel) {
+                var axis = sel.getAttribute('data-axis');
+                if (axis) selectedOpts[axis] = sel.value;
+            });
+
+            var matched = null;
+            for (var i = 0; i < checkoutVariantsData.length; i++) {
+                var v = checkoutVariantsData[i];
+                var isMatch = true;
+                for (var ax in selectedOpts) {
+                    if (v.options && v.options[ax] !== selectedOpts[ax]) {
+                        isMatch = false;
+                        break;
+                    }
+                }
+                if (isMatch) {
+                    matched = v;
+                    break;
+                }
+            }
+
+            if (matched) {
+                var skuInput = document.getElementById('item_sku');
+                if (skuInput) skuInput.value = matched.sku || '';
+
+                var titleBadge = document.getElementById('checkout_variant_title_badge');
+                if (titleBadge) {
+                    titleBadge.textContent = matched.title || (Object.values(selectedOpts).join(' / '));
+                }
+
+                if (matched.image) {
+                    var thumb = document.querySelector('.ds-checkout-course-thumb');
+                    if (thumb) thumb.src = matched.image;
+                }
+
+                if (matched.price_brl && parseFloat(matched.price_brl) > 0) {
+                    unitPrice = parseFloat(matched.price_brl);
+                    var unitPriceEl = document.getElementById('checkout_unit_price_val');
+                    if (unitPriceEl) unitPriceEl.textContent = 'R$ ' + formatBrlAmount(unitPrice);
+                    updateOrderTotalsUI();
+                }
+
+                showNotify('Opção selecionada: ' + (matched.title || Object.values(selectedOpts).join(' / ')), 'info');
+            }
+        }
 
         function calcExpressShippingForQty(qty) {
             var totalWeight = unitWeightInGrams * Math.max(1, qty);

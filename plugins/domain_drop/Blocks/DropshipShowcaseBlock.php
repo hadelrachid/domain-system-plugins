@@ -236,7 +236,13 @@ class DropshipShowcaseBlock implements BlockInterface, StylableElementInterface
                         <?php
                         $productUrl = !empty($p->slug) ? $baseUrl . '/produto/' . urlencode($p->slug) : $baseUrl . '/produto/' . (int)$p->id;
                         $checkoutUrl = $baseUrl . '/checkout/produto/' . (int)$p->id;
-                        $costRef = $p->salePriceBrl * 1.35; // Preço original tachado simulado
+                        $originalPrice = (float)($p->attributes['original_price'] ?? ($p->attributes['regular_price'] ?? ($p->attributes['targetOriginalPrice'] ?? 0.0)));
+                        $hasPromo = ($originalPrice > $p->salePriceBrl);
+                        $hasVariants = method_exists($p, 'hasVariants') ? $p->hasVariants() : (!empty($p->attributes['variants']));
+                        $axes = method_exists($p, 'getVariationAxes') ? $p->getVariationAxes() : ($p->attributes['variation_axes'] ?? []);
+                        $publicoAlvo = (string)($p->attributes['publico_alvo'] ?? ($p->attributes['Público'] ?? ''));
+                        $buyUrl = $hasVariants ? ($productUrl . '#product-variants-box') : $checkoutUrl;
+                        $buyLabel = $hasVariants ? 'Escolher Opções' : $btnText;
                         ?>
                         <article class="drop-card">
                             <!-- Image Frame -->
@@ -255,6 +261,13 @@ class DropshipShowcaseBlock implements BlockInterface, StylableElementInterface
                                     </span>
                                 <?php endif; ?>
 
+                                <?php if (!empty($publicoAlvo)): ?>
+                                    <span style="position: absolute; bottom: 12px; right: 12px; background: rgba(15,23,42,0.85); border: 1px solid rgba(56,189,248,0.4); color: #38bdf8; padding: 3px 8px; border-radius: 6px; font-size: 10.5px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; backdrop-filter: blur(4px);">
+                                        <span><?= str_contains($publicoAlvo, 'Infantil') ? '👶' : '🧑' ?></span>
+                                        <span><?= htmlspecialchars($publicoAlvo) ?></span>
+                                    </span>
+                                <?php endif; ?>
+
                                 <?php if ($showRating && $p->rating > 0): ?>
                                     <?php
                                     $bStarsCount = (int)max(1, min(5, round((float)$p->rating)));
@@ -266,9 +279,11 @@ class DropshipShowcaseBlock implements BlockInterface, StylableElementInterface
                                     </span>
                                 <?php endif; ?>
 
-                                <span style="position: absolute; top: 12px; right: 12px; background: linear-gradient(135deg, #ff4747 0%, #e02424 100%); color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;">
-                                    PROMO
-                                </span>
+                                <?php if ($hasPromo): ?>
+                                    <span style="position: absolute; top: 12px; right: 12px; background: linear-gradient(135deg, #ff4747 0%, #e02424 100%); color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;">
+                                        PROMO
+                                    </span>
+                                <?php endif; ?>
                             </div>
 
                             <!-- Content -->
@@ -279,48 +294,72 @@ class DropshipShowcaseBlock implements BlockInterface, StylableElementInterface
                                     </h3>
 
                                     <?php
-                                    $cardRating = (float)($p->rating ?? 4.8);
-                                    $starCount = (int)max(1, min(5, round($cardRating > 0 ? $cardRating : 4.8)));
-                                    $starsEmoji = str_repeat('⭐', $starCount);
+                                    $cardRating = (float)($p->rating ?? 0.0);
                                     $ordersCount = (int)($p->ordersCount ?? 0);
                                     $salesInformed = (string)($p->attributes['Vendas_Informadas'] ?? '');
                                     $reviewsCount = (int)($p->attributes['reviews_count'] ?? 0);
                                     ?>
-                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; font-size: 11.5px;">
-                                        <span style="letter-spacing: 1px; font-size: 12px;"><?= $starsEmoji ?></span>
-                                        <strong style="color: #fbbf24; font-family: monospace; font-size: 12px;"><?= number_format($cardRating > 0 ? $cardRating : 4.8, 1) ?></strong>
+                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; font-size: 11.5px;">
+                                        <?php if ($cardRating > 0): ?>
+                                            <?php
+                                            $starCount = (int)max(1, min(5, round($cardRating)));
+                                            $starsEmoji = str_repeat('⭐', $starCount);
+                                            ?>
+                                            <span style="letter-spacing: 1px; font-size: 12px;"><?= $starsEmoji ?></span>
+                                            <strong style="color: #fbbf24; font-family: monospace; font-size: 12px;"><?= number_format($cardRating, 1) ?></strong>
+                                        <?php endif; ?>
                                         <?php if ($ordersCount > 0 && $salesInformed !== 'nao'): ?>
                                             <span style="color: #94a3b8; font-size: 11px;">• <strong style="color: #e2e8f0;"><?= number_format($ordersCount, 0, ',', '.') ?></strong> vendidos</span>
                                         <?php elseif ($reviewsCount > 0): ?>
                                             <span style="color: #94a3b8; font-size: 11px;">• <strong style="color: #e2e8f0;"><?= $reviewsCount ?></strong> avaliações</span>
+                                        <?php elseif ($cardRating <= 0): ?>
+                                            <span style="color: #94a3b8; font-size: 11px;">Item Verificado no Fornecedor</span>
                                         <?php else: ?>
                                             <span style="color: #94a3b8; font-size: 11px;">• <strong style="color: #e2e8f0;">Destaque</strong> em vendas</span>
                                         <?php endif; ?>
                                     </div>
 
+                                    <?php if ($hasVariants && !empty($axes)): ?>
+                                        <?php
+                                        $axesLabels = [];
+                                        if (!empty($axes['Cor'])) $axesLabels[] = '🎨 ' . count($axes['Cor']) . ' Cores';
+                                        if (!empty($axes['Tamanho'])) $axesLabels[] = '📏 ' . implode(', ', array_slice($axes['Tamanho'], 0, 4)) . (count($axes['Tamanho']) > 4 ? '...' : '');
+                                        ?>
+                                        <div style="font-size: 11px; color: #F0D060; background: rgba(212,175,55,0.08); border: 1px solid rgba(212,175,55,0.25); border-radius: 6px; padding: 4px 8px; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; font-weight: 600;">
+                                            <span><?= htmlspecialchars(implode(' • ', $axesLabels) ?: 'Variações Disponíveis') ?></span>
+                                            <span style="color: #cbd5e1; font-size: 10px;">Opções</span>
+                                        </div>
+                                    <?php endif; ?>
+
                                     <!-- Pricing Box -->
                                     <div style="margin-bottom: 16px;">
-                                        <div style="font-size: 12px; color: var(--text-muted, #94a3b8); text-decoration: line-through; margin-bottom: 2px;">
-                                            R$ <?= number_format($costRef, 2, ',', '.') ?>
-                                        </div>
+                                        <?php if ($hasPromo): ?>
+                                            <div style="font-size: 12px; color: var(--text-muted, #94a3b8); text-decoration: line-through; margin-bottom: 2px;">
+                                                R$ <?= number_format($originalPrice, 2, ',', '.') ?>
+                                            </div>
+                                        <?php endif; ?>
                                         <div style="font-size: 20px; font-weight: 700; color: #5cd67d; font-family: monospace;">
                                             R$ <?= number_format($p->salePriceBrl, 2, ',', '.') ?>
                                         </div>
                                         <?php $isNational = (!empty($p->attributes['origem_brasil']) || (isset($p->attributes['ship_from']) && $p->attributes['ship_from'] === 'BR')); ?>
-                                        <div style="font-size: 11px; color: <?= $isNational ? '#4ade80' : 'var(--text-muted, #94a3b8)' ?>; margin-top: 2px; font-weight: <?= $isNational ? '600' : 'normal' ?>; display: flex; align-items: center; flex-wrap: wrap;">
-                                            <?= $isNational ? (\DomainSystem\Plugins\domain_drop\Helpers\FlagHelper::br(15, 10) . ' Estoque no Brasil • Envio 3 a 7 dias') : 'em até 12x no cartão ou Pix' ?>
+                                        <div style="font-size: 11px; color: <?= $isNational ? '#4ade80' : 'var(--text-muted, #94a3b8)' ?>; margin-top: 2px; font-weight: <?= $isNational ? '600' : 'normal' ?>; display: flex; align-items: center; flex-wrap: wrap; gap: 4px;">
+                                            <span><?= $isNational ? (\DomainSystem\Plugins\domain_drop\Helpers\FlagHelper::br(15, 10) . ' Estoque no Brasil • Envio 3 a 7 dias') : '🌐 Importação Oficial com Rastreio' ?></span>
+                                        </div>
+                                        <div style="font-size: 11px; color: #38bdf8; margin-top: 3px; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                                            <span>🚚 Frete Grátis Disponível</span>
+                                            <span style="color: #94a3b8; font-weight: 400;">• Opção Sedex Expresso</span>
                                         </div>
                                     </div>
                                 </div>
 
-                                <!-- Action Buttons: Ver Detalhes e Comprar -->
+                                <!-- Action Buttons: Ver Detalhes e Comprar / Escolher Opções -->
                                 <div style="display: flex; gap: 8px; margin-top: 4px;">
                                     <a href="<?= htmlspecialchars($productUrl) ?>" style="flex: 1; background: rgba(255,255,255,0.06); border: 1.5px solid rgba(255,255,255,0.18); color: #fff; text-decoration: none; padding: 0 6px; height: 38px; border-radius: 8px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 4px; box-sizing: border-box; transition: all 0.2s ease;">
                                         <span>🔍</span>
                                         <span>Ver Detalhes</span>
                                     </a>
-                                    <a href="<?= htmlspecialchars($checkoutUrl) ?>" style="flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: linear-gradient(135deg, #ff4747 0%, #e02424 100%); color: #fff; text-decoration: none; padding: 0 8px; height: 38px; border-radius: 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 4px 14px rgba(255, 71, 71, 0.3); transition: filter 0.2s ease; box-sizing: border-box;">
-                                        <span><?= htmlspecialchars($btnText) ?></span>
+                                    <a href="<?= htmlspecialchars($buyUrl) ?>" style="flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: linear-gradient(135deg, #ff4747 0%, #e02424 100%); color: #fff; text-decoration: none; padding: 0 8px; height: 38px; border-radius: 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 4px 14px rgba(255, 71, 71, 0.3); transition: filter 0.2s ease; box-sizing: border-box;">
+                                        <span><?= htmlspecialchars($buyLabel) ?></span>
                                         <span>➔</span>
                                     </a>
                                 </div>

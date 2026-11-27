@@ -16,10 +16,23 @@ use DomainSystem\Plugins\domain_drop\Contracts\CurrencyConverterInterface;
 class FinancialPricingStation implements AssemblyStationInterface
 {
     private ?CurrencyConverterInterface $currencyConverter;
+    private ?float $defaultRate;
+    private ?float $defaultMarkup;
 
-    public function __construct(?CurrencyConverterInterface $currencyConverter = null)
-    {
-        $this->currencyConverter = $currencyConverter;
+    public function __construct(
+        CurrencyConverterInterface|float|null $currencyConverter = null,
+        ?float $rate = null,
+        ?float $markup = null
+    ) {
+        if (is_numeric($currencyConverter)) {
+            $this->currencyConverter = null;
+            $this->defaultRate = (float)$currencyConverter;
+            $this->defaultMarkup = $rate;
+        } else {
+            $this->currencyConverter = $currencyConverter;
+            $this->defaultRate = $rate;
+            $this->defaultMarkup = $markup;
+        }
     }
 
     public function getName(): string
@@ -30,12 +43,15 @@ class FinancialPricingStation implements AssemblyStationInterface
     public function process(ProductAssemblyContextInterface $context): ProductAssemblyContextInterface
     {
         $shared = $context->getSharedOptions();
-        $markupMultiplier = (float)($shared['markup'] ?? 1.4); // 40% margem padrão se não informado
+        $markupMultiplier = (float)($this->defaultMarkup ?? $shared['markup'] ?? 1.4); // 40% margem padrão se não informado
         if ($markupMultiplier <= 0.0) {
             $markupMultiplier = 1.4;
         }
 
         $rawPrice = (float)$context->get('raw_price', 0.0);
+        if ($rawPrice <= 0.0) {
+            $rawPrice = (float)$context->get('cost_price_usd', 0.0);
+        }
         if ($rawPrice <= 0.0) {
             $rawPrice = (float)$context->get('price', 0.0);
         }
@@ -50,10 +66,14 @@ class FinancialPricingStation implements AssemblyStationInterface
 
         if ($currency !== 'BRL') {
             if ($this->currencyConverter !== null) {
-                $costBrl = $this->currencyConverter->convert($rawPrice, $currency, 'BRL');
+                $rate = $this->currencyConverter->getExchangeRate($currency, 'BRL');
+                if ($rate <= 0.0) {
+                    $rate = (float)($this->defaultRate ?? $shared['exchange_rate'] ?? 5.50);
+                }
+                $costBrl = $rawPrice * $rate;
             } else {
                 // Fallback conservador de câmbio
-                $exchangeRate = (float)($shared['exchange_rate'] ?? 5.50);
+                $exchangeRate = (float)($this->defaultRate ?? $shared['exchange_rate'] ?? 5.50);
                 $costBrl = $rawPrice * $exchangeRate;
             }
         }
@@ -65,7 +85,9 @@ class FinancialPricingStation implements AssemblyStationInterface
         $marginPercent = ($salePriceBrl > 0.0) ? round(($profitBrl / $salePriceBrl) * 100, 1) : 0.0;
 
         $context->set('cost_brl', $costBrl);
+        $context->set('cost_price_brl', $costBrl);
         $context->set('price_brl', $salePriceBrl);
+        $context->set('sale_price_brl', $salePriceBrl);
         $context->set('suggested_price', $salePriceBrl);
         $context->set('profit_brl', $profitBrl);
         $context->set('margin_percent', $marginPercent);

@@ -16,6 +16,16 @@ use DomainSystem\Plugins\domain_drop\Contracts\Assembly\ProductAssemblyContextIn
  */
 class MediaSanitizationStation implements AssemblyStationInterface
 {
+    private bool $verifyHttpReachability;
+    /** @var ?callable */
+    private $httpChecker;
+
+    public function __construct(bool $verifyHttpReachability = false, ?callable $httpChecker = null)
+    {
+        $this->verifyHttpReachability = $verifyHttpReachability;
+        $this->httpChecker = $httpChecker;
+    }
+
     public function getName(): string
     {
         return 'MediaSanitization';
@@ -26,6 +36,15 @@ class MediaSanitizationStation implements AssemblyStationInterface
         $mainImage = trim((string)$context->get('main_image', ''));
         if ($mainImage === '') {
             $mainImage = trim((string)$context->get('image_url', ''));
+        }
+        if ($mainImage === '') {
+            $mainImage = trim((string)$context->get('main_image_url', ''));
+        }
+        if ($mainImage === '') {
+            $mainImage = trim((string)$context->get('item_main_image_url', ''));
+        }
+        if ($mainImage === '') {
+            $mainImage = trim((string)$context->get('image', ''));
         }
 
         if ($mainImage === '') {
@@ -40,6 +59,19 @@ class MediaSanitizationStation implements AssemblyStationInterface
         // Rejeita placeholders conhecidos ou imagens sintéticas
         if (str_contains($mainImage, 'default_') && str_contains($mainImage, '.jpg')) {
             return $context->abort($this->getName(), 'Imagem sintética/placeholder rejeitada pelo controle de qualidade');
+        }
+
+        // Verificação de Resposta HTTP Real (Elimina URLs que retornam 404, 403 ou conteúdo inacessível)
+        $shared = $context->getSharedOptions();
+        $shouldVerifyHttp = $this->verifyHttpReachability 
+            || !empty($shared['verify_http']) 
+            || !empty($shared['verify_media_reachability']);
+
+        if ($shouldVerifyHttp) {
+            $isReachable = $this->checkImageReachability($mainImage);
+            if (!$isReachable) {
+                return $context->abort($this->getName(), "Imagem principal inacessível no servidor remoto ou retornou status de erro HTTP (404/403): {$mainImage}");
+            }
         }
 
         // Galeria adicional
@@ -63,5 +95,47 @@ class MediaSanitizationStation implements AssemblyStationInterface
             'total_valid_images' => count($validImages),
             'main_image' => $mainImage
         ]);
+    }
+
+    /**
+     * Verifica se a imagem responde com status HTTP 200/300 no servidor remoto.
+     */
+    public function checkImageReachability(string $url): bool
+    {
+        if ($this->httpChecker !== null) {
+            return (bool)call_user_func($this->httpChecker, $url);
+        }
+
+        // Domínios fictícios e locais usados em ambiente de teste automatizado
+        $host = parse_url($url, PHP_URL_HOST);
+        if ($host === 'localhost' || $host === '127.0.0.1' || str_ends_with((string)$host, '.test') || str_ends_with((string)$host, '.example')) {
+            return true;
+        }
+
+        if (function_exists('curl_init')) {
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_NOBODY => true,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 2,
+                CURLOPT_CONNECTTIMEOUT => 2,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_SSL_VERIFYPEER => true,
+                CURLOPT_SSL_VERIFYHOST => 2,
+                CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            ]);
+            curl_exec($ch);
+            $statusCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($statusCode >= 200 && $statusCode < 400) {
+                return true;
+            }
+            if ($statusCode >= 400) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

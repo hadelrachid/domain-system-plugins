@@ -124,6 +124,7 @@
     $adminH = str_pad((string)floor($adminRemSeconds / 3600), 2, '0', STR_PAD_LEFT);
     $adminM = str_pad((string)floor(($adminRemSeconds % 3600) / 60), 2, '0', STR_PAD_LEFT);
     $adminS = str_pad((string)($adminRemSeconds % 60), 2, '0', STR_PAD_LEFT);
+    $isDailyCycleActive = !empty($cycleInfo['auto_sync_enabled'] ?? true);
     ?>
     <div style="background: linear-gradient(135deg, rgba(212,175,55,0.12) 0%, rgba(20,24,30,0.95) 100%); border: 1px solid rgba(212,175,55,0.4); border-radius: 10px; padding: 22px 24px; margin-bottom: 26px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.25);">
         <div style="display: flex; align-items: center; gap: 16px;">
@@ -135,8 +136,8 @@
                     <span style="font-size: 16px; font-weight: 800; color: #FFE082; text-transform: uppercase; letter-spacing: 0.5px;">
                         Ciclo Autônomo 24 Horas • Rotação de 9 Categorias
                     </span>
-                    <span style="background: rgba(34,197,94,0.2); color: #4ade80; border: 1px solid rgba(34,197,94,0.4); padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase;">
-                        Ativo
+                    <span id="cycleActiveBadge" style="background: <?= $isDailyCycleActive ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)' ?>; color: <?= $isDailyCycleActive ? '#4ade80' : '#f87171' ?>; border: 1px solid <?= $isDailyCycleActive ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)' ?>; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase;">
+                        <?= $isDailyCycleActive ? 'Ativo' : 'Pausado' ?>
                     </span>
                 </div>
                 <div style="font-size: 13px; color: #cbd5e1;">
@@ -172,6 +173,12 @@
                     <div style="font-size: 8px; color: #94a3b8; text-transform: uppercase;">Seg</div>
                 </div>
             </div>
+
+            <!-- Botão Amarelo para Pausar / Desabilitar Rotação 24h -->
+            <button type="button" id="btnToggleDailyCycle" onclick="toggleDailyCycleAutoSync()" style="background: <?= $isDailyCycleActive ? 'linear-gradient(135deg, #fbbf24 0%, #d97706 100%)' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)' ?>; color: #0b0f17; border: none; padding: 11px 18px; border-radius: 6px; font-weight: 700; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(245,158,11,0.3); transition: all 0.2s ease;" title="<?= $isDailyCycleActive ? 'Pausar o ciclo autônomo de 24 horas' : 'Reativar o ciclo autônomo de 24 horas' ?>">
+                <i class="fas <?= $isDailyCycleActive ? 'fa-pause-circle' : 'fa-play-circle' ?>" id="btnToggleDailyCycleIcon"></i>
+                <span id="btnToggleDailyCycleText"><?= $isDailyCycleActive ? 'Pausar 24 Horas' : 'Ativar 24 Horas' ?></span>
+            </button>
 
             <!-- Manual Trigger Form -->
             <form action="<?= $baseUrl ?>/admin/dropship/run-daily-cycle" method="POST" id="formRunDailyCycle" style="margin: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
@@ -925,19 +932,9 @@
                             </div>
                         <?php endif; ?>
 
-                        <?php if ($isNational): ?>
-                            <div style="position: absolute; bottom: 10px; right: 10px; background: rgba(16, 185, 129, 0.9); backdrop-filter: blur(4px); color: #fff; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; display: flex; align-items: center; gap: 4px;" title="Produto em Entreposto no Brasil / Envio Nacional (3 a 7 dias)">
-                                <span>🇧🇷</span> BR
-                            </div>
-                        <?php elseif ($isChina): ?>
-                            <div style="position: absolute; bottom: 10px; right: 10px; background: rgba(59, 130, 246, 0.9); backdrop-filter: blur(4px); color: #fff; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; display: flex; align-items: center; gap: 4px;" title="Importação Direta / Entreposto Central AliExpress (China) Remessa Conforme DDP">
-                                <span>🇨🇳</span> CN
-                            </div>
-                        <?php else: ?>
-                            <div style="position: absolute; bottom: 10px; right: 10px; background: rgba(100, 116, 139, 0.9); backdrop-filter: blur(4px); color: #fff; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; display: flex; align-items: center; gap: 4px;" title="Origem Internacional Certificada com Rastreamento">
-                                <span>🌐</span> GLOBAL
-                            </div>
-                        <?php endif; ?>
+                        <div id="prod-origin-badge-<?= (int)$prod->id ?>" style="position: absolute; bottom: 10px; right: 10px; background: <?= $isNational ? 'rgba(16, 185, 129, 0.9)' : ($isChina ? 'rgba(59, 130, 246, 0.9)' : 'rgba(100, 116, 139, 0.9)') ?>; backdrop-filter: blur(4px); color: #fff; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; display: flex; align-items: center; gap: 4px;" title="Procedência e Entreposto Físico">
+                            <?= $isNational ? '<span>🇧🇷</span> BR' : ($isChina ? '<span>🇨🇳</span> CN' : '<span>🌐</span> GLOBAL') ?>
+                        </div>
                     </div>
 
                     <!-- Content -->
@@ -953,6 +950,39 @@
                                     <?php endif; ?>
                                 </div>
                             <?php endif; ?>
+
+                            <!-- Controles Rápidos no Card: Categoria e Procedência (Origem) -->
+                            <div style="margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+                                <div style="display: flex; align-items: center; gap: 4px;">
+                                    <span style="font-size: 10px; color: #94a3b8; font-weight: 700; text-transform: uppercase;" title="Clique para alterar a categoria deste produto">
+                                        <i class="fas fa-tag" style="color: #fbbf24;"></i> Cat:
+                                    </span>
+                                    <select class="admin-prod-category-select" data-product-id="<?= (int)$prod->id ?>" onchange="updateProductCategory(<?= (int)$prod->id ?>, this.value)" style="background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.18); color: #F0D060; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px; outline: none; cursor: pointer; max-width: 140px; text-overflow: ellipsis; white-space: nowrap;">
+                                        <?php 
+                                        $officialCommercialCats = \DomainSystem\Plugins\domain_drop\Services\CategoryTaxonomyService::getCommercialCategories();
+                                        $availableCats = !empty($categories) ? array_unique(array_merge($categories, $officialCommercialCats)) : $officialCommercialCats;
+                                        foreach ($availableCats as $catOpt): 
+                                        ?>
+                                            <option value="<?= htmlspecialchars($catOpt) ?>" <?= ($prod->category === $catOpt) ? 'selected' : '' ?> style="background: #1d2327; color: #fff;">
+                                                <?= htmlspecialchars($catOpt) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+
+                                <?php $prodOrigin = $isNational ? 'BR' : ($isChina ? 'CN' : 'GLOBAL'); ?>
+                                <div style="display: flex; align-items: center; gap: 4px;">
+                                    <span style="font-size: 10px; color: #94a3b8; font-weight: 700; text-transform: uppercase;" title="Clique para alterar a procedência/entreposto deste produto (Brasil vs China)">
+                                        <i class="fas fa-map-marker-alt" style="color: #60a5fa;"></i> Origem:
+                                    </span>
+                                    <select class="admin-prod-origin-select" id="prod-origin-select-<?= (int)$prod->id ?>" data-product-id="<?= (int)$prod->id ?>" onchange="updateProductOrigin(<?= (int)$prod->id ?>, this.value)" style="background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.18); color: <?= $prodOrigin === 'BR' ? '#34d399' : ($prodOrigin === 'CN' ? '#60a5fa' : '#cbd5e1') ?>; font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 4px; outline: none; cursor: pointer;">
+                                        <option value="BR" <?= $prodOrigin === 'BR' ? 'selected' : '' ?> style="background: #1d2327; color: #34d399;">🇧🇷 Brasil</option>
+                                        <option value="CN" <?= $prodOrigin === 'CN' ? 'selected' : '' ?> style="background: #1d2327; color: #60a5fa;">🇨🇳 China</option>
+                                        <option value="GLOBAL" <?= $prodOrigin === 'GLOBAL' ? 'selected' : '' ?> style="background: #1d2327; color: #cbd5e1;">🌐 Global</option>
+                                    </select>
+                                </div>
+                            </div>
+
                             <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600; color: #fff; line-height: 1.4; max-height: 2.8em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;" title="<?= htmlspecialchars($prod->title) ?>">
                                 <?= htmlspecialchars($prod->title) ?>
                             </h4>
@@ -2269,6 +2299,114 @@
         window.startBatchSync = startBatchSync;
         window.cancelBatchSync = cancelBatchSync;
         window.finishAndReload = finishAndReload;
+
+        function updateProductCategory(productId, newCategory) {
+            if (!productId || !newCategory) return;
+            var fd = new FormData();
+            fd.append('csrf_token', dropshipCsrfToken);
+            fd.append('category', newCategory);
+
+            fetch(baseAdminUrl + '/product/' + productId + '/category', {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: fd
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    showToastFeedback(data.message, 'success');
+                } else {
+                    showToastFeedback(data.message || 'Erro ao alterar categoria', 'error');
+                }
+            })
+            .catch(function(err) {
+                showToastFeedback('Erro de conexão ao salvar categoria.', 'error');
+            });
+        }
+
+        function updateProductOrigin(productId, newOrigin) {
+            if (!productId || !newOrigin) return;
+            var fd = new FormData();
+            fd.append('csrf_token', dropshipCsrfToken);
+            fd.append('origin', newOrigin);
+
+            var sel = document.getElementById('prod-origin-select-' + productId);
+            if (sel) {
+                sel.style.color = (newOrigin === 'BR') ? '#34d399' : ((newOrigin === 'CN') ? '#60a5fa' : '#cbd5e1');
+            }
+
+            fetch(baseAdminUrl + '/product/' + productId + '/origin', {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: fd
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    showToastFeedback(data.message, 'success');
+                    var badge = document.getElementById('prod-origin-badge-' + productId);
+                    if (badge) {
+                        badge.innerHTML = data.badge_flag;
+                        badge.style.background = data.badge_bg;
+                    }
+                } else {
+                    showToastFeedback(data.message || 'Erro ao alterar procedência', 'error');
+                }
+            })
+            .catch(function(err) {
+                showToastFeedback('Erro de conexão ao salvar procedência.', 'error');
+            });
+        }
+
+        function toggleDailyCycleAutoSync() {
+            var btn = document.getElementById('btnToggleDailyCycle');
+            var icon = document.getElementById('btnToggleDailyCycleIcon');
+            var text = document.getElementById('btnToggleDailyCycleText');
+            var badge = document.getElementById('cycleActiveBadge');
+
+            var fd = new FormData();
+            fd.append('csrf_token', dropshipCsrfToken);
+
+            fetch(baseAdminUrl + '/toggle-daily-cycle', {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: fd
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    showToastFeedback(data.message, 'success');
+                    var isEnabled = data.auto_sync_enabled;
+                    if (badge) {
+                        badge.textContent = isEnabled ? 'Ativo' : 'Pausado';
+                        badge.style.background = isEnabled ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)';
+                        badge.style.color = isEnabled ? '#4ade80' : '#f87171';
+                        badge.style.borderColor = isEnabled ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)';
+                    }
+                    if (btn) {
+                        btn.style.background = isEnabled 
+                            ? 'linear-gradient(135deg, #fbbf24 0%, #d97706 100%)' 
+                            : 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+                        btn.title = isEnabled ? 'Pausar o ciclo autônomo de 24 horas' : 'Reativar o ciclo autônomo de 24 horas';
+                    }
+                    if (icon) {
+                        icon.className = isEnabled ? 'fas fa-pause-circle' : 'fas fa-play-circle';
+                    }
+                    if (text) {
+                        text.textContent = isEnabled ? 'Pausar 24 Horas' : 'Ativar 24 Horas';
+                    }
+                } else {
+                    showToastFeedback(data.message || 'Erro ao alterar estado do ciclo 24h', 'error');
+                }
+            })
+            .catch(function(err) {
+                showToastFeedback('Erro de conexão ao alternar ciclo 24h.', 'error');
+            });
+        }
+
+        window.updateProductCategory = updateProductCategory;
+        window.updateProductOrigin = updateProductOrigin;
+        window.toggleDailyCycleAutoSync = toggleDailyCycleAutoSync;
         let targetDeleteProductId = null;
 
         function openDeleteProductModal(id, title) {

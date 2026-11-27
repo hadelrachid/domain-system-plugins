@@ -247,13 +247,19 @@ class DropshipFrontController
     }
 
     /**
-     * Página Dedicada: Sex Shop (Descontinuada por conformidade regulatória e de gateways)
-     * GET /sexshop -> Redirecionamento permanente para /loja
+     * Página Dedicada: Sex Shop & Bem-Estar Íntimo (+18 com Age Gate)
+     * GET /sexshop
      */
     public function sexShop(Request $request): ResponseInterface
     {
-        $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
-        return new Response('', 301, ['Location' => ($baseUrl !== '' ? $baseUrl : '') . '/loja']);
+        return $this->renderCatalogPage($request, [
+            'dedicatedSection' => 'sexshop',
+            'pageBaseRoute'    => '/sexshop',
+            'pageTitle'        => 'Sex Shop & Bem-Estar Íntimo (+18) - Loja Oficial',
+            'forcedCategory'   => 'Novidades & Uso Especial',
+            'displayCategory'  => 'Novidades & Uso Especial',
+            'forcedSearch'     => '',
+        ]);
     }
 
     /**

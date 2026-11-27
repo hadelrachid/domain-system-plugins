@@ -6,6 +6,7 @@ namespace DomainSystem\Plugins\domain_drop\Services\Assembly\Stations;
 
 use DomainSystem\Plugins\domain_drop\Contracts\Assembly\AssemblyStationInterface;
 use DomainSystem\Plugins\domain_drop\Contracts\Assembly\ProductAssemblyContextInterface;
+use DomainSystem\Plugins\domain_drop\Contracts\AliExpressApiClientInterface;
 use DomainSystem\Plugins\domain_drop\Contracts\WarehouseOriginResolverInterface;
 
 /**
@@ -17,10 +18,23 @@ use DomainSystem\Plugins\domain_drop\Contracts\WarehouseOriginResolverInterface;
 class FreightInspectionStation implements AssemblyStationInterface
 {
     private ?WarehouseOriginResolverInterface $originResolver;
+    private ?string $defaultOriginMode;
+    private ?AliExpressApiClientInterface $apiClient;
 
-    public function __construct(?WarehouseOriginResolverInterface $originResolver = null)
-    {
-        $this->originResolver = $originResolver;
+    public function __construct(
+        WarehouseOriginResolverInterface|string|null $originResolver = null,
+        ?string $warehouseMode = null,
+        ?AliExpressApiClientInterface $apiClient = null
+    ) {
+        if (is_string($originResolver)) {
+            $this->originResolver = null;
+            $this->defaultOriginMode = $originResolver;
+            $this->apiClient = $apiClient;
+        } else {
+            $this->originResolver = $originResolver;
+            $this->defaultOriginMode = $warehouseMode;
+            $this->apiClient = $apiClient;
+        }
     }
 
     public function getName(): string
@@ -31,7 +45,7 @@ class FreightInspectionStation implements AssemblyStationInterface
     public function process(ProductAssemblyContextInterface $context): ProductAssemblyContextInterface
     {
         $shared = $context->getSharedOptions();
-        $requiredOrigin = strtoupper((string)($shared['warehouse'] ?? $shared['warehouseOrigin'] ?? 'ALL'));
+        $requiredOrigin = strtoupper((string)($this->defaultOriginMode ?? $shared['warehouse'] ?? $shared['warehouseOrigin'] ?? 'ALL'));
 
         // Se tiver o resolver de entreposto injetado, executa a resolução formal
         if ($this->originResolver !== null) {
@@ -46,6 +60,46 @@ class FreightInspectionStation implements AssemblyStationInterface
                 $origin = 'CN';
             } else {
                 $origin = 'UNKNOWN';
+            }
+        }
+
+        // Se a procedência for UNKNOWN e tivermos cliente oficial da API injetado, executa consulta de frete oficial
+        // Endpoint: aliexpress.ds.freight.query (ae-freight-shipment.pdf e documentacao-completa.pdf Pág. 229)
+        if ($origin === 'UNKNOWN' && $this->apiClient !== null) {
+            $id = (string)$context->get('id', $context->get('productId', ''));
+            if ($id !== '' && is_numeric($id)) {
+                try {
+                    $selectedSku = null;
+                    $skus = $context->get('skus', []);
+                    if (!empty($skus) && is_array($skus)) {
+                        $selectedSku = (string)($skus[0]['sku_id'] ?? '');
+                    }
+                    $freightReq = [
+                        'productId'     => $id,
+                        'shipToCountry' => 'BR',
+                        'quantity'      => 1
+                    ];
+                    if ($selectedSku !== '') {
+                        $freightReq['selectedSkuId'] = $selectedSku;
+                    }
+                    $freightRes = $this->apiClient->queryFreight($freightReq);
+                    if (!empty($freightRes) && is_array($freightRes)) {
+                        $context->set('freight_info', $freightRes);
+                        $productPayload = array_merge($context->getRawData(), $context->getProcessedData(), ['freight' => $freightRes]);
+                        if ($this->originResolver !== null) {
+                            $origin = $this->originResolver->resolve($productPayload);
+                        } else {
+                            $shipFromFreight = strtoupper((string)($freightRes['ship_from_country'] ?? ($freightRes['send_goods_country_code'] ?? '')));
+                            if ($shipFromFreight === 'BR') {
+                                $origin = 'BR';
+                            } elseif ($shipFromFreight === 'CN') {
+                                $origin = 'CN';
+                            }
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // Isolamento gracioso
+                }
             }
         }
 

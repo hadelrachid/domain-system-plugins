@@ -135,16 +135,29 @@ if ($eanCode !== '') {
         <!-- Product Buy Box Column -->
         <div style="display: flex; flex-direction: column; justify-content: space-between;">
             <div>
-                <?php $isNational = (!empty($product->attributes['origem_brasil']) || (isset($product->attributes['ship_from']) && $product->attributes['ship_from'] === 'BR')); ?>
+                <?php 
+                $isNational = (!empty($product->attributes['origem_brasil']) || (isset($product->attributes['ship_from']) && $product->attributes['ship_from'] === 'BR'));
+                $publicoAlvo = (string)($product->attributes['publico_alvo'] ?? ($isAdult ? 'Adulto' : 'Infantil (Kids)'));
+                ?>
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
                     <span style="background: <?= $isAdult ? 'rgba(239,68,68,0.2)' : 'rgba(255,71,71,0.15)' ?>; color: <?= $isAdult ? '#f87171' : '#ff6b6b' ?>; border: <?= $isAdult ? '1px solid rgba(239,68,68,0.4)' : 'none' ?>; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block;">
                         <?= $isAdult ? '🔞 ' : '' ?><?= htmlspecialchars($product->category) ?>
+                    </span>
+                    <span style="background: rgba(59,130,246,0.14); border: 1px solid rgba(59,130,246,0.35); color: #93c5fd; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 5px;">
+                        <span>🧑 Público: <?= htmlspecialchars($publicoAlvo) ?></span>
                     </span>
                     <?php if ($isNational): ?>
                         <span style="background: rgba(34,197,94,0.14); border: 1px solid rgba(34,197,94,0.4); color: #4ade80; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 5px;">
                             <?= \DomainSystem\Plugins\domain_drop\Helpers\FlagHelper::br(16, 11) ?> <span>Estoque no Brasil (Envio 3 a 7 dias)</span>
                         </span>
+                    <?php else: ?>
+                        <span style="background: rgba(168,85,247,0.14); border: 1px solid rgba(168,85,247,0.35); color: #c084fc; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 5px;">
+                            <span>🌐 Importação Oficial (Rastreamento Oficial)</span>
+                        </span>
                     <?php endif; ?>
+                    <span style="background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.3); color: #34d399; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 5px;">
+                        <span>🚚 Frete Grátis Disponível • Opção Sedex</span>
+                    </span>
                 </div>
 
                 <h1 style="font-size: clamp(20px, 3vw, 28px); font-weight: 700; color: #fff; margin: 0 0 14px 0; line-height: 1.3;">
@@ -198,15 +211,31 @@ if ($eanCode !== '') {
                 </div>
 
                 <!-- Identificação do Vendedor / Fornecedor Exclusivo & Transparência da Curadoria -->
+                <?php
+                $storeLocation = $product->attributes['store_info']['location'] ?? ($product->attributes['store_location'] ?? ($sellerInfo['warehouse'] ?? ''));
+                $storeOpenDate = $product->attributes['store_info']['open_date'] ?? ($product->attributes['store_open_date'] ?? '');
+                $isStoreBrazil = stripos($storeLocation, 'Brasil') !== false || stripos($storeLocation, 'Brazil') !== false;
+                ?>
                 <div style="background: rgba(59, 130, 246, 0.06); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 6px;">
                     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 13px;">
                         <span style="color: #fff; font-weight: 700;">🏪 <?= htmlspecialchars($sellerInfo['store_name']) ?></span>
-                        <span style="font-family: monospace; font-size: 11px; background: rgba(255,255,255,0.08); color: #93c5fd; padding: 2px 8px; border-radius: 5px;">
-                            ID: <?= htmlspecialchars($sellerInfo['seller_id']) ?>
-                        </span>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <?php if ($storeLocation !== ''): ?>
+                                <span style="font-size: 11px; background: <?= $isStoreBrazil ? 'rgba(16,185,129,0.15)' : 'rgba(59,130,246,0.15)' ?>; color: <?= $isStoreBrazil ? '#34d399' : '#93c5fd' ?>; border: 1px solid <?= $isStoreBrazil ? 'rgba(16,185,129,0.3)' : 'rgba(59,130,246,0.3)' ?>; padding: 2px 7px; border-radius: 4px; font-weight: 600;">
+                                    <?= $isStoreBrazil ? '🇧🇷 Brasil' : '🌐 ' . htmlspecialchars($storeLocation) ?>
+                                </span>
+                            <?php endif; ?>
+                            <span style="font-family: monospace; font-size: 11px; background: rgba(255,255,255,0.08); color: #cbd5e1; padding: 2px 8px; border-radius: 5px;">
+                                ID: <?= htmlspecialchars($sellerInfo['seller_id']) ?>
+                            </span>
+                        </div>
                     </div>
                     <span style="font-size: 11.5px; color: #94a3b8; line-height: 1.45;">
-                        <?= htmlspecialchars($sellerInfo['warehouse']) ?> • Produto minerado no AliExpress Brasil por notas e aprovações. Vendido e enviado diretamente por este fornecedor (itens de outros vendedores têm entrega separada), com <strong>garantia de entrega RachidD.com</strong>.
+                        <?= htmlspecialchars($sellerInfo['warehouse']) ?>
+                        <?php if ($storeOpenDate !== ''): ?>
+                            • Aberta desde: <strong style="color: #cbd5e1;"><?= htmlspecialchars($storeOpenDate) ?></strong>
+                        <?php endif; ?>
+                        • Vendido e enviado diretamente por este fornecedor com <strong>garantia de entrega RachidD.com</strong>.
                     </span>
                 </div>
 
@@ -214,11 +243,17 @@ if ($eanCode !== '') {
                     <?php
                     $axes = $product->getVariationAxes();
                     $variantsList = $product->getVariants();
+                    $hasSizeOption = isset($axes['Tamanho']) || isset($axes['Tamanhos']) || isset($axes['Size']) || ($product->category === 'Moda, Roupas & Vestuário') || !empty($product->attributes['tabela_tamanhos']);
                     ?>
                     <!-- SELETORES DINÂMICOS DE VARIAÇÃO (CORES, TAMANHOS, MODELOS - PADRÃO SKU MATRIX) -->
                     <div id="product-variants-box" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 16px; margin-bottom: 20px;">
-                        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #F0D060; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+                        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #F0D060; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
                             <span>🎨 Opções & Variações</span>
+                            <?php if ($hasSizeOption): ?>
+                                <button type="button" onclick="openSizeGuideModal()" style="background: rgba(240, 208, 96, 0.12); border: 1px solid rgba(240, 208, 96, 0.4); color: #F0D060; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 5px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; text-transform: none;">
+                                    <span>📏 Guia de Tamanhos</span>
+                                </button>
+                            <?php endif; ?>
                             <span id="active-variant-summary" style="color: #94a3b8; font-size: 11.5px; text-transform: none; font-weight: 600;"></span>
                         </div>
 
@@ -229,8 +264,36 @@ if ($eanCode !== '') {
                                     <span class="axis-selected-label" data-axis="<?= htmlspecialchars($axisName) ?>" style="color: #5cd67d; font-weight: 700;"></span>
                                 </div>
                                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                    <?php 
+                                    $isColorAxis = (bool)preg_match('/(?:cor|color)/i', $axisName);
+                                    $colorHexMap = [
+                                        'preto' => '#18181b', 'preta' => '#18181b', 'black' => '#18181b', 'grafite' => '#374151', 'chumbo' => '#334155', 'meia-noite' => '#0f172a', 'onix' => '#111827', 'ônix' => '#111827',
+                                        'branco' => '#f8fafc', 'branca' => '#f8fafc', 'white' => '#f8fafc', 'neve' => '#ffffff',
+                                        'prata' => '#cbd5e1', 'prateado' => '#cbd5e1', 'prateada' => '#cbd5e1', 'silver' => '#cbd5e1', 'inox' => '#94a3b8', 'titânio' => '#94a3b8', 'titanio' => '#94a3b8',
+                                        'cinza' => '#64748b', 'gray' => '#64748b', 'grey' => '#64748b', 'espacial' => '#475569',
+                                        'dourado' => '#f59e0b', 'dourada' => '#f59e0b', 'gold' => '#f59e0b', 'ouro' => '#eab308', 'amarelo' => '#facc15', 'amarela' => '#facc15',
+                                        'rosa' => '#f472b6', 'pink' => '#ec4899', 'rose' => '#fb7185', 'ouro rosa' => '#e0a899', 'rose gold' => '#e0a899',
+                                        'azul' => '#3b82f6', 'marinho' => '#1e3a8a', 'celeste' => '#38bdf8', 'blue' => '#3b82f6', 'navy' => '#1e3a8a',
+                                        'verde' => '#22c55e', 'green' => '#22c55e', 'oliva' => '#65a30d', 'militar' => '#4d7c0f',
+                                        'vermelho' => '#ef4444', 'vermelha' => '#ef4444', 'red' => '#ef4444', 'vinho' => '#881337', 'bordô' => '#881337',
+                                        'roxo' => '#a855f7', 'roxa' => '#a855f7', 'purple' => '#a855f7', 'violeta' => '#7c3aed',
+                                        'laranja' => '#f97316', 'orange' => '#f97316', 'marrom' => '#78350f', 'bege' => '#d6d3d1',
+                                    ];
+                                    ?>
                                     <?php foreach ($options as $optIdx => $optionValue): ?>
-                                        <?php $isInStock = $product->isOptionAvailable($axisName, $optionValue); ?>
+                                        <?php 
+                                        $isInStock = $product->isOptionAvailable($axisName, $optionValue);
+                                        $swatchColor = null;
+                                        if ($isColorAxis) {
+                                            $vLower = mb_strtolower((string)$optionValue, 'UTF-8');
+                                            foreach ($colorHexMap as $ckey => $chex) {
+                                                if (str_contains($vLower, $ckey)) {
+                                                    $swatchColor = $chex;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                        ?>
                                         <button type="button"
                                                 class="btn-variant-chip <?= !$isInStock ? 'is-disabled' : '' ?>"
                                                 data-axis="<?= htmlspecialchars($axisName) ?>"
@@ -241,6 +304,9 @@ if ($eanCode !== '') {
                                                 style="<?= $isInStock
                                                     ? 'background: rgba(255,255,255,0.04); border: 1.5px solid rgba(255,255,255,0.14); color: #fff; padding: 7px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 6px;'
                                                     : 'background: rgba(255,255,255,0.01); border: 1.5px dashed rgba(255,255,255,0.1); color: #64748b; padding: 7px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: not-allowed; opacity: 0.4; display: inline-flex; align-items: center; gap: 6px; text-decoration: line-through; pointer-events: none;' ?>">
+                                            <?php if ($swatchColor): ?>
+                                                <span style="width: 12px; height: 12px; border-radius: 50%; background: <?= $swatchColor ?>; display: inline-block; border: 1.5px solid rgba(255,255,255,0.5); box-shadow: 0 0 4px rgba(0,0,0,0.6); flex-shrink: 0;"></span>
+                                            <?php endif; ?>
                                             <span><?= htmlspecialchars($optionValue) ?></span>
                                             <?php if (!$isInStock): ?>
                                                 <span style="font-size: 9.5px; background: rgba(239,68,68,0.18); border: 1px solid rgba(239,68,68,0.3); color: #f87171; padding: 1px 5px; border-radius: 4px; text-decoration: none; font-weight: 700;">Esgotado</span>
@@ -404,6 +470,30 @@ if ($eanCode !== '') {
         </div>
     <?php endif; ?>
 
+    <!-- Ficha Técnica / Especificações Detalhadas (Tecido, Composição, Gênero, Artesanato, etc.) -->
+    <?php 
+    $techSpecs = $product->attributes['especificacoes'] ?? ($product->attributes['ficha_tecnica'] ?? []);
+    ?>
+    <?php if (!empty($techSpecs) && is_array($techSpecs)): ?>
+        <div style="background: #171d22; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 28px; margin-bottom: 30px;">
+            <h2 style="font-size: 20px; font-weight: 700; color: #fff; margin: 0 0 16px 0; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                <span>📋</span> Ficha Técnica & Especificações
+            </h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;">
+                <?php foreach ($techSpecs as $specKey => $specVal): ?>
+                    <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 10px 14px; display: flex; flex-direction: column; gap: 3px;">
+                        <span style="font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                            <?= htmlspecialchars((string)$specKey) ?>
+                        </span>
+                        <span style="font-size: 13.5px; color: #fff; font-weight: 600;">
+                            <?= htmlspecialchars((string)$specVal) ?>
+                        </span>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    <?php endif; ?>
+
     <!-- Full Description & Persuasive Copy -->
     <div style="background: #171d22; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 28px; margin-bottom: 40px;">
         <h2 style="font-size: 20px; font-weight: 700; color: #fff; margin: 0 0 20px 0; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px;">
@@ -500,7 +590,102 @@ if ($eanCode !== '') {
 
 </div>
 
-<!-- LIGHTBOX MODAL FULLSCREEN FOR VISUAL BOOK -->
+<!-- Modal Tabela de Medidas & Guia de Tamanhos (Princípio da Razoabilidade na Compra) -->
+<div id="sizeGuideModal" style="display: none; position: fixed; inset: 0; z-index: 999999; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(6px); align-items: center; justify-content: center; padding: 16px;">
+    <div style="background: #111722; border: 1px solid rgba(240, 208, 96, 0.4); border-radius: 14px; max-width: 640px; width: 100%; max-height: 88vh; overflow-y: auto; padding: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.85); position: relative;">
+        <button type="button" onclick="closeSizeGuideModal()" aria-label="Fechar" style="position: absolute; top: 16px; right: 16px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; width: 34px; height: 34px; border-radius: 50%; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center;">✕</button>
+
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+            <span style="font-size: 26px;">📏</span>
+            <div>
+                <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #FFE082;">Tabela de Medidas & Guia de Tamanhos</h3>
+                <span style="font-size: 12px; color: #94a3b8;">Consulte as medidas de referência para escolher com total precisão</span>
+            </div>
+        </div>
+
+        <!-- Tabela Roupas & Vestuário Padrão Brasil -->
+        <div style="margin-bottom: 20px;">
+            <div style="font-size: 13px; font-weight: 700; color: #cbd5e1; margin-bottom: 8px;">👗 Roupas & Vestuário (Medidas Corporais em cm):</div>
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: center;">
+                    <thead>
+                        <tr style="background: rgba(240, 208, 96, 0.15); color: #FFE082; font-weight: 700;">
+                            <th style="padding: 10px 8px; border: 1px solid rgba(255,255,255,0.1);">Tamanho</th>
+                            <th style="padding: 10px 8px; border: 1px solid rgba(255,255,255,0.1);">Busto (cm)</th>
+                            <th style="padding: 10px 8px; border: 1px solid rgba(255,255,255,0.1);">Cintura (cm)</th>
+                            <th style="padding: 10px 8px; border: 1px solid rgba(255,255,255,0.1);">Quadril (cm)</th>
+                        </tr>
+                    </thead>
+                    <tbody style="color: #cbd5e1;">
+                        <tr>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08); font-weight: 700; color: #fff;">Pequeno (P)</td>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">84 - 88</td>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">66 - 70</td>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">92 - 96</td>
+                        </tr>
+                        <tr style="background: rgba(255,255,255,0.02);">
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08); font-weight: 700; color: #fff;">Médio (M)</td>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">88 - 92</td>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">70 - 74</td>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">96 - 100</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08); font-weight: 700; color: #fff;">Grande (G)</td>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">92 - 96</td>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">74 - 78</td>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">100 - 104</td>
+                        </tr>
+                        <tr style="background: rgba(255,255,255,0.02);">
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08); font-weight: 700; color: #fff;">Extra Grande (GG)</td>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">96 - 102</td>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">78 - 84</td>
+                            <td style="padding: 9px 8px; border: 1px solid rgba(255,255,255,0.08);">104 - 110</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Tabela Calçados & Tênis -->
+        <div style="margin-bottom: 16px;">
+            <div style="font-size: 13px; font-weight: 700; color: #cbd5e1; margin-bottom: 8px;">👟 Calçados & Tênis (Padrão Brasil BR):</div>
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: center;">
+                    <thead>
+                        <tr style="background: rgba(59, 130, 246, 0.15); color: #93c5fd; font-weight: 700;">
+                            <th style="padding: 8px 6px; border: 1px solid rgba(255,255,255,0.1);">Numeração BR</th>
+                            <th style="padding: 8px 6px; border: 1px solid rgba(255,255,255,0.1);">37</th>
+                            <th style="padding: 8px 6px; border: 1px solid rgba(255,255,255,0.1);">38</th>
+                            <th style="padding: 8px 6px; border: 1px solid rgba(255,255,255,0.1);">39</th>
+                            <th style="padding: 8px 6px; border: 1px solid rgba(255,255,255,0.1);">40</th>
+                            <th style="padding: 8px 6px; border: 1px solid rgba(255,255,255,0.1);">41</th>
+                            <th style="padding: 8px 6px; border: 1px solid rgba(255,255,255,0.1);">42</th>
+                            <th style="padding: 8px 6px; border: 1px solid rgba(255,255,255,0.1);">43</th>
+                            <th style="padding: 8px 6px; border: 1px solid rgba(255,255,255,0.1);">44</th>
+                        </tr>
+                    </thead>
+                    <tbody style="color: #cbd5e1;">
+                        <tr>
+                            <td style="padding: 7px 6px; border: 1px solid rgba(255,255,255,0.08); font-weight: 700; color: #fff;">Comprimento (cm)</td>
+                            <td style="padding: 7px 6px; border: 1px solid rgba(255,255,255,0.08);">24.5</td>
+                            <td style="padding: 7px 6px; border: 1px solid rgba(255,255,255,0.08);">25.0</td>
+                            <td style="padding: 7px 6px; border: 1px solid rgba(255,255,255,0.08);">25.5</td>
+                            <td style="padding: 7px 6px; border: 1px solid rgba(255,255,255,0.08);">26.5</td>
+                            <td style="padding: 7px 6px; border: 1px solid rgba(255,255,255,0.08);">27.5</td>
+                            <td style="padding: 7px 6px; border: 1px solid rgba(255,255,255,0.08);">28.0</td>
+                            <td style="padding: 7px 6px; border: 1px solid rgba(255,255,255,0.08);">29.0</td>
+                            <td style="padding: 7px 6px; border: 1px solid rgba(255,255,255,0.08);">30.0</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div style="font-size: 11.5px; color: #94a3b8; line-height: 1.5; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 12px;">
+            💡 <strong>Dica RachidD.com:</strong> Caso suas medidas corporais estejam entre dois tamanhos, recomendamos escolher o tamanho maior para um caimento mais confortável.
+        </div>
+    </div>
+</div>
 <div id="visualBookLightbox" style="display: none; position: fixed; inset: 0; z-index: 999999; background: rgba(0, 0, 0, 0.94); backdrop-filter: blur(8px); align-items: center; justify-content: center; flex-direction: column;">
     <!-- Close button -->
     <button onclick="closeVisualBookLightbox()" aria-label="Fechar" style="position: absolute; top: 18px; right: 20px; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.25); color: #fff; font-size: 24px; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s ease; z-index: 10;">
@@ -1210,6 +1395,35 @@ function handleBuyNowClick(event, btn) {
         return false;
     }
 
+    <?php if ($product->hasVariants()): ?>
+    var missingAxes = [];
+    if (typeof productVariationAxes !== 'undefined' && productVariationAxes) {
+        for (var axKey in productVariationAxes) {
+            if (!selectedVariationOptions[axKey]) {
+                missingAxes.push(axKey);
+            }
+        }
+    }
+    if (missingAxes.length > 0 || !activeProductSku) {
+        var missingMsg = missingAxes.length > 0 ? ('Por favor, selecione ' + missingAxes.join(' e ') + ' antes de continuar para a compra.') : 'Por favor, selecione as opções de cor e tamanho desejadas.';
+        if (typeof showDropToast === 'function') {
+            showDropToast({
+                title: 'Opções Necessárias',
+                message: missingMsg,
+                type: 'warning',
+                duration: 6500
+            });
+        }
+        var varBox = document.getElementById('product-variants-box');
+        if (varBox) {
+            varBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            varBox.style.boxShadow = '0 0 16px rgba(240, 208, 96, 0.5)';
+            setTimeout(function() { varBox.style.boxShadow = ''; }, 2200);
+        }
+        return false;
+    }
+    <?php endif; ?>
+
     _buyCheckInProgress = true;
     var targetHref = btn.href;
     var origHtml = btn.innerHTML;
@@ -1282,5 +1496,15 @@ function handleBuyNowClick(event, btn) {
     });
 
     return false;
+}
+
+function openSizeGuideModal() {
+    var modal = document.getElementById('sizeGuideModal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeSizeGuideModal() {
+    var modal = document.getElementById('sizeGuideModal');
+    if (modal) modal.style.display = 'none';
 }
 </script>

@@ -282,7 +282,8 @@ class DropshipAdminController
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
         curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
         curl_setopt($ch, CURLOPT_TIMEOUT, 120);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
         curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($curl, $data) {
             echo $data;
             if (ob_get_level() > 0) {
@@ -1332,6 +1333,152 @@ class DropshipAdminController
                 'cost_formatted' => 'R$ ' . number_format($finalCostBrl, 2, ',', '.'),
                 'profit_brl'     => round($profitBrl, 2),
                 'margin_percent' => $marginPercent,
+            ]);
+        }
+
+        $this->session->setFlash('success', $msg);
+        return Response::redirect($baseUrl . '/admin/dropship');
+    }
+
+    public function updateCategory(Request $request, string $id): ResponseInterface
+    {
+        $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
+
+        if (!$this->verifyCsrf($request)) {
+            if ($this->isAjaxOrJson($request)) {
+                return new JsonResponse(['success' => false, 'message' => 'Token de segurança expirado.'], 403);
+            }
+            $this->session->setFlash('error', 'Token de segurança expirado.');
+            return Response::redirect($baseUrl . '/admin/dropship');
+        }
+
+        $productId = (int)$id;
+        $product = $this->catalogRepo->findById($productId);
+        if ($product === null) {
+            if ($this->isAjaxOrJson($request)) {
+                return new JsonResponse(['success' => false, 'message' => 'Produto não encontrado.'], 404);
+            }
+            $this->session->setFlash('error', 'Produto não encontrado.');
+            return Response::redirect($baseUrl . '/admin/dropship');
+        }
+
+        $newCategory = trim((string)$request->input('category', ''));
+        if ($newCategory === '') {
+            if ($this->isAjaxOrJson($request)) {
+                return new JsonResponse(['success' => false, 'message' => 'Categoria inválida informada.'], 400);
+            }
+            $this->session->setFlash('error', 'Categoria inválida informada.');
+            return Response::redirect($baseUrl . '/admin/dropship');
+        }
+
+        $commercialCat = \DomainSystem\Plugins\domain_drop\Services\ProductMiningService::toCommercialCategory($newCategory);
+        $this->catalogRepo->updateCategory($productId, $commercialCat);
+
+        $msg = "🏷️ Categoria de '{$product->title}' alterada para '{$commercialCat}' com sucesso!";
+
+        if ($this->isAjaxOrJson($request)) {
+            return new JsonResponse([
+                'success'  => true,
+                'message'  => $msg,
+                'category' => $commercialCat,
+            ]);
+        }
+
+        $this->session->setFlash('success', $msg);
+        return Response::redirect($baseUrl . '/admin/dropship');
+    }
+
+    public function updateOrigin(Request $request, string $id): ResponseInterface
+    {
+        $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
+
+        if (!$this->verifyCsrf($request)) {
+            if ($this->isAjaxOrJson($request)) {
+                return new JsonResponse(['success' => false, 'message' => 'Token de segurança expirado.'], 403);
+            }
+            $this->session->setFlash('error', 'Token de segurança expirado.');
+            return Response::redirect($baseUrl . '/admin/dropship');
+        }
+
+        $productId = (int)$id;
+        $product = $this->catalogRepo->findById($productId);
+        if ($product === null) {
+            if ($this->isAjaxOrJson($request)) {
+                return new JsonResponse(['success' => false, 'message' => 'Produto não encontrado.'], 404);
+            }
+            $this->session->setFlash('error', 'Produto não encontrado.');
+            return Response::redirect($baseUrl . '/admin/dropship');
+        }
+
+        $origin = strtoupper(trim((string)$request->input('origin', 'GLOBAL')));
+        if (!in_array($origin, ['BR', 'CN', 'GLOBAL'], true)) {
+            $origin = 'GLOBAL';
+        }
+
+        $this->catalogRepo->updateOrigin($productId, $origin);
+
+        $label = match ($origin) {
+            'BR' => 'Estoque no Brasil (Nacional) 🇧🇷',
+            'CN' => 'Importação Oficial AliExpress (China) 🇨🇳',
+            default => 'Origem Internacional Certificada 🌐',
+        };
+
+        $badgeFlag = match ($origin) {
+            'BR' => '<span>🇧🇷</span> BR',
+            'CN' => '<span>🇨🇳</span> CN',
+            default => '<span>🌐</span> GLOBAL',
+        };
+
+        $badgeBg = match ($origin) {
+            'BR' => 'rgba(16, 185, 129, 0.9)',
+            'CN' => 'rgba(59, 130, 246, 0.9)',
+            default => 'rgba(100, 116, 139, 0.9)',
+        };
+
+        $msg = "📍 Procedência de '{$product->title}' alterada para {$label} com sucesso!";
+
+        if ($this->isAjaxOrJson($request)) {
+            return new JsonResponse([
+                'success'    => true,
+                'message'    => $msg,
+                'origin'     => $origin,
+                'label'      => $label,
+                'badge_flag' => $badgeFlag,
+                'badge_bg'   => $badgeBg,
+            ]);
+        }
+
+        $this->session->setFlash('success', $msg);
+        return Response::redirect($baseUrl . '/admin/dropship');
+    }
+
+    public function toggleDailyCycle(Request $request): ResponseInterface
+    {
+        $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
+
+        if (!$this->verifyCsrf($request)) {
+            if ($this->isAjaxOrJson($request)) {
+                return new JsonResponse(['success' => false, 'message' => 'Token de segurança expirado.'], 403);
+            }
+            $this->session->setFlash('error', 'Token de segurança expirado.');
+            return Response::redirect($baseUrl . '/admin/dropship');
+        }
+
+        $config = $this->loadConfig();
+        $current = !empty($config['auto_sync_enabled'] ?? true);
+        $newStatus = !$current;
+        $config['auto_sync_enabled'] = $newStatus;
+        $this->saveConfig($config);
+
+        $statusLabel = $newStatus ? 'ativada' : 'pausada / desabilitada';
+        $msg = "⚡ Rotação Automática de 24h foi {$statusLabel} com sucesso!";
+
+        if ($this->isAjaxOrJson($request)) {
+            return new JsonResponse([
+                'success'           => true,
+                'message'           => $msg,
+                'auto_sync_enabled' => $newStatus,
+                'status_label'      => $statusLabel,
             ]);
         }
 

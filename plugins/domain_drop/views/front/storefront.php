@@ -232,6 +232,26 @@ $canonicalUrl = $baseUrl . $pageBaseRoute . ($page > 1 ? '?page=' . $page : '');
         <?php include __DIR__ . '/stage.php'; ?>
     </div>
 
+    <?php if (!empty($dedicatedSection) && $dedicatedSection === 'sexshop'): ?>
+        <div id="ageGateModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 99999; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
+            <div style="background: #0f172a; border: 1px solid rgba(239,68,68,0.5); border-radius: 14px; padding: 28px; max-width: 440px; width: 90%; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.8);">
+                <div style="font-size: 40px; margin-bottom: 12px;">🔞</div>
+                <h2 style="color: #fff; font-size: 1.25rem; font-weight: 800; margin: 0 0 10px 0;">Conteúdo Adulto (+18)</h2>
+                <p style="color: #94a3b8; font-size: 0.88rem; line-height: 1.5; margin: 0 0 20px 0;">
+                    Esta seção destina-se exclusivamente a maiores de 18 anos em conformidade com as diretrizes e legislação brasileira. Você confirma ter mais de 18 anos?
+                </p>
+                <div style="display: flex; gap: 10px; justify-content: center;">
+                    <button type="button" id="btnConfirmAge18" style="background: #ef4444; color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 700; cursor: pointer;">
+                        Sim, sou maior de 18 anos
+                    </button>
+                    <a href="<?= $baseUrl ?>/loja" style="background: rgba(255,255,255,0.08); color: #cbd5e1; padding: 10px 16px; border-radius: 8px; text-decoration: none; font-size: 0.88rem;">
+                        Sair
+                    </a>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
+
 </div>
 
 <script>

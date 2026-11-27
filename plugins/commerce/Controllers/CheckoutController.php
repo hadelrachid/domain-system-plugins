@@ -262,6 +262,12 @@ class CheckoutController
 
         $productWeightInGrams = 200;
         $expressShippingBasePrice = 19.90;
+        $productVariants = [];
+        $variationAxes = [];
+        $selectedVariant = null;
+        $publicoAlvo = '';
+        $productOrigin = '';
+
         if ($resolvedItem !== null) {
             if (method_exists($resolvedItem, 'getWeightInGrams')) {
                 $productWeightInGrams = $resolvedItem->getWeightInGrams();
@@ -272,6 +278,26 @@ class CheckoutController
                     $productWeightInGrams = $innerProduct->getEstimatedWeightInGrams();
                     $expressShippingBasePrice = $innerProduct->calculateExpressShippingPrice($quantity);
                 }
+            }
+
+            if (method_exists($resolvedItem, 'getProduct')) {
+                $pDto = $resolvedItem->getProduct();
+                if (is_object($pDto)) {
+                    if (method_exists($pDto, 'getVariants')) {
+                        $productVariants = $pDto->getVariants();
+                    }
+                    if (method_exists($pDto, 'getVariationAxes')) {
+                        $variationAxes = $pDto->getVariationAxes();
+                    }
+                    if (isset($pDto->attributes) && is_array($pDto->attributes)) {
+                        $publicoAlvo = (string)($pDto->attributes['publico_alvo'] ?? ($pDto->attributes['Público'] ?? ''));
+                        $isBr = !empty($pDto->attributes['origem_brasil']) || (($pDto->attributes['ship_from'] ?? '') === 'BR');
+                        $productOrigin = $isBr ? 'BR' : 'CN';
+                    }
+                }
+            }
+            if (method_exists($resolvedItem, 'getVariant')) {
+                $selectedVariant = $resolvedItem->getVariant();
             }
         }
 
@@ -295,6 +321,12 @@ class CheckoutController
             'isPhysicalOrDropship'     => $isPhysicalOrDropship,
             'productWeightInGrams'     => $productWeightInGrams,
             'expressShippingBasePrice' => $expressShippingBasePrice,
+            'productVariants'          => $productVariants,
+            'variationAxes'            => $variationAxes,
+            'selectedVariant'          => $selectedVariant,
+            'publicoAlvo'              => $publicoAlvo,
+            'productOrigin'            => $productOrigin,
+            'selectedSku'              => trim((string)$request->input('sku', '')),
         ]);
 
         return new ViewResponse($html);

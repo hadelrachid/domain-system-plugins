@@ -19,6 +19,10 @@ interface WarehouseOriginResolverInterface
     public const ORIGIN_CN = 'CN';
     public const ORIGIN_UNKNOWN = 'UNKNOWN';
 
+    public const MODE_BR = 'BR';
+    public const MODE_CN = 'CN';
+    public const MODE_ALL = 'ALL';
+
     /**
      * Resolve a procedência logística do produto com base nos metadados estruturados.
      *

@@ -31,14 +31,16 @@ class CatalogPackagingStation implements AssemblyStationInterface
         $origin = (string)$context->get('warehouse_origin', 'UNKNOWN');
         $categoryName = (string)$context->get('category_name', 'Geral');
 
-        $rating = (float)$context->get('rating', $context->get('evaluation_rate', 4.8));
+        $rating = (float)$context->get('rating', $context->get('evaluation_rate', 0.0));
         $ordersCount = (int)$context->get('orders_count', $context->get('sales_count', 0));
-        $stock = (int)$context->get('stock', 100);
+        $stock = (int)$context->get('stock', $context->get('inventory', 0));
 
         // Montagem do payload canônico compatível com as views e repositórios
         $packaged = [
             'id' => $id,
             'productId' => $id,
+            'aliexpressId' => $id,
+            'aliexpress_id' => $id,
             'title' => $title,
             'image' => $mainImage,
             'image_url' => $mainImage,

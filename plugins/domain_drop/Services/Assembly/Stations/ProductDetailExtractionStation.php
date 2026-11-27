@@ -34,83 +34,105 @@ class ProductDetailExtractionStation implements AssemblyStationInterface
 
         // Se já tiver dados enriquecidos de SKU no contexto, aproveita
         $skus = $context->get('skus', []);
-        $price = (float) $context->get('price', $context->get('target_sale_price', 0.0));
+        $price = (float) $context->get('price', $context->get('target_sale_price', $context->get('cost_price_usd', 0.0)));
         $images = $context->get('images', []);
         $mainImage = (string) $context->get('main_image', $context->get('image_url', ''));
 
         // Se o cliente da API estiver disponível e faltarem detalhes críticos, consulta a API oficial
         if ($this->apiClient !== null && (empty($skus) || $price <= 0.0 || empty($mainImage))) {
             try {
-                $detailResponse = $this->apiClient->getProductDetail($id);
+                if (method_exists($this->apiClient, 'getProductDetails')) {
+                    $detailResponse = $this->apiClient->getProductDetails($id);
+                } elseif (method_exists($this->apiClient, 'getProductDetail')) {
+                    $detailResponse = $this->apiClient->getProductDetail($id);
+                } else {
+                    $detailResponse = [];
+                }
                 $result = $detailResponse['aliexpress_ds_product_get_response']['result'] ?? $detailResponse['result'] ?? null;
 
                 if (!$result) {
-                    // Produto inexistente ou indisponível na plataforma
-                    return $context->abort($this->getName(), "Produto {$id} não retornou detalhes ou foi removido (404)");
-                }
+                    // Se a API não retornou detalhes mas o produto já possui preço e imagem válidos (ex: fallback curado), prossegue sem abortar
+                    if ($price <= 0.0 || empty($mainImage)) {
+                        return $context->abort($this->getName(), "Produto {$id} não retornou detalhes ou foi removido (404)");
+                    }
+                } else {
+                    $title = $result['item_title'] ?? $result['subject'] ?? $result['product_title'] ?? $context->get('title');
+                    $context->set('title', $title);
 
-                $title = $result['item_title'] ?? $result['subject'] ?? $context->get('title');
-                $context->set('title', $title);
+                    // Imagem principal e galeria
+                    if (!empty($result['item_main_image_url'])) {
+                        $mainImage = $result['item_main_image_url'];
+                    } elseif (!empty($result['product_main_image_url'])) {
+                        $mainImage = $result['product_main_image_url'];
+                    } elseif (!empty($result['image_url'])) {
+                        $mainImage = $result['image_url'];
+                    }
+                    if (!empty($result['item_image_urls'])) {
+                        $images = is_array($result['item_image_urls']) ? $result['item_image_urls'] : explode(';', (string)$result['item_image_urls']);
+                    }
 
-                // Imagem principal e galeria
-                if (!empty($result['item_main_image_url'])) {
-                    $mainImage = $result['item_main_image_url'];
-                }
-                if (!empty($result['item_image_urls'])) {
-                    $images = is_array($result['item_image_urls']) ? $result['item_image_urls'] : explode(';', (string)$result['item_image_urls']);
-                }
+                    // Preço bruto vindo da resposta do detalhe
+                    $resPrice = (float)($result['target_sale_price'] ?? ($result['targetSalePrice'] ?? ($result['sale_price'] ?? ($result['salePrice'] ?? ($result['price'] ?? 0.0)))));
+                    if ($price <= 0.0 && $resPrice > 0.0) {
+                        $price = $resPrice;
+                    }
 
-                // Extração de SKUs
-                $skuMatrix = $result['ae_item_sku_info_dtos']['ae_item_sku_info_d_t_o'] ?? [];
-                if (!empty($skuMatrix)) {
-                    $parsedSkus = [];
-                    foreach ($skuMatrix as $sku) {
-                        $skuPrice = (float)($sku['offer_sale_price'] ?? $sku['sku_price'] ?? 0.0);
-                        $skuStock = (int)($sku['sku_available_stock'] ?? $sku['ipm_sku_stock'] ?? 0);
-                        $skuId = (string)($sku['sku_id'] ?? '');
+                    // Extração de SKUs
+                    $skuMatrix = $result['ae_item_sku_info_dtos']['ae_item_sku_info_d_t_o'] ?? [];
+                    if (!empty($skuMatrix)) {
+                        $parsedSkus = [];
+                        foreach ($skuMatrix as $sku) {
+                            $skuPrice = (float)($sku['offer_sale_price'] ?? $sku['sku_price'] ?? 0.0);
+                            $skuStock = (int)($sku['sku_available_stock'] ?? $sku['ipm_sku_stock'] ?? 0);
+                            $skuId = (string)($sku['sku_id'] ?? '');
 
-                        $parsedSkus[] = [
-                            'sku_id' => $skuId,
-                            'price' => $skuPrice,
-                            'stock' => $skuStock,
-                            'sku_attr' => $sku['sku_attr'] ?? ''
-                        ];
+                            $parsedSku = $sku;
+                            $parsedSku['sku_id'] = $skuId;
+                            $parsedSku['price'] = $skuPrice;
+                            $parsedSku['offer_sale_price'] = $skuPrice;
+                            $parsedSku['sku_price'] = $skuPrice;
+                            $parsedSku['stock'] = $skuStock;
+                            $parsedSku['sku_available_stock'] = $skuStock;
+                            $parsedSku['sku_attr'] = $sku['sku_attr'] ?? '';
+                            $parsedSkus[] = $parsedSku;
 
-                        if ($price <= 0.0 && $skuPrice > 0.0) {
-                            $price = $skuPrice;
+                            if ($price <= 0.0 && $skuPrice > 0.0) {
+                                $price = $skuPrice;
+                            }
+                        }
+                        $context->set('skus', $parsedSkus);
+                        $context->set('ae_item_sku_info_dtos', $result['ae_item_sku_info_dtos']);
+                    }
+
+                    if (!empty($result['store_info'])) {
+                        $context->set('store_info', $result['store_info']);
+                    }
+
+                    // Extração Oficial de Vídeo Demonstrativo (ae-product-management.pdf / ae_multimedia_info_dto)
+                    $videoUrl = (string)$context->get('video_url', '');
+                    if (empty($videoUrl) && !empty($result['ae_multimedia_info_dto']['ae_video_dtos'])) {
+                        $vDtos = $result['ae_multimedia_info_dto']['ae_video_dtos'];
+                        $vItem = $vDtos['ae_video_d_t_o'] ?? ($vDtos[0] ?? null);
+                        if (is_array($vItem)) {
+                            $firstV = isset($vItem[0]) ? $vItem[0] : $vItem;
+                            if (!empty($firstV['media_url'])) {
+                                $videoUrl = (string)$firstV['media_url'];
+                            }
                         }
                     }
-                    $context->set('skus', $parsedSkus);
-                }
-
-                if (!empty($result['store_info'])) {
-                    $context->set('store_info', $result['store_info']);
-                }
-
-                // Extração Oficial de Vídeo Demonstrativo (ae-product-management.pdf / ae_multimedia_info_dto)
-                $videoUrl = (string)$context->get('video_url', '');
-                if (empty($videoUrl) && !empty($result['ae_multimedia_info_dto']['ae_video_dtos'])) {
-                    $vDtos = $result['ae_multimedia_info_dto']['ae_video_dtos'];
-                    $vItem = $vDtos['ae_video_d_t_o'] ?? ($vDtos[0] ?? null);
-                    if (is_array($vItem)) {
-                        $firstV = isset($vItem[0]) ? $vItem[0] : $vItem;
-                        if (!empty($firstV['media_url'])) {
-                            $videoUrl = (string)$firstV['media_url'];
+                    if (empty($videoUrl) && !empty($result['product_video_url'])) {
+                        $videoUrl = (string)$result['product_video_url'];
+                    }
+                    if (!empty($videoUrl)) {
+                        if (str_starts_with($videoUrl, '//')) {
+                            $videoUrl = 'https:' . $videoUrl;
                         }
+                        $context->set('video_url', $videoUrl);
                     }
-                }
-                if (empty($videoUrl) && !empty($result['product_video_url'])) {
-                    $videoUrl = (string)$result['product_video_url'];
-                }
-                if (!empty($videoUrl)) {
-                    if (str_starts_with($videoUrl, '//')) {
-                        $videoUrl = 'https:' . $videoUrl;
-                    }
-                    $context->set('video_url', $videoUrl);
                 }
             } catch (\Throwable $e) {
                 // Se falhar e não tivermos dados prévios válidos, aborta
-                if ($price <= 0.0) {
+                if ($price <= 0.0 || empty($mainImage)) {
                     return $context->abort($this->getName(), "Falha ao extrair detalhes do produto {$id}: " . $e->getMessage());
                 }
             }

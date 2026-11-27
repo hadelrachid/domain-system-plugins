@@ -408,6 +408,61 @@ class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
         return $stmt->execute([$salePriceBrl, $now, $id]);
     }
 
+    public function updateCategory(int $id, string $category): bool
+    {
+        $category = trim($category);
+        if ($category === '') {
+            return false;
+        }
+
+        $stmt = $this->pdo->prepare("
+            UPDATE domain_drop_catalog 
+            SET category = ?, updated_at = ? 
+            WHERE id = ?
+        ");
+
+        return $stmt->execute([$category, date('Y-m-d H:i:s'), $id]);
+    }
+
+    public function updateOrigin(int $id, string $origin): bool
+    {
+        $product = $this->findById($id);
+        if ($product === null) {
+            return false;
+        }
+
+        $origin = strtoupper(trim($origin));
+        $attributes = $product->attributes;
+
+        if ($origin === 'BR') {
+            $attributes['ship_from'] = 'BR';
+            $attributes['origem_brasil'] = true;
+            $attributes['entreposto_brasil'] = true;
+            $attributes['despacho_nacional'] = 'Estoque no Brasil (Entreposto Nacional)';
+            unset($attributes['origem_china'], $attributes['entreposto_china'], $attributes['origem_desconhecida']);
+        } elseif ($origin === 'CN') {
+            $attributes['ship_from'] = 'CN';
+            $attributes['origem_china'] = true;
+            $attributes['entreposto_china'] = true;
+            $attributes['despacho_origem'] = 'Entreposto Central AliExpress (China)';
+            $attributes['remessa_conforme'] = 'Importação Oficial com DDP e Rastreamento';
+            unset($attributes['origem_brasil'], $attributes['entreposto_brasil'], $attributes['despacho_nacional'], $attributes['origem_desconhecida']);
+        } else {
+            $attributes['ship_from'] = 'UNKNOWN';
+            $attributes['origem_desconhecida'] = true;
+            $attributes['despacho_origem'] = 'Origem Internacional Certificada';
+            unset($attributes['origem_brasil'], $attributes['entreposto_brasil'], $attributes['despacho_nacional'], $attributes['origem_china'], $attributes['entreposto_china']);
+        }
+
+        $stmt = $this->pdo->prepare("
+            UPDATE domain_drop_catalog 
+            SET attributes = ?, updated_at = ? 
+            WHERE id = ?
+        ");
+
+        return $stmt->execute([json_encode($attributes, JSON_UNESCAPED_UNICODE), date('Y-m-d H:i:s'), $id]);
+    }
+
     public function updateStatus(int $id, string $status): bool
     {
         $stmt = $this->pdo->prepare("

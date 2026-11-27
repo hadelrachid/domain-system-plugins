@@ -56,6 +56,16 @@ interface DropshipCatalogRepositoryInterface
     public function updatePrice(int $id, float $salePriceBrl, ?float $costPriceUsd = null): bool;
 
     /**
+     * Atualiza a categoria comercial de um produto no catálogo.
+     */
+    public function updateCategory(int $id, string $category): bool;
+
+    /**
+     * Atualiza a procedência / entreposto físico de um produto (BR, CN, GLOBAL).
+     */
+    public function updateOrigin(int $id, string $origin): bool;
+
+    /**
      * Atualiza o status de publicação de um produto (ex: 'published', 'draft', 'quarantine').
      */
     public function updateStatus(int $id, string $status): bool;

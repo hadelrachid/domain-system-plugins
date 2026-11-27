@@ -46,6 +46,25 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
     }
 
     /**
+     * Retorna a lista das 9 categorias comerciais oficiais de vitrine do DomainDrop.
+     * @return array<int, string>
+     */
+    public static function getCommercialCategories(): array
+    {
+        return [
+            'Eletrônicos & Gadget',
+            'Casa Inteligente & Organização',
+            'Beleza, Saúde & Bem-Estar',
+            'Ferramentas & Construção',
+            'Pet Shop & Cuidados Animais',
+            'Peças & Acessórios Automotivos',
+            'Moda, Roupas & Vestuário',
+            'Moda Íntima & Lingerie',
+            'Novidades & Uso Especial',
+        ];
+    }
+
+    /**
      * Retorna os IDs numéricos oficiais correspondentes na árvore de categorias da AliExpress Open Platform.
      * Alinhado a categoria-e-atributos.pdf e dropshiper.pdf.
      *
@@ -337,7 +356,7 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
         $t = mb_strtolower(trim($title), 'UTF-8');
 
         // 0. Moda Fitness, Leggings & Academia (Precedência alta sobre Moda geral)
-        if (preg_match('/\b(legging|leggings|suplex|macaquinho|macaquinhos|macacão fitness|macacao fitness|conjunto academia|top fitness|calça suplex|calca suplex|bermuda fitness|empina bumbum|short suplex|fitness|feetness|academia)\b/iu', $t)) {
+        if (preg_match('/\b(legging|leggings|suplex|macaquinho fitness|macacão fitness|macacao fitness|conjunto academia|top fitness|calça suplex|calca suplex|bermuda fitness|empina bumbum|short suplex|fitness|feetness|academia)\b/iu', $t)) {
             return self::CAT_FITNESS;
         }
 
@@ -356,8 +375,13 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
             return self::CAT_BEAUTY;
         }
 
-        // 3. Roupas, Bolsas & Calçados
-        if (preg_match('/\b(casaco|casacos|jaqueta|jaquetas|corta-vento|corta vento|ciclismo|corrida secagem|impermeável masculino|capuz capa|moletom|calça|calca|camisa|camiseta|vestido|saia|bermuda|roupa|roupas|vestuário|vestuario|mochila|mochilas|bolsa|bolsas|carteira|carteiras|pochete|tênis|tenis|sapato|sapatos|sandália|sandalia|chinelo|chinelos|bota|botas|mocassim|calçado|calçados|calcado|calcados|meia|meias|invisível|invisivel|chaveiro|chaveiros|cinto|cintos|boné|bone|óculos|oculos)\b/iu', $t)) {
+        // 2.5 Joias, Pulseiras, Colares, Anéis & Semijoias
+        if (preg_match('/\b(pulseira|pulseiras|bracelete|braceletes|colar|colares|gargantilha|corrente banhada|brinco|brincos|anel|anéis|aneis|aliança|alianças|alianca|aliancas|pingente|pingentes|tornozeleira|tornozeleiras|berloque|berloques|joia|joias|jóia|jóias|bijuteria|bijuterias|semijoia|semijoias|semi-joia|ouro 18k|prata 925)\b/iu', $t)) {
+            return self::CAT_BEAUTY;
+        }
+
+        // 3. Roupas, Bolsas & Calçados (Moda em Geral - Inclui Macacão, Vestidos, Tecidos e Calçados)
+        if (preg_match('/\b(macacão|macacao|macacões|macacoes|macaquinho|macaquinhos|playsuit|playsuits|romper|rompers|cropped|top|body|bodies|biquíni|biquini|maiô|maio|tricô|trico|poliamida|viscose|elastano|linho|algodão|algodao|tecido|moda urbana|mulheres|mulher|feminino|feminina|masculino|masculina|unissex|casaco|casacos|jaqueta|jaquetas|corta-vento|corta vento|ciclismo|corrida secagem|impermeável masculino|capuz capa|moletom|calça|calca|camisa|camiseta|vestido|saia|bermuda|roupa|roupas|vestuário|vestuario|mochila|mochilas|bolsa|bolsas|carteira|carteiras|pochete|tênis|tenis|sapato|sapatos|sandália|sandalia|chinelo|chinelos|bota|botas|mocassim|calçado|calçados|calcado|calcados|meia|meias|invisível|invisivel|chaveiro|chaveiros|cinto|cintos|boné|bone|óculos|oculos|terno|blazer|cardigan|pullover|suéter|sueter)\b/iu', $t)) {
             return self::CAT_FASHION;
         }
 
@@ -366,8 +390,8 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
             return self::CAT_PETS;
         }
 
-        // 5. Peças & Acessórios Automotivos
-        if (preg_match('/\b(veicular|veículo|veiculo|carro|automotivo|ventilação de ar|suporte celular carro|suporte automotivo|telemóvel com ventosa|suporte magnético 360|peças automotivas)\b/iu', $t)) {
+        // 5. Peças & Acessórios Automotivos (Restrito estritamente a veículos)
+        if (preg_match('/\b(veicular|veículo|veiculo|carro|automotivo|ventilação de ar|suporte celular carro|suporte automotivo|telemóvel com ventosa|suporte magnético 360|peças automotivas|painel do carro|para-brisa|parabrisa|volante carro|palheta carro|pneu carro)\b/iu', $t)) {
             return self::CAT_AUTO;
         }
 
@@ -386,8 +410,8 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
             return self::CAT_BEAUTY;
         }
 
-        // 9. Casa, Iluminação & Eletro
-        if (preg_match('/\b(fita de led|fita led|rgbic|tuya|luminária|luminaria|lâmpada|lampada|barra de luz|monitor luzes|iluminação|teto|armário|quarto|cozinha|aspirador|eletrodoméstico|eletrodomestico|liquidificador portátil)\b/iu', $t)) {
+        // 9. Casa, Iluminação & Eletro (Casa Inteligente, Banheiro, Prateleiras, Cozinha, Organização)
+        if (preg_match('/\b(prateleira|prateleiras|suporte parede|suporte de parede|suporte para parede|adesivo parede|adesivos para parede|alto adesivo|adesivo para parede|toalheiro|porta toalha|saboneteira|dispenser|banheiro|chuveiro|ducha|torneira|ralo|estante|nicho|organizador|cozinha|escorredor|louça|panela|frigideira|utensílio|utensilio|mesa|cadeira|sofá|sofa|almofada|cortina|tapete|fita de led|fita led|rgbic|tuya|luminária|luminaria|lâmpada|lampada|barra de luz|monitor luzes|iluminação|teto|armário|quarto|aspirador|eletrodoméstico|eletrodomestico|liquidificador portátil)\b/iu', $t)) {
             return self::CAT_HOME;
         }
 
