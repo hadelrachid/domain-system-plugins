@@ -480,6 +480,55 @@ class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
         return $stmt->execute([$status, date('Y-m-d H:i:s'), $id]);
     }
 
+    public function batchUpdateStatus(array $ids, string $status): int
+    {
+        $intIds = array_values(array_filter(array_map('intval', $ids), fn($id) => $id > 0));
+        if (empty($intIds)) {
+            return 0;
+        }
+
+        return $this->executeWithRetry(function (PDO $pdo) use ($intIds, $status) {
+            $placeholders = implode(',', array_fill(0, count($intIds), '?'));
+            $stmt = $pdo->prepare("
+                UPDATE domain_drop_catalog
+                SET status = ?, updated_at = ?
+                WHERE id IN ({$placeholders})
+            ");
+            $params = array_merge([$status, date('Y-m-d H:i:s')], $intIds);
+            $stmt->execute($params);
+            return $stmt->rowCount();
+        });
+    }
+
+    public function batchDelete(array $ids, bool $preserveOrdered = true): int
+    {
+        $intIds = array_values(array_filter(array_map('intval', $ids), fn($id) => $id > 0));
+        if (empty($intIds)) {
+            return 0;
+        }
+
+        return $this->executeWithRetry(function (PDO $pdo) use ($intIds, $preserveOrdered) {
+            $placeholders = implode(',', array_fill(0, count($intIds), '?'));
+            if ($preserveOrdered) {
+                $sql = "
+                    DELETE FROM domain_drop_catalog
+                    WHERE id IN ({$placeholders})
+                      AND aliexpress_id NOT IN (
+                          SELECT aliexpress_product_id 
+                          FROM domain_drop_orders 
+                          WHERE aliexpress_product_id IS NOT NULL AND aliexpress_product_id != ''
+                      )
+                ";
+            } else {
+                $sql = "DELETE FROM domain_drop_catalog WHERE id IN ({$placeholders})";
+            }
+
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($intIds);
+            return $stmt->rowCount();
+        });
+    }
+
     public function getCategories(): array
     {
         $canonicals = $this->taxonomy->getCanonicalCategories();

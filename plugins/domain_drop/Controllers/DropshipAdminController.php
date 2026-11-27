@@ -60,6 +60,7 @@ class DropshipAdminController
         $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
         $category = (string)$request->input('category', '');
         $search = (string)$request->input('q', '');
+        $status = trim((string)$request->input('status', ''));
         $page = max(1, (int)$request->input('page', 1));
         $perPage = 48; // 48 produtos por página (grade equilibrada para 2, 3 e 4 colunas, sem sobrar itens órfãos)
 
@@ -70,8 +71,15 @@ class DropshipAdminController
         if ($search !== '') {
             $criteria['search'] = $search;
         }
+        if ($status !== '' && in_array($status, ['published', 'draft', 'quarantine', 'review'], true)) {
+            $criteria['status'] = ($status === 'quarantine' || $status === 'review') ? 'draft' : $status;
+        }
 
         $totalCount = $this->catalogRepo->count($criteria);
+        $totalAll = $this->catalogRepo->count();
+        $totalPublished = $this->catalogRepo->count(['status' => 'published']);
+        $totalDraft = $this->catalogRepo->count(['status' => 'draft']);
+
         $totalPages = max(1, (int)ceil($totalCount / $perPage));
         if ($page > $totalPages && $totalCount > 0) {
             $page = $totalPages;
@@ -120,13 +128,21 @@ class DropshipAdminController
         if (!in_array($warehouseOrigin, ['ALL', 'BR', 'CN'], true)) {
             $warehouseOrigin = 'ALL';
         }
+        $sendToQuarantine = (bool)$request->input('quarantine', false);
 
         try {
             if ($replaceCatalog) {
                 $this->catalogRepo->clearAll(preserveOrdered: true);
             }
             $mined = $this->miningService->mineTrendingProducts($category, $limit, true, $sort, $warehouseOrigin);
-            $this->catalogRepo->publishAll();
+            if ($sendToQuarantine) {
+                $minedIds = array_filter(array_map(fn($p) => (int)($p->id ?? 0), $mined));
+                if (!empty($minedIds)) {
+                    $this->catalogRepo->batchUpdateStatus($minedIds, 'draft');
+                }
+            } else {
+                $this->catalogRepo->publishAll();
+            }
             $count = count($mined);
 
             if ($count === 0) {
@@ -146,7 +162,9 @@ class DropshipAdminController
                 return Response::redirect($baseUrl . '/admin/dropship');
             }
 
-            $msg = "🚀 Mineração concluída com sucesso! {$count} produtos da categoria '{$category}' minerados e ativos para venda.";
+            $msg = $sendToQuarantine
+                ? "🛡️ Mineração concluída com sucesso! {$count} produtos da categoria '{$category}' minerados e enviados para QUARENTENA / REVISÃO MANUAL antes de subirem para o site."
+                : "🚀 Mineração concluída com sucesso! {$count} produtos da categoria '{$category}' minerados e ativos para venda no site.";
 
             if ($isAjax) {
                 return new Response(json_encode([
@@ -1716,6 +1734,152 @@ class DropshipAdminController
         return Response::redirect($baseUrl . '/admin/dropship');
     }
 
+    public function updateStatus(Request $request, string $id): ResponseInterface
+    {
+        $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
+
+        if (!$this->verifyCsrf($request)) {
+            if ($this->isAjaxOrJson($request)) {
+                return new JsonResponse(['success' => false, 'message' => 'Token de segurança expirado.'], 403);
+            }
+            $this->session->setFlash('error', 'Token de segurança expirado.');
+            return Response::redirect($baseUrl . '/admin/dropship');
+        }
+
+        $productId = (int)$id;
+        $product = $this->catalogRepo->findById($productId);
+        if ($product === null) {
+            if ($this->isAjaxOrJson($request)) {
+                return new JsonResponse(['success' => false, 'message' => 'Produto não encontrado.'], 404);
+            }
+            $this->session->setFlash('error', 'Produto não encontrado.');
+            return Response::redirect($baseUrl . '/admin/dropship');
+        }
+
+        $targetStatus = strtolower(trim((string)$request->input('status', 'published')));
+        if (!in_array($targetStatus, ['published', 'draft', 'quarantine', 'review'], true)) {
+            $targetStatus = 'published';
+        }
+
+        $normalizedStatus = ($targetStatus === 'quarantine' || $targetStatus === 'review') ? 'draft' : $targetStatus;
+        $this->catalogRepo->updateStatus($productId, $normalizedStatus);
+
+        $isLive = ($normalizedStatus === 'published');
+        $msg = $isLive
+            ? "✅ Produto '{$product->title}' carregado e ativo para venda no site!"
+            : "⏳ Produto '{$product->title}' movido para Quarentena/Revisão (oculto da vitrine).";
+
+        if ($this->isAjaxOrJson($request)) {
+            return new JsonResponse([
+                'success' => true,
+                'message' => $msg,
+                'status'  => $normalizedStatus,
+                'is_live' => $isLive,
+                'id'      => $productId,
+            ]);
+        }
+
+        $this->session->setFlash('success', $msg);
+        return Response::redirect($baseUrl . '/admin/dropship');
+    }
+
+    public function batchStatus(Request $request): ResponseInterface
+    {
+        $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
+
+        if (!$this->verifyCsrf($request)) {
+            if ($this->isAjaxOrJson($request)) {
+                return new JsonResponse(['success' => false, 'message' => 'Token de segurança expirado.'], 403);
+            }
+            $this->session->setFlash('error', 'Token de segurança expirado.');
+            return Response::redirect($baseUrl . '/admin/dropship');
+        }
+
+        $rawIds = $request->input('ids');
+        $ids = [];
+        if (is_array($rawIds)) {
+            $ids = array_values(array_filter(array_map('intval', $rawIds), fn($v) => $v > 0));
+        } elseif (is_string($rawIds)) {
+            $ids = array_values(array_filter(array_map('intval', explode(',', $rawIds)), fn($v) => $v > 0));
+        }
+
+        if (empty($ids)) {
+            if ($this->isAjaxOrJson($request)) {
+                return new JsonResponse(['success' => false, 'message' => 'Nenhum produto selecionado.'], 400);
+            }
+            $this->session->setFlash('warning', 'Nenhum produto selecionado.');
+            return Response::redirect($baseUrl . '/admin/dropship');
+        }
+
+        $action = strtolower(trim((string)$request->input('action', 'publish')));
+        $targetStatus = in_array($action, ['unpublish', 'draft', 'quarantine', 'review'], true) ? 'draft' : 'published';
+
+        $updatedCount = $this->catalogRepo->batchUpdateStatus($ids, $targetStatus);
+
+        $isLive = ($targetStatus === 'published');
+        $msg = $isLive
+            ? "🚀 {$updatedCount} produtos foram carregados com sucesso e já estão no ar no site!"
+            : "⏸️ {$updatedCount} produtos foram movidos para Quarentena / Revisão (ocultos da vitrine).";
+
+        if ($this->isAjaxOrJson($request)) {
+            return new JsonResponse([
+                'success'       => true,
+                'message'       => $msg,
+                'updated_count' => $updatedCount,
+                'status'        => $targetStatus,
+                'is_live'       => $isLive,
+                'ids'           => $ids,
+            ]);
+        }
+
+        $this->session->setFlash('success', $msg);
+        return Response::redirect($baseUrl . '/admin/dropship');
+    }
+
+    public function batchDelete(Request $request): ResponseInterface
+    {
+        $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
+
+        if (!$this->verifyCsrf($request)) {
+            if ($this->isAjaxOrJson($request)) {
+                return new JsonResponse(['success' => false, 'message' => 'Token de segurança expirado.'], 403);
+            }
+            $this->session->setFlash('error', 'Token de segurança expirado.');
+            return Response::redirect($baseUrl . '/admin/dropship');
+        }
+
+        $rawIds = $request->input('ids');
+        $ids = [];
+        if (is_array($rawIds)) {
+            $ids = array_values(array_filter(array_map('intval', $rawIds), fn($v) => $v > 0));
+        } elseif (is_string($rawIds)) {
+            $ids = array_values(array_filter(array_map('intval', explode(',', $rawIds)), fn($v) => $v > 0));
+        }
+
+        if (empty($ids)) {
+            if ($this->isAjaxOrJson($request)) {
+                return new JsonResponse(['success' => false, 'message' => 'Nenhum produto selecionado para exclusão.'], 400);
+            }
+            $this->session->setFlash('warning', 'Nenhum produto selecionado para exclusão.');
+            return Response::redirect($baseUrl . '/admin/dropship');
+        }
+
+        $deletedCount = $this->catalogRepo->batchDelete($ids, preserveOrdered: true);
+        $msg = "🗑️ {$deletedCount} produtos foram excluídos do catálogo com sucesso!";
+
+        if ($this->isAjaxOrJson($request)) {
+            return new JsonResponse([
+                'success'       => true,
+                'message'       => $msg,
+                'deleted_count' => $deletedCount,
+                'ids'           => $ids,
+            ]);
+        }
+
+        $this->session->setFlash('success', $msg);
+        return Response::redirect($baseUrl . '/admin/dropship');
+    }
+
     public function toggleDailyCycle(Request $request): ResponseInterface
     {
         $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
@@ -1931,6 +2095,7 @@ class DropshipAdminController
             if (!in_array($warehouseOrigin, ['ALL', 'BR', 'CN'], true)) {
                 $warehouseOrigin = 'ALL';
             }
+            $sendToQuarantine = (bool)$request->input('quarantine', false);
 
             $purgedCount = 0;
             if ($replaceCatalog) {
@@ -1947,14 +2112,21 @@ class DropshipAdminController
             );
             $count = count($mined);
 
-            // Garante publicação imediata
-            $this->catalogRepo->publishAll();
+            if ($sendToQuarantine) {
+                $minedIds = array_filter(array_map(fn($p) => (int)($p->id ?? 0), $mined));
+                if (!empty($minedIds)) {
+                    $this->catalogRepo->batchUpdateStatus($minedIds, 'draft');
+                }
+            } else {
+                $this->catalogRepo->publishAll();
+            }
             $totalCatalog = $this->catalogRepo->count();
 
             return new Response(json_encode([
                 'success'          => true,
                 'category'         => $category,
                 'mined_count'      => $count,
+                'quarantine'       => $sendToQuarantine,
                 'purged_count'     => $purgedCount,
                 'total_in_catalog' => $totalCatalog,
             ]), 200, ['Content-Type' => 'application/json']);

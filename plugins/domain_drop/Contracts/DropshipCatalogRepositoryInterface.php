@@ -71,6 +71,23 @@ interface DropshipCatalogRepositoryInterface
     public function updateStatus(int $id, string $status): bool;
 
     /**
+     * Atualiza o status de publicação em lote para múltiplos produtos.
+     * Retorna o número de produtos atualizados.
+     * 
+     * @param array<int> $ids
+     */
+    public function batchUpdateStatus(array $ids, string $status): int;
+
+    /**
+     * Exclui múltiplos produtos em lote de forma segura.
+     * Se $preserveOrdered for true, preserva produtos com pedidos vinculados.
+     * Retorna o número de produtos removidos.
+     * 
+     * @param array<int> $ids
+     */
+    public function batchDelete(array $ids, bool $preserveOrdered = true): int;
+
+    /**
      * Retorna lista de categorias únicas disponíveis no catálogo.
      * @return array<int, string>
      */

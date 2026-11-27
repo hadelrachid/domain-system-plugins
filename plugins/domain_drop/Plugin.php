@@ -485,6 +485,9 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
             $router->addRoute('POST', '/admin/dropship/product/{id}/category', [DropshipAdminController::class, 'updateCategory'], 'domain_drop', ['admin']);
             $router->addRoute('POST', '/admin/dropship/product/{id}/origin', [DropshipAdminController::class, 'updateOrigin'], 'domain_drop', ['admin']);
             $router->addRoute('POST', '/admin/dropship/product/{id}/config', [DropshipAdminController::class, 'updateProductConfig'], 'domain_drop', ['admin']);
+            $router->addRoute('POST', '/admin/dropship/product/{id}/status', [DropshipAdminController::class, 'updateStatus'], 'domain_drop', ['admin']);
+            $router->addRoute('POST', '/admin/dropship/batch-status', [DropshipAdminController::class, 'batchStatus'], 'domain_drop', ['admin']);
+            $router->addRoute('POST', '/admin/dropship/batch-delete', [DropshipAdminController::class, 'batchDelete'], 'domain_drop', ['admin']);
             $router->addRoute('POST', '/admin/dropship/toggle-daily-cycle', [DropshipAdminController::class, 'toggleDailyCycle'], 'domain_drop', ['admin']);
             $router->addRoute('POST', '/admin/dropship/run-daily-cycle', [DropshipAdminController::class, 'runDailyCycle'], 'domain_drop', ['admin']);
             $router->addRoute('POST', '/admin/dropship/mine-category-step', [DropshipAdminController::class, 'mineCategoryStep'], 'domain_drop', ['admin']);

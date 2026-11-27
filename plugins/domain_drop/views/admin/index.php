@@ -659,6 +659,13 @@
                     </div>
                 </div>
 
+                <div style="margin-top: 10px; margin-bottom: 12px; padding: 8px 12px; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 6px; display: flex; align-items: center; gap: 10px;">
+                    <input type="checkbox" id="minerQuarantineCheck" name="quarantine" value="1" checked style="width: 17px; height: 17px; accent-color: #f59e0b; cursor: pointer;">
+                    <label for="minerQuarantineCheck" style="font-size: 12px; color: #fbbf24; cursor: pointer; user-select: none; line-height: 1.3;">
+                        <strong>🛡️ Modo Esteira de Quarentena:</strong> Enviar para Revisão Manual antes de carregar no site (Recomendado para conferência humana de tamanhos, cores e fotos)
+                    </label>
+                </div>
+
                 <button type="submit" id="btnOneClickMiner" style="background: linear-gradient(135deg, #ff4747 0%, #e02424 100%); border: none; color: #fff; padding: 10px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s ease;">
                     <i class="fas fa-bolt"></i> Iniciar Mineração 1-Click
                 </button>
@@ -838,44 +845,92 @@
     </div>
 
     <!-- Catalog Filter Bar -->
-    <div style="background: var(--bg-panel, #1d2327); border: 1px solid var(--border, rgba(255,255,255,0.1)); border-radius: 8px; padding: 16px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-        <form action="<?= $baseUrl ?>/admin/dropship" method="GET" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; flex: 1;">
-            <div style="position: relative; min-width: 260px; flex: 1;">
-                <i class="fas fa-search" style="position: absolute; left: 12px; top: 11px; color: var(--text-muted, #94a3b8); font-size: 13px;"></i>
-                <input type="text" name="q" value="<?= htmlspecialchars((string)($_GET['q'] ?? '')) ?>" placeholder="Buscar por título ou ID..." style="width: 100%; background: rgba(0,0,0,0.25); border: 1px solid var(--border, rgba(255,255,255,0.15)); color: #fff; padding: 8px 12px 8px 34px; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+    <div style="background: var(--bg-panel, #1d2327); border: 1px solid var(--border, rgba(255,255,255,0.1)); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+        <?php 
+        $currStatus = (string)($_GET['status'] ?? ''); 
+        $catParam = !empty($_GET['category']) ? '&category=' . urlencode((string)$_GET['category']) : '';
+        $qParam = !empty($_GET['q']) ? '&q=' . urlencode((string)$_GET['q']) : '';
+        ?>
+        <!-- Abas de Auditoria de Status: Todos vs No Site vs Quarentena -->
+        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08); flex-wrap: wrap;">
+            <a href="<?= $baseUrl ?>/admin/dropship?<?= ltrim($catParam . $qParam, '&') ?>" style="padding: 7px 14px; border-radius: 6px; font-size: 12.5px; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s ease; <?= ($currStatus === '') ? 'background: #3b82f6; color: #fff; box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);' : 'background: rgba(255,255,255,0.05); color: #94a3b8;' ?>">
+                <i class="fas fa-boxes"></i> Todos os Produtos (<?= (int)($totalAll ?? $totalCount) ?>)
+            </a>
+            <a href="<?= $baseUrl ?>/admin/dropship?status=published<?= $catParam . $qParam ?>" style="padding: 7px 14px; border-radius: 6px; font-size: 12.5px; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s ease; <?= ($currStatus === 'published') ? 'background: #10b981; color: #fff; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);' : 'background: rgba(16, 185, 129, 0.12); color: #34d399;' ?>">
+                <i class="fas fa-check-circle"></i> ✅ No Ar / No Site (<?= (int)($totalPublished ?? 0) ?>)
+            </a>
+            <a href="<?= $baseUrl ?>/admin/dropship?status=draft<?= $catParam . $qParam ?>" style="padding: 7px 14px; border-radius: 6px; font-size: 12.5px; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s ease; <?= ($currStatus === 'draft') ? 'background: #f59e0b; color: #000; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.35);' : 'background: rgba(245, 158, 11, 0.12); color: #fbbf24;' ?>">
+                <i class="fas fa-hourglass-half"></i> ⏳ Quarentena / Em Revisão (<?= (int)($totalDraft ?? 0) ?>)
+            </a>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <form action="<?= $baseUrl ?>/admin/dropship" method="GET" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; flex: 1;">
+                <?php if ($currStatus !== ''): ?>
+                    <input type="hidden" name="status" value="<?= htmlspecialchars($currStatus) ?>">
+                <?php endif; ?>
+                <div style="position: relative; min-width: 260px; flex: 1;">
+                    <i class="fas fa-search" style="position: absolute; left: 12px; top: 11px; color: var(--text-muted, #94a3b8); font-size: 13px;"></i>
+                    <input type="text" name="q" value="<?= htmlspecialchars((string)($_GET['q'] ?? '')) ?>" placeholder="Buscar por título ou ID..." style="width: 100%; background: rgba(0,0,0,0.25); border: 1px solid var(--border, rgba(255,255,255,0.15)); color: #fff; padding: 8px 12px 8px 34px; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+                </div>
+
+                <?php if (!empty($categories)): ?>
+                    <select name="category" onchange="this.form.submit()" style="background: rgba(0,0,0,0.25); border: 1px solid var(--border, rgba(255,255,255,0.15)); color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 13px;">
+                        <option value="">Todas as Categorias</option>
+                        <?php foreach ($categories as $cat): ?>
+                            <option value="<?= htmlspecialchars($cat) ?>" <?= (isset($_GET['category']) && $_GET['category'] === $cat) ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($cat) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                <?php endif; ?>
+
+                <button type="submit" style="background: rgba(255,255,255,0.06); border: 1px solid var(--border, rgba(255,255,255,0.15)); color: #fff; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                    Filtrar
+                </button>
+                <?php if (!empty($_GET['q']) || !empty($_GET['category']) || !empty($_GET['status'])): ?>
+                    <a href="<?= $baseUrl ?>/admin/dropship" style="color: var(--text-muted, #94a3b8); font-size: 12px; text-decoration: none;">Limpar</a>
+                <?php endif; ?>
+            </form>
+
+            <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+                <button type="button" onclick="openBatchMediaSyncModal()" title="Sincroniza produto por produto em tempo real com barra de progresso e log de status" style="background: linear-gradient(135deg, rgba(69, 243, 255, 0.16) 0%, rgba(59, 130, 246, 0.22) 100%); border: 1.5px solid rgba(69, 243, 255, 0.45); color: #45f3ff; padding: 7px 14px; border-radius: 7px; font-size: 12.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(69, 243, 255, 0.15); transition: all 0.2s ease;">
+                    <i class="fas fa-sync-alt"></i> Atualizar Todas as Imagens (Fila & Status)
+                </button>
+                <div style="font-size: 13px; color: var(--text-muted, #94a3b8);">
+                    <?php
+                    $perPageAdmin = 48;
+                    $fromItem = $totalCount > 0 ? ((($page - 1) * $perPageAdmin) + 1) : 0;
+                    $toItem = min((($page - 1) * $perPageAdmin) + count($products), $totalCount);
+                    ?>
+                    Mostrando <strong style="color: #fff;"><?= $fromItem ?>-<?= $toItem ?></strong> de <strong style="color: #fff;"><?= $totalCount ?></strong> produtos (Página <?= $page ?> de <?= $totalPages ?> • <?= $perPageAdmin ?> por página)
+                </div>
             </div>
+        </div>
+    </div>
 
-            <?php if (!empty($categories)): ?>
-                <select name="category" onchange="this.form.submit()" style="background: rgba(0,0,0,0.25); border: 1px solid var(--border, rgba(255,255,255,0.15)); color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 13px;">
-                    <option value="">Todas as Categorias</option>
-                    <?php foreach ($categories as $cat): ?>
-                        <option value="<?= htmlspecialchars($cat) ?>" <?= (isset($_GET['category']) && $_GET['category'] === $cat) ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($cat) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            <?php endif; ?>
+    <!-- Barra de Ações em Lote e Auditoria Rápida (Sticky Toolbar) -->
+    <div id="catalogBatchActionBar" style="background: rgba(15, 23, 42, 0.96); backdrop-filter: blur(10px); border: 1.5px solid rgba(69, 243, 255, 0.35); border-radius: 8px; padding: 12px 18px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.5);">
+        <div style="display: flex; align-items: center; gap: 14px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: #fff; font-size: 13px; font-weight: 600; user-select: none;">
+                <input type="checkbox" id="selectAllCardsCheckbox" onchange="toggleSelectAllCards(this)" style="width: 18px; height: 18px; accent-color: #45f3ff; cursor: pointer;">
+                <span>Marcar Todos na Página</span>
+            </label>
+            <span id="batchSelectedCounter" style="background: rgba(69, 243, 255, 0.15); color: #45f3ff; border: 1px solid rgba(69, 243, 255, 0.3); padding: 3px 12px; border-radius: 12px; font-size: 12px; font-weight: 700;">
+                0 selecionados
+            </span>
+        </div>
 
-            <button type="submit" style="background: rgba(255,255,255,0.06); border: 1px solid var(--border, rgba(255,255,255,0.15)); color: #fff; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;">
-                Filtrar
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <button type="button" id="btnBatchPublish" onclick="executeBatchStatus('publish')" disabled style="background: linear-gradient(135deg, #059669 0%, #10b981 100%); border: none; color: #fff; padding: 8px 16px; border-radius: 6px; font-size: 12.5px; font-weight: 700; cursor: not-allowed; display: inline-flex; align-items: center; gap: 6px; opacity: 0.45; transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);" title="Carregar os produtos selecionados com ✅ direto para a vitrine da loja">
+                <i class="fas fa-check-double"></i> 🚀 Carregar para Site (Aplicar)
             </button>
-            <?php if (!empty($_GET['q']) || !empty($_GET['category'])): ?>
-                <a href="<?= $baseUrl ?>/admin/dropship" style="color: var(--text-muted, #94a3b8); font-size: 12px; text-decoration: none;">Limpar</a>
-            <?php endif; ?>
-        </form>
-
-        <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
-            <button type="button" onclick="openBatchMediaSyncModal()" title="Sincroniza produto por produto em tempo real com barra de progresso e log de status" style="background: linear-gradient(135deg, rgba(69, 243, 255, 0.16) 0%, rgba(59, 130, 246, 0.22) 100%); border: 1.5px solid rgba(69, 243, 255, 0.45); color: #45f3ff; padding: 7px 14px; border-radius: 7px; font-size: 12.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(69, 243, 255, 0.15); transition: all 0.2s ease;">
-                <i class="fas fa-sync-alt"></i> Atualizar Todas as Imagens (Fila & Status)
+            <button type="button" id="btnBatchUnpublish" onclick="executeBatchStatus('unpublish')" disabled style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #fbbf24; padding: 8px 14px; border-radius: 6px; font-size: 12.5px; font-weight: 700; cursor: not-allowed; display: inline-flex; align-items: center; gap: 6px; opacity: 0.45; transition: all 0.2s ease;" title="Mover produtos selecionados de volta para Quarentena / Revisão (ocultar da vitrine)">
+                <i class="fas fa-pause-circle"></i> ⏸️ Mover para Quarentena
             </button>
-            <div style="font-size: 13px; color: var(--text-muted, #94a3b8);">
-                <?php
-                $perPageAdmin = 48;
-                $fromItem = $totalCount > 0 ? ((($page - 1) * $perPageAdmin) + 1) : 0;
-                $toItem = min((($page - 1) * $perPageAdmin) + count($products), $totalCount);
-                ?>
-                Mostrando <strong style="color: #fff;"><?= $fromItem ?>-<?= $toItem ?></strong> de <strong style="color: #fff;"><?= $totalCount ?></strong> produtos (Página <?= $page ?> de <?= $totalPages ?> • <?= $perPageAdmin ?> por página)
-            </div>
+            <button type="button" id="btnBatchDelete" onclick="executeBatchDelete()" disabled style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); color: #ef4444; padding: 8px 14px; border-radius: 6px; font-size: 12.5px; font-weight: 700; cursor: not-allowed; display: inline-flex; align-items: center; gap: 6px; opacity: 0.45; transition: all 0.2s ease;" title="Excluir do catálogo todos os produtos selecionados">
+                <i class="fas fa-trash-alt"></i> 🗑️ Excluir Selecionados
+            </button>
         </div>
     </div>
 
@@ -891,9 +946,15 @@
     <?php else: ?>
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; margin-bottom: 30px;">
             <?php foreach ($products as $prod): ?>
-                <div data-product-id="<?= (int)$prod->id ?>" id="prod-card-<?= (int)$prod->id ?>" style="background: var(--bg-panel, #1d2327); border: 1px solid var(--border, rgba(255,255,255,0.1)); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column;">
+                <?php $isProdLive = ($prod->status === 'published'); ?>
+                <div data-product-id="<?= (int)$prod->id ?>" id="prod-card-<?= (int)$prod->id ?>" style="background: var(--bg-panel, #1d2327); border: 1.5px solid <?= $isProdLive ? 'rgba(16, 185, 129, 0.35)' : 'rgba(245, 158, 11, 0.35)' ?>; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; transition: all 0.2s ease; position: relative;">
                     <!-- Image with badges -->
                     <div style="position: relative; width: 100%; height: 200px; background: #0b0e11; overflow: hidden;">
+                        <!-- Checkbox Individual de Seleção do Card -->
+                        <div style="position: absolute; top: 10px; left: 10px; z-index: 10;">
+                            <input type="checkbox" class="prod-card-checkbox" id="card-check-<?= (int)$prod->id ?>" data-product-id="<?= (int)$prod->id ?>" onchange="onCardCheckboxChange(<?= (int)$prod->id ?>)" style="width: 20px; height: 20px; accent-color: #45f3ff; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.8); border-radius: 4px;">
+                        </div>
+
                         <?php if (!empty($prod->mainImageUrl)): ?>
                             <img id="prod-main-img-<?= (int)($prod->id ?? 0) ?>" src="<?= htmlspecialchars($prod->mainImageUrl) ?>" alt="<?= htmlspecialchars($prod->title) ?>" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1526738549149-8e07eca6c147?w=600&auto=format&fit=crop&q=80';" style="width: 100%; height: 100%; object-fit: cover;">
                         <?php else: ?>
@@ -911,7 +972,7 @@
                         }
                         ?>
 
-                        <div id="prod-category-badge-<?= (int)$prod->id ?>" style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px); color: #F0D060; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; z-index: 2; box-shadow: 0 2px 6px rgba(0,0,0,0.4);" title="Categoria: <?= htmlspecialchars($prod->category ?: 'Dropship') ?>">
+                        <div id="prod-category-badge-<?= (int)$prod->id ?>" style="position: absolute; top: 10px; left: 38px; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px); color: #F0D060; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; z-index: 2; box-shadow: 0 2px 6px rgba(0,0,0,0.4);" title="Categoria: <?= htmlspecialchars($prod->category ?: 'Dropship') ?>">
                             <i class="fas fa-tag" style="color: #fbbf24; font-size: 10px;"></i>
                             <span id="prod-category-text-<?= (int)$prod->id ?>"><?= htmlspecialchars($prod->category ?: 'Dropship') ?></span>
                         </div>
@@ -927,15 +988,21 @@
                             <i class="fas fa-images"></i> <span id="prod-imgs-count-<?= (int)($prod->id ?? 0) ?>"><?= $galleryCount ?></span> fotos
                         </div>
 
+                        <!-- Badge de Status: No Ar vs Em Revisão -->
+                        <div id="prod-status-badge-<?= (int)$prod->id ?>" style="position: absolute; bottom: 10px; left: 10px; background: <?= $isProdLive ? 'rgba(16, 185, 129, 0.95)' : 'rgba(245, 158, 11, 0.95)' ?>; backdrop-filter: blur(4px); color: <?= $isProdLive ? '#fff' : '#000' ?>; padding: 2.5px 8px; border-radius: 4px; font-size: 10.5px; font-weight: 800; display: flex; align-items: center; gap: 4px; z-index: 2; box-shadow: 0 2px 6px rgba(0,0,0,0.4);" title="Status no Site: <?= $isProdLive ? 'Ativo na Vitrine Pública' : 'Em Quarentena / Aguardando Aprovação Manual' ?>">
+                            <?= $isProdLive ? '<i class="fas fa-check-circle"></i> ✅ No Ar' : '<i class="fas fa-hourglass-half"></i> ⏳ Em Revisão' ?>
+                        </div>
+
                         <?php if ($prod->rating > 0): ?>
-                            <div style="position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.75); color: #fbbf24; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                            <div style="position: absolute; bottom: 10px; left: 95px; background: rgba(0,0,0,0.75); color: #fbbf24; padding: 3px 7px; border-radius: 4px; font-size: 10.5px; font-weight: 600; display: flex; align-items: center; gap: 4px; z-index: 2;">
                                 <i class="fas fa-star"></i> <?= number_format($prod->rating, 1) ?>
                             </div>
                         <?php endif; ?>
 
-                        <div id="prod-origin-badge-<?= (int)$prod->id ?>" style="position: absolute; bottom: 10px; right: 10px; background: <?= $isNational ? 'rgba(16, 185, 129, 0.9)' : ($isChina ? 'rgba(59, 130, 246, 0.9)' : 'rgba(100, 116, 139, 0.9)') ?>; backdrop-filter: blur(4px); color: #fff; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; display: flex; align-items: center; gap: 4px;" title="Procedência e Entreposto Físico">
+                        <div id="prod-origin-badge-<?= (int)$prod->id ?>" style="position: absolute; bottom: 10px; right: 10px; background: <?= $isNational ? 'rgba(16, 185, 129, 0.9)' : ($isChina ? 'rgba(59, 130, 246, 0.9)' : 'rgba(100, 116, 139, 0.9)') ?>; backdrop-filter: blur(4px); color: #fff; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; display: flex; align-items: center; gap: 4px; z-index: 2;" title="Procedência e Entreposto Físico">
                             <?= $isNational ? '<span>🇧🇷</span> BR' : ($isChina ? '<span>🇨🇳</span> CN' : '<span>🌐</span> GLOBAL') ?>
                         </div>
+                    </div>
                     </div>
 
                     <!-- Content -->
@@ -1041,9 +1108,14 @@
                             </div>
 
                             <?php if ($prod->id !== null): ?>
-                                <button type="button" onclick="openDeleteProductModal(<?= (int)$prod->id ?>, <?= htmlspecialchars(json_encode($prod->title), ENT_QUOTES, 'UTF-8') ?>)" style="height: 26px; padding: 0 8px; font-size: 11px; font-weight: 600; color: #ef4444; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; box-sizing: border-box; line-height: 1;" title="Excluir produto do catálogo">
-                                    <i class="fas fa-trash-alt"></i> Excluir
-                                </button>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <button type="button" id="prod-toggle-status-btn-<?= (int)$prod->id ?>" onclick="toggleProductLiveStatus(<?= (int)$prod->id ?>, '<?= $isProdLive ? 'draft' : 'published' ?>')" style="height: 26px; padding: 0 9px; font-size: 11px; font-weight: 700; color: <?= $isProdLive ? '#fbbf24' : '#34d399' ?>; background: <?= $isProdLive ? 'rgba(245, 158, 11, 0.12)' : 'rgba(16, 185, 129, 0.15)' ?>; border: 1px solid <?= $isProdLive ? 'rgba(245, 158, 11, 0.35)' : 'rgba(16, 185, 129, 0.4)' ?>; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; box-sizing: border-box; line-height: 1; transition: all 0.2s ease;" title="<?= $isProdLive ? 'Ocultar da vitrine e mover para Quarentena' : 'Aprovar e Carregar este produto para o Site' ?>">
+                                        <i class="fas <?= $isProdLive ? 'fa-pause-circle' : 'fa-check-circle' ?>"></i> <?= $isProdLive ? '⏸️ Ocultar' : '✅ Carregar' ?>
+                                    </button>
+                                    <button type="button" onclick="openDeleteProductModal(<?= (int)$prod->id ?>, <?= htmlspecialchars(json_encode($prod->title), ENT_QUOTES, 'UTF-8') ?>)" style="height: 26px; padding: 0 8px; font-size: 11px; font-weight: 600; color: #ef4444; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; box-sizing: border-box; line-height: 1;" title="Excluir produto do catálogo">
+                                        <i class="fas fa-trash-alt"></i> Excluir
+                                    </button>
+                                </div>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -2650,6 +2722,269 @@
                 showToastFeedback('Erro de conexão ao alternar ciclo 24h.', 'error');
             });
         }
+
+        // -------------------------------------------------------------
+        // Auditoria & Esteira de Aprovação de Produtos (Ações em Lote e 1-Click)
+        // -------------------------------------------------------------
+        function getSelectedCardIds() {
+            var checkboxes = document.querySelectorAll('.prod-card-checkbox:checked');
+            var ids = [];
+            checkboxes.forEach(function(cb) {
+                var pid = parseInt(cb.getAttribute('data-product-id') || '0', 10);
+                if (pid > 0) ids.push(pid);
+            });
+            return ids;
+        }
+
+        function updateBatchBarState() {
+            var ids = getSelectedCardIds();
+            var totalChecks = document.querySelectorAll('.prod-card-checkbox').length;
+            var counterEl = document.getElementById('batchSelectedCounter');
+            if (counterEl) {
+                counterEl.textContent = ids.length + ' selecionado' + (ids.length === 1 ? '' : 's');
+            }
+
+            var btnPub = document.getElementById('btnBatchPublish');
+            var btnUnpub = document.getElementById('btnBatchUnpublish');
+            var btnDel = document.getElementById('btnBatchDelete');
+            var masterCheck = document.getElementById('selectAllCardsCheckbox');
+
+            var hasSelection = ids.length > 0;
+            [btnPub, btnUnpub, btnDel].forEach(function(btn) {
+                if (btn) {
+                    btn.disabled = !hasSelection;
+                    btn.style.opacity = hasSelection ? '1' : '0.45';
+                    btn.style.cursor = hasSelection ? 'pointer' : 'not-allowed';
+                }
+            });
+
+            if (masterCheck) {
+                masterCheck.checked = (totalChecks > 0 && ids.length === totalChecks);
+                masterCheck.indeterminate = (ids.length > 0 && ids.length < totalChecks);
+            }
+
+            // Atualiza destaque visual dos cards selecionados
+            document.querySelectorAll('.prod-card-checkbox').forEach(function(cb) {
+                var pid = cb.getAttribute('data-product-id');
+                var card = document.getElementById('prod-card-' + pid);
+                if (card) {
+                    if (cb.checked) {
+                        card.style.boxShadow = '0 0 0 2px #45f3ff, 0 8px 24px rgba(69, 243, 255, 0.2)';
+                    } else {
+                        card.style.boxShadow = 'none';
+                    }
+                }
+            });
+        }
+
+        function onCardCheckboxChange(productId) {
+            updateBatchBarState();
+        }
+
+        function toggleSelectAllCards(masterCheckbox) {
+            var isChecked = masterCheckbox.checked;
+            document.querySelectorAll('.prod-card-checkbox').forEach(function(cb) {
+                cb.checked = isChecked;
+            });
+            updateBatchBarState();
+        }
+
+        function toggleProductLiveStatus(productId, targetStatus) {
+            if (!productId) return;
+            var btn = document.getElementById('prod-toggle-status-btn-' + productId);
+            var origHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            }
+
+            var fd = new FormData();
+            fd.append('csrf_token', dropshipCsrfToken);
+            fd.append('status', targetStatus);
+
+            fetch(baseAdminUrl + '/product/' + productId + '/status', {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: fd
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (btn) btn.disabled = false;
+                if (data.success) {
+                    showToastFeedback(data.message, 'success');
+                    var isLive = data.is_live;
+                    var badge = document.getElementById('prod-status-badge-' + productId);
+                    var card = document.getElementById('prod-card-' + productId);
+
+                    if (badge) {
+                        badge.style.background = isLive ? 'rgba(16, 185, 129, 0.95)' : 'rgba(245, 158, 11, 0.95)';
+                        badge.style.color = isLive ? '#fff' : '#000';
+                        badge.innerHTML = isLive ? '<i class="fas fa-check-circle"></i> ✅ No Ar' : '<i class="fas fa-hourglass-half"></i> ⏳ Em Revisão';
+                        badge.title = isLive ? 'Status no Site: Ativo na Vitrine Pública' : 'Status no Site: Em Quarentena / Aguardando Aprovação Manual';
+                    }
+
+                    if (card) {
+                        card.style.borderColor = isLive ? 'rgba(16, 185, 129, 0.35)' : 'rgba(245, 158, 11, 0.35)';
+                    }
+
+                    if (btn) {
+                        var nextStatus = isLive ? 'draft' : 'published';
+                        btn.onclick = function() { toggleProductLiveStatus(productId, nextStatus); };
+                        btn.style.color = isLive ? '#fbbf24' : '#34d399';
+                        btn.style.background = isLive ? 'rgba(245, 158, 11, 0.12)' : 'rgba(16, 185, 129, 0.15)';
+                        btn.style.borderColor = isLive ? 'rgba(245, 158, 11, 0.35)' : 'rgba(16, 185, 129, 0.4)';
+                        btn.title = isLive ? 'Ocultar da vitrine e mover para Quarentena' : 'Aprovar e Carregar este produto para o Site';
+                        btn.innerHTML = isLive ? '<i class="fas fa-pause-circle"></i> ⏸️ Ocultar' : '<i class="fas fa-check-circle"></i> ✅ Carregar';
+                    }
+                } else {
+                    if (btn) btn.innerHTML = origHtml;
+                    showToastFeedback(data.message || 'Erro ao alterar status', 'error');
+                }
+            })
+            .catch(function() {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = origHtml;
+                }
+                showToastFeedback('Erro de conexão ao salvar status.', 'error');
+            });
+        }
+
+        function executeBatchStatus(action) {
+            var ids = getSelectedCardIds();
+            if (ids.length === 0) {
+                showToastFeedback('Selecione ao menos um produto.', 'warning');
+                return;
+            }
+
+            var btn = (action === 'publish') ? document.getElementById('btnBatchPublish') : document.getElementById('btnBatchUnpublish');
+            var origHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aplicando...';
+            }
+
+            var fd = new FormData();
+            fd.append('csrf_token', dropshipCsrfToken);
+            fd.append('action', action);
+            ids.forEach(function(id) {
+                fd.append('ids[]', id);
+            });
+
+            fetch(baseAdminUrl + '/batch-status', {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: fd
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = origHtml;
+                }
+                if (data.success) {
+                    showToastFeedback(data.message, 'success');
+                    var isLive = data.is_live;
+                    ids.forEach(function(pid) {
+                        var badge = document.getElementById('prod-status-badge-' + pid);
+                        var card = document.getElementById('prod-card-' + pid);
+                        var bBtn = document.getElementById('prod-toggle-status-btn-' + pid);
+
+                        if (badge) {
+                            badge.style.background = isLive ? 'rgba(16, 185, 129, 0.95)' : 'rgba(245, 158, 11, 0.95)';
+                            badge.style.color = isLive ? '#fff' : '#000';
+                            badge.innerHTML = isLive ? '<i class="fas fa-check-circle"></i> ✅ No Ar' : '<i class="fas fa-hourglass-half"></i> ⏳ Em Revisão';
+                        }
+                        if (card) {
+                            card.style.borderColor = isLive ? 'rgba(16, 185, 129, 0.35)' : 'rgba(245, 158, 11, 0.35)';
+                        }
+                        if (bBtn) {
+                            var nextStatus = isLive ? 'draft' : 'published';
+                            bBtn.onclick = function() { toggleProductLiveStatus(pid, nextStatus); };
+                            bBtn.style.color = isLive ? '#fbbf24' : '#34d399';
+                            bBtn.style.background = isLive ? 'rgba(245, 158, 11, 0.12)' : 'rgba(16, 185, 129, 0.15)';
+                            bBtn.style.borderColor = isLive ? 'rgba(245, 158, 11, 0.35)' : 'rgba(16, 185, 129, 0.4)';
+                            bBtn.title = isLive ? 'Ocultar da vitrine e mover para Quarentena' : 'Aprovar e Carregar este produto para o Site';
+                            bBtn.innerHTML = isLive ? '<i class="fas fa-pause-circle"></i> ⏸️ Ocultar' : '<i class="fas fa-check-circle"></i> ✅ Carregar';
+                        }
+                    });
+                } else {
+                    showToastFeedback(data.message || 'Erro ao aplicar alteração em lote', 'error');
+                }
+            })
+            .catch(function() {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = origHtml;
+                }
+                showToastFeedback('Erro de conexão ao processar ação em lote.', 'error');
+            });
+        }
+
+        function executeBatchDelete() {
+            var ids = getSelectedCardIds();
+            if (ids.length === 0) {
+                showToastFeedback('Selecione ao menos um produto para excluir.', 'warning');
+                return;
+            }
+
+            if (!confirm('Tem certeza que deseja excluir os ' + ids.length + ' produtos selecionados do catálogo?')) {
+                return;
+            }
+
+            var btn = document.getElementById('btnBatchDelete');
+            var origHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Excluindo...';
+            }
+
+            var fd = new FormData();
+            fd.append('csrf_token', dropshipCsrfToken);
+            ids.forEach(function(id) {
+                fd.append('ids[]', id);
+            });
+
+            fetch(baseAdminUrl + '/batch-delete', {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: fd
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = origHtml;
+                }
+                if (data.success) {
+                    showToastFeedback(data.message, 'success');
+                    ids.forEach(function(pid) {
+                        var card = document.getElementById('prod-card-' + pid);
+                        if (card) {
+                            card.style.transition = 'all 0.3s ease';
+                            card.style.opacity = '0';
+                            card.style.transform = 'scale(0.9)';
+                            setTimeout(function() { card.remove(); updateBatchBarState(); }, 350);
+                        }
+                    });
+                } else {
+                    showToastFeedback(data.message || 'Erro ao excluir produtos selecionados', 'error');
+                }
+            })
+            .catch(function() {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = origHtml;
+                }
+                showToastFeedback('Erro de conexão ao excluir produtos em lote.', 'error');
+            });
+        }
+
+        window.onCardCheckboxChange = onCardCheckboxChange;
+        window.toggleSelectAllCards = toggleSelectAllCards;
+        window.toggleProductLiveStatus = toggleProductLiveStatus;
+        window.executeBatchStatus = executeBatchStatus;
+        window.executeBatchDelete = executeBatchDelete;
 
         window.updateProductCategory = updateProductCategory;
         window.updateProductOrigin = updateProductOrigin;
