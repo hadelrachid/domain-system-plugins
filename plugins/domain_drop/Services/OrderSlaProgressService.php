@@ -60,8 +60,27 @@ class OrderSlaProgressService
         $latestDispute = $hasComplaint ? $disputes[0] : null;
         $mediationSent = is_array($latestDispute) && (($latestDispute['mediation_status'] ?? '') === 'sent');
 
+        $orderStatus = strtolower((string)($order['status'] ?? ''));
+        if ($orderStatus === 'cancelled' || $orderStatus === 'refunded') {
+            return [
+                'origin'            => $origin,
+                'expected_days'     => $expectedDays,
+                'days_elapsed'      => $daysElapsed,
+                'days_remaining'    => 0,
+                'percent_remaining' => 0,
+                'bar_percent'       => 0,
+                'state'             => 'cancelled_refunded',
+                'tone'              => 'muted',
+                'sdk_delivered'     => false,
+                'has_complaint'     => $hasComplaint,
+                'mediation_sent'    => $mediationSent,
+                'last_sdk_event'    => $trackingAnalysis['last_event'],
+                'label'             => $orderStatus === 'refunded' ? 'Pedido Reembolsado' : 'Pedido Cancelado',
+            ];
+        }
+
         $sdkDelivered = !empty($order['sdk_delivered_at'])
-            || strtolower((string)($order['status'] ?? '')) === 'delivered'
+            || $orderStatus === 'delivered'
             || ($trackingAnalysis['delivered'] === true);
 
         if ($hasComplaint) {
@@ -153,22 +172,25 @@ class OrderSlaProgressService
             ];
         }
 
-        $json = strtolower((string)json_encode($trackingResponse, JSON_UNESCAPED_UNICODE));
-        $deliveredSignals = [
-            'delivered',
-            'signed_by_customer',
-            'objeto entregue ao destinat',
-            'entregue no local',
-            'package delivered',
-            'successfully delivered',
-        ];
-
-        $delivered = false;
-        foreach ($deliveredSignals as $signal) {
-            if (str_contains($json, $signal)) {
-                $delivered = true;
-                break;
+        if (isset($trackingResponse['delivered']) && $trackingResponse['delivered'] === false) {
+            $lastEvent = '';
+            $details = $trackingResponse['aliexpress_logistics_buyer_freight_get_response']['result']['details']['details']
+                ?? $trackingResponse['details']
+                ?? $trackingResponse['events']
+                ?? [];
+            if (is_array($details) && !empty($details)) {
+                $first = reset($details);
+                if (is_array($first)) {
+                    $lastEvent = (string)($first['event_desc'] ?? $first['desc'] ?? $first['status'] ?? '');
+                } elseif (is_string($first)) {
+                    $lastEvent = $first;
+                }
             }
+            return [
+                'delivered'   => false,
+                'last_event'  => $lastEvent !== '' ? $lastEvent : (string)($trackingResponse['last_event'] ?? 'Objeto em trânsito'),
+                'status_code' => (string)($trackingResponse['status'] ?? 'IN_TRANSIT'),
+            ];
         }
 
         $lastEvent = '';
@@ -182,6 +204,31 @@ class OrderSlaProgressService
                 $lastEvent = (string)($first['event_desc'] ?? $first['desc'] ?? $first['status'] ?? '');
             } elseif (is_string($first)) {
                 $lastEvent = $first;
+            }
+        }
+
+        $statusStr = strtoupper(trim((string)($trackingResponse['status'] ?? ($trackingResponse['status_code'] ?? ''))));
+        $delivered = false;
+
+        if (in_array($statusStr, ['NOT_DELIVERED', 'UNDELIVERED', 'IN_TRANSIT', 'SHIPPED', 'PICKUP', 'DEPARTED', 'PENDING'], true)) {
+            $delivered = false;
+        } elseif ($statusStr === 'DELIVERED' || $statusStr === 'SUCCESS' || $statusStr === 'SIGNED') {
+            $delivered = true;
+        } else {
+            $latestText = strtolower($lastEvent);
+            $deliveredSignals = [
+                'signed_by_customer',
+                'objeto entregue',
+                'entregue ao destinat',
+                'entregue no local',
+                'package delivered',
+                'successfully delivered',
+            ];
+            foreach ($deliveredSignals as $signal) {
+                if (str_contains($latestText, $signal)) {
+                    $delivered = true;
+                    break;
+                }
             }
         }
 

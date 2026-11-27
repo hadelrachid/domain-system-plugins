@@ -29,13 +29,15 @@ class ContentIntegrityGuard implements ProductValidationGuardInterface
     public function validate(string $id, array $rawData): ValidationResultInterface
     {
         // 1. Validação de Título (AliExpress API & Feed aliases)
+        $baseInfo = is_array($rawData['ae_item_base_info_dto'] ?? null) ? $rawData['ae_item_base_info_dto'] : [];
         $title = trim((string)(
             $rawData['title']['displayTitle'] 
             ?? ($rawData['title']['title'] 
             ?? ($rawData['product_title']
             ?? ($rawData['title'] 
             ?? ($rawData['subject'] 
-            ?? ($rawData['name'] ?? '')))))
+            ?? ($baseInfo['subject']
+            ?? ($rawData['name'] ?? ''))))))
         ));
 
         if ($title === '' && (!empty($rawData['product_id']) || !empty($rawData['itemId']))) {
@@ -51,6 +53,9 @@ class ContentIntegrityGuard implements ProductValidationGuardInterface
         }
 
         // 2. Validação da Imagem Principal (ae-image.docx & Feed aliases)
+        $multiMediaImgs = $rawData['ae_multimedia_info_dto']['image_urls'] ?? '';
+        $firstGalleryImg = is_string($multiMediaImgs) && $multiMediaImgs !== '' ? trim(explode(';', $multiMediaImgs)[0]) : '';
+
         $firstImgFromArray = '';
         if (!empty($rawData['images']) && is_array($rawData['images'])) {
             $first = $rawData['images'][0] ?? '';
@@ -59,11 +64,12 @@ class ContentIntegrityGuard implements ProductValidationGuardInterface
 
         $mainImg = trim((string)(
             $rawData['image']['imgUrl'] 
+            ?? ($rawData['itemMainPic']
             ?? ($rawData['product_main_image_url'] 
             ?? ($rawData['main_image_url'] 
             ?? ($rawData['image_url'] 
             ?? ($rawData['image'] 
-            ?? ($firstImgFromArray ?? '')))))
+            ?? ($firstImgFromArray !== '' ? $firstImgFromArray : $firstGalleryImg))))))
         ));
 
         if ($mainImg === '') {
@@ -75,7 +81,7 @@ class ContentIntegrityGuard implements ProductValidationGuardInterface
         }
 
         // Rejeita placeholders genéricos ou URLs quebradas
-        if (stripos($mainImg, '404') !== false || stripos($mainImg, 'placeholder') !== false) {
+        if (preg_match('#(?:^|/)(?:404|not[_-]?found|placeholder)(?:\.|/|$)#i', $mainImg)) {
             return ValidationResult::fail(
                 $this->getName(),
                 'Imagem principal aponta para placeholder de erro ou 404.',

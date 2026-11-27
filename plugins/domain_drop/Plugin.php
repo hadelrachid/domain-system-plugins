@@ -576,7 +576,7 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
                         $supplierUrl = null;
                         $selectedColor = null;
                         $selectedSize = null;
-                        $requestedSku = trim((string)($payload['sku'] ?? ($payload['shipping_address']['sku'] ?? ($_GET['sku'] ?? ($_POST['sku'] ?? '')))));
+                        $requestedSku = trim((string)($payload['sku'] ?? ($payload['shipping_address']['sku'] ?? ($payload['selected_sku'] ?? ''))));
                         $qty = max(1, (int)($payload['quantity'] ?? ($payload['shipping_address']['quantity'] ?? 1)));
 
                         if ($itemId > 0) {
@@ -606,11 +606,22 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
                                         $variant = $productDto->findVariantBySku($requestedSku);
                                     }
                                     if ($variant !== null) {
-                                        $selectedColor = $variant->options['Cor'] ?? ($variant->options['cor'] ?? ($variant->options['Color'] ?? null));
-                                        $selectedSize = $variant->options['Tamanho'] ?? ($variant->options['tamanho'] ?? ($variant->options['Size'] ?? null));
+                                        foreach ($variant->options as $optK => $optV) {
+                                            if ($selectedColor === null && preg_match('/(?:cor|color|metal|acabamento)/iu', (string)$optK)) {
+                                                $selectedColor = (string)$optV;
+                                            } elseif ($selectedSize === null && preg_match('/(?:tamanho|size|aro|comprimento|capacidade|modelo|kit)/iu', (string)$optK)) {
+                                                $selectedSize = (string)$optV;
+                                            }
+                                        }
+                                        if ($selectedColor === null) {
+                                            $selectedColor = $variant->getColor();
+                                        }
+                                        if ($selectedSize === null) {
+                                            $selectedSize = $variant->getSize();
+                                        }
                                     } else {
-                                        $selectedColor = $payload['color'] ?? ($payload['cor'] ?? ($_GET['cor'] ?? ($_POST['cor'] ?? null)));
-                                        $selectedSize = $payload['size'] ?? ($payload['tamanho'] ?? ($_GET['tamanho'] ?? ($_POST['tamanho'] ?? null)));
+                                        $selectedColor = $payload['color'] ?? ($payload['cor'] ?? null);
+                                        $selectedSize = $payload['size'] ?? ($payload['tamanho'] ?? null);
                                     }
                                 }
                             } catch (Throwable $e) {
@@ -618,7 +629,15 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
                         }
 
                         // Normalização do endereço e criação do Dossiê Cópia Carbono (Contingência de Compra Manual no Fornecedor)
-                        $shipAddr = is_array($payload['shipping_address'] ?? null) ? $payload['shipping_address'] : [];
+                        $rawShipAddr = $payload['shipping_address'] ?? [];
+                        if (is_string($rawShipAddr)) {
+                            $decoded = @json_decode($rawShipAddr, true);
+                            $shipAddr = is_array($decoded) ? $decoded : ['raw' => $rawShipAddr];
+                        } elseif (is_array($rawShipAddr)) {
+                            $shipAddr = $rawShipAddr;
+                        } else {
+                            $shipAddr = [];
+                        }
                         $custName = (string)($payload['customer_name'] ?? 'Cliente');
                         $custEmail = (string)($payload['customer_email'] ?? '');
                         $custDoc = (string)($payload['customer_document'] ?? ($payload['customer_cpf'] ?? ''));
@@ -698,6 +717,7 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
                             'product_slug'           => $productSlug,
                             'product_title'          => $productTitle,
                             'aliexpress_product_id'  => $aeProductId,
+                            'selected_sku'           => $requestedSku,
                             'selected_color'         => $selectedColor,
                             'selected_size'          => $selectedSize,
                             'quantity'               => $qty,
@@ -734,7 +754,22 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
                             // Isolamento gracioso
                         }
                     } else {
-                        $orderRepo->updateFulfillment($orderRef, 'paid');
+                        // Se o pedido já existia em status pending, atualiza para paid e enriquece com dossiê
+                        $currStatus = strtolower((string)($existing['status'] ?? 'pending'));
+                        if (in_array($currStatus, ['pending', ''], true)) {
+                            $orderRepo->updateFulfillment($orderRef, 'paid');
+                        }
+                        if (method_exists($orderRepo, 'updateOrderDossier')) {
+                            $orderRepo->updateOrderDossier($orderRef, [
+                                'selected_sku'        => $requestedSku,
+                                'selected_color'      => $selectedColor,
+                                'selected_size'       => $selectedSize,
+                                'quantity'            => $qty,
+                                'supplier_url'        => $supplierUrl,
+                                'supplier_store'      => $sellerName,
+                                'fulfillment_dossier' => $dossier,
+                            ]);
+                        }
                     }
 
                     // Registra conversão de venda no Livro de Demanda com identidade completa do comprador
@@ -749,7 +784,7 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
                         $demandTracker->recordInteraction(new \DomainSystem\Plugins\domain_drop\DTO\DemandEvent(
                             productId: $aeProductId ?: (string)$itemId,
                             productTitle: $productTitle,
-                            categorySlug: 'geral',
+                            categorySlug: $productDto?->category ?: 'geral',
                             actionType: 'conversion',
                             sessionId: $sessionId,
                             customerId: $cId ?: null,

@@ -426,13 +426,19 @@ class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
 
     public function updateOrigin(int $id, string $origin): bool
     {
-        $product = $this->findById($id);
-        if ($product === null) {
+        $stmt = $this->pdo->prepare("SELECT attributes FROM domain_drop_catalog WHERE id = ? LIMIT 1");
+        $stmt->execute([$id]);
+        $rawAttrs = $stmt->fetchColumn();
+        if ($rawAttrs === false) {
             return false;
         }
 
+        $attributes = json_decode((string)$rawAttrs, true);
+        if (!is_array($attributes)) {
+            $attributes = [];
+        }
+
         $origin = strtoupper(trim($origin));
-        $attributes = $product->attributes;
 
         if ($origin === 'BR') {
             $attributes['ship_from'] = 'BR';
@@ -498,7 +504,10 @@ class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
                     $stmt = $pdo->prepare($sql);
                     $stmt->execute();
                     return $stmt->rowCount();
-                } catch (\Throwable $e) {}
+                } catch (\Throwable $e) {
+                    error_log('[PdoDropshipCatalogRepository::clearAll] Falha ao executar exclusao segura: ' . $e->getMessage());
+                    return 0;
+                }
             }
 
             $stmt = $pdo->prepare("DELETE FROM domain_drop_catalog");
@@ -592,6 +601,8 @@ class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
             'Moda Fitness, Leggings & Academia',
         ], true) || preg_match('/\b(jaqueta|casaco|calça|calca|tênis|tenis|sapato|vestido|camisa|camiseta|shorts|bermuda|agasalho|conjunto|meia|roupa|blusa|moletom|lingerie|macacão|macacao|macaquinho|playsuit|playsuits|romper|rompers|body|bodies|top|cropped|biquíni|biquini|maiô|maio|tricô|trico|canelado|pijama|calçado|calcado|sandália|sandalia|chinelo|bota|sutiã|sutia|cueca|calcinha|bra|bras|bralette|bralettes|bojo|push up|push-up|corset|espartilho|underwear)\b/iu', $title);
 
+        $isAccessory = (bool)preg_match('/\b(mochila|bolsa|carteira|mala|maleta|nécessaire|necessaire|cinto|porta-cartões|porta-cartoes)\b/iu', $title);
+
         $hasSize = false;
         if (!empty($attributes['variation_axes']) && is_array($attributes['variation_axes'])) {
             foreach (array_keys($attributes['variation_axes']) as $ax) {
@@ -602,7 +613,7 @@ class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
             }
         }
 
-        if (empty($attributes['variants']) || ($isClothing && !$hasSize)) {
+        if (empty($attributes['variants']) || ($isClothing && !$isAccessory && !$hasSize)) {
             $aeId = (string)($row['aliexpress_id'] ?? ($row['id'] ?? 'item'));
             $priceBrl = (float)($row['sale_price_brl'] ?? 0.0);
             $costUsd = (float)($row['cost_price_usd'] ?? 0.0);

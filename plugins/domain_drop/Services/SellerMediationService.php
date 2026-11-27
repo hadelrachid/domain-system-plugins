@@ -36,7 +36,7 @@ class SellerMediationService
      */
     public function sendMediation(array $order, array $dispute, string $baseUrl = ''): array
     {
-        $sellerOrigin = strtoupper(trim((string)($dispute['seller_origin'] ?: ($order['seller_origin'] ?? 'CN'))));
+        $sellerOrigin = strtoupper(trim((string)(($dispute['seller_origin'] ?? '') ?: ($order['seller_origin'] ?? 'CN'))));
         if ($sellerOrigin !== 'BR') {
             $sellerOrigin = 'CN';
         }
@@ -44,7 +44,7 @@ class SellerMediationService
         $language = $sellerOrigin === 'BR' ? 'pt-BR' : 'zh-CN';
         $message = $this->composeMessage($order, $dispute, $language, $baseUrl);
 
-        $sellerEmail = trim((string)($dispute['seller_email'] ?: ($order['seller_email'] ?? '')));
+        $sellerEmail = trim((string)(($dispute['seller_email'] ?? '') ?: ($order['seller_email'] ?? '')));
         $channel = 'aliexpress_mediation_log';
         $emailDispatched = false;
 

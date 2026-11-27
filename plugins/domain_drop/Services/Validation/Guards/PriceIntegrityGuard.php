@@ -52,6 +52,10 @@ class PriceIntegrityGuard implements ProductValidationGuardInterface
             $priceBrl = (float)$rawData['cost_price'];
         } elseif (isset($rawData['min_price'])) {
             $priceBrl = (float)$rawData['min_price'];
+        } elseif (isset($rawData['ae_item_sku_info_dtos']['ae_item_sku_info_d_t_o'][0]['offer_sale_price'])) {
+            $priceBrl = (float)$rawData['ae_item_sku_info_dtos']['ae_item_sku_info_d_t_o'][0]['offer_sale_price'];
+        } elseif (isset($rawData['ae_item_sku_info_dtos']['ae_item_sku_info_d_t_o']['offer_sale_price'])) {
+            $priceBrl = (float)$rawData['ae_item_sku_info_dtos']['ae_item_sku_info_d_t_o']['offer_sale_price'];
         } elseif (isset($rawData['ae_item_sku_info_dtos'][0]['offer_sale_price'])) {
             $priceBrl = (float)$rawData['ae_item_sku_info_dtos'][0]['offer_sale_price'];
         } elseif (isset($rawData['volume']) || isset($rawData['evaluate_rate']) || isset($rawData['orders_count'])) {
@@ -86,9 +90,16 @@ class PriceIntegrityGuard implements ProductValidationGuardInterface
         }
 
         // 4. Reconciliação com a matriz oficial de SKUs (ae_item_sku_info_dtos de dropshiper.docx)
-        $skuList = $rawData['ae_item_sku_info_dtos'] 
+        $rawSkus = $rawData['ae_item_sku_info_dtos'] 
             ?? ($rawData['result']['ae_item_sku_info_dtos'] 
             ?? ($rawData['data']['ae_item_sku_info_dtos'] ?? null));
+
+        if (is_array($rawSkus) && isset($rawSkus['ae_item_sku_info_d_t_o'])) {
+            $rawSkus = $rawSkus['ae_item_sku_info_d_t_o'];
+        }
+        $skuList = (is_array($rawSkus) && (isset($rawSkus['sku_id']) || isset($rawSkus['offer_sale_price']) || isset($rawSkus['sku_price'])))
+            ? [$rawSkus]
+            : $rawSkus;
 
         if (is_array($skuList) && !empty($skuList)) {
             $validSkus = 0;

@@ -600,7 +600,7 @@ class ProductMiningService implements ProductMiningServiceInterface
                 $costPriceUsd = $minPriceBrl > 0.0 ? round($minPriceBrl / $usdRate, 2) : (float)($raw['target_sale_price'] ?? 12.00);
                 $config = $this->loadConfig();
                 $markup = isset($config['default_markup_percent']) ? (float)$config['default_markup_percent'] : 100.0;
-                $volatility = isset($config['default_volatility_percent']) ? (float)$config['default_volatility_percent'] : 0.0;
+                $volatility = isset($config['volatility_index_percent']) ? (float)$config['volatility_index_percent'] : (isset($config['default_volatility_percent']) ? (float)$config['default_volatility_percent'] : 12.0);
                 $salePriceBrl = $minPriceBrl > 0.0
                     ? $this->currencyConverter->calculateSalePriceFromBrl($minPriceBrl, $markup, $volatility)
                     : $this->currencyConverter->calculateSalePrice($costPriceUsd, $markup, null, $volatility);
@@ -1107,7 +1107,7 @@ class ProductMiningService implements ProductMiningServiceInterface
         $costBrl = !empty($scraped->attributes['cost_price_brl']) ? (float)$scraped->attributes['cost_price_brl'] : 0.0;
         $config = $this->loadConfig();
         $markup = isset($config['default_markup_percent']) ? (float)$config['default_markup_percent'] : 100.0;
-        $volatility = isset($config['default_volatility_percent']) ? (float)$config['default_volatility_percent'] : 0.0;
+        $volatility = isset($config['volatility_index_percent']) ? (float)$config['volatility_index_percent'] : (isset($config['default_volatility_percent']) ? (float)$config['default_volatility_percent'] : 12.0);
         $salePriceBrl = $costBrl > 0.0
             ? $this->currencyConverter->calculateSalePriceFromBrl($costBrl, $markup, $volatility)
             : $this->currencyConverter->calculateSalePrice($scraped->costPriceUsd, $markup, null, $volatility);
@@ -1350,13 +1350,22 @@ class ProductMiningService implements ProductMiningServiceInterface
 
         $config = $this->loadConfig();
         $markup = isset($config['default_markup_percent']) ? (float)$config['default_markup_percent'] : 100.0;
-        $volatility = isset($config['default_volatility_percent']) ? (float)$config['default_volatility_percent'] : 0.0;
+        $volatility = isset($config['volatility_index_percent']) ? (float)$config['volatility_index_percent'] : (isset($config['default_volatility_percent']) ? (float)$config['default_volatility_percent'] : 12.0);
 
-        if ($costBrl > 0.0) {
-            $salePriceBrl = $this->currencyConverter->calculateSalePriceFromBrl($costBrl, $markup, $volatility);
+        $providedUsd = !empty($item['cost_price_usd']) ? (float)$item['cost_price_usd'] : 0.0;
+        if ($providedUsd > 0.0) {
+            $costPriceUsd = $providedUsd;
+        } elseif ($candidatePrice > 0.0 && $rawCurrency !== 'BRL' && $rawCurrency !== 'R$') {
+            $costPriceUsd = $candidatePrice;
+        } elseif ($costBrl > 0.0) {
             $costPriceUsd = round($costBrl / 5.75, 2);
         } else {
             $costPriceUsd = $candidatePrice > 0.0 ? $candidatePrice : 10.0;
+        }
+
+        if ($costBrl > 0.0) {
+            $salePriceBrl = $this->currencyConverter->calculateSalePriceFromBrl($costBrl, $markup, $volatility);
+        } else {
             $salePriceBrl = $this->currencyConverter->calculateSalePrice($costPriceUsd, $markup, null, $volatility);
         }
 
@@ -1497,8 +1506,10 @@ class ProductMiningService implements ProductMiningServiceInterface
                     continue;
                 }
                 $skuId = (string)($sku['sku_id'] ?? ($sku['id'] ?? uniqid('sku_')));
-                $skuPriceUsd = (float)($sku['offer_sale_price'] ?? ($sku['sku_price'] ?? $costPriceUsd));
-                $skuCostBrl = (float)($sku['cost_price_brl'] ?? 0.0);
+                $rawSkuPrice = (float)($sku['offer_sale_price'] ?? ($sku['sku_price'] ?? $costPriceUsd));
+                $skuCurrency = strtoupper((string)($sku['currency'] ?? $rawCurrency));
+                $skuCostBrl = (float)($sku['cost_price_brl'] ?? (($skuCurrency === 'BRL' || $skuCurrency === 'R$') ? $rawSkuPrice : 0.0));
+                $skuPriceUsd = $skuCostBrl > 0.0 ? round($skuCostBrl / 5.75, 2) : $rawSkuPrice;
                 $skuPriceBrl = $skuCostBrl > 0.0
                     ? $this->currencyConverter->calculateSalePriceFromBrl($skuCostBrl, $markup, $volatility)
                     : $this->currencyConverter->calculateSalePrice($skuPriceUsd, $markup, null, $volatility);
@@ -1540,7 +1551,7 @@ class ProductMiningService implements ProductMiningServiceInterface
                             $propName = 'Cor do Mostrador';
                         } elseif (preg_match('/(?:case\s*colou?r|cor\s*da\s*capa|cor\s*da\s*caixa)/i', $lowerProp)) {
                             $propName = 'Cor da Capa';
-                        } elseif (preg_match('/(?:colou?r|cor)/i', $lowerProp)) {
+                        } elseif (preg_match('/\b(?:colou?r|cor|cores)\b/iu', $lowerProp)) {
                             $propName = 'Cor';
                         } elseif (preg_match('/(?:ring\s*size|tamanho\s*do\s*anel|aro)/i', $lowerProp)) {
                             $propName = 'Aro / Tamanho do Anel';
@@ -1590,6 +1601,7 @@ class ProductMiningService implements ProductMiningServiceInterface
                                 $props['entreposto_brasil'] = true;
                                 $props['despacho_nacional'] = 'Estoque no Brasil (Entreposto Nacional)';
                             }
+                            continue;
                         }
 
                         // Tradução de Cores em Inglês para Português
@@ -1960,7 +1972,7 @@ class ProductMiningService implements ProductMiningServiceInterface
                     $sCode = '';
                     if ($secondAxisName && $sVal !== null) {
                         $optMap[$secondAxisName] = $sVal;
-                        $sCode = '-' . (strtok((string)$sVal, ' ') ?: (string)$sIdx);
+                        $sCode = '-' . (strtoupper(preg_replace('/[^A-Za-z0-9]+/', '', (string)$sVal)) ?: (string)$sIdx);
                     }
                     $extractedVariants[] = [
                         'sku_id'         => "{$aeId}-{$pSlug}{$sCode}",

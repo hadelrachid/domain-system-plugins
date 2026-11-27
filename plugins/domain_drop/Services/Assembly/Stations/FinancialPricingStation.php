@@ -43,8 +43,13 @@ class FinancialPricingStation implements AssemblyStationInterface
     public function process(ProductAssemblyContextInterface $context): ProductAssemblyContextInterface
     {
         $shared = $context->getSharedOptions();
-        $markupMultiplier = (float)($this->defaultMarkup ?? $shared['markup'] ?? 1.4); // 40% margem padrão se não informado
-        if ($markupMultiplier <= 0.0) {
+        $rawMarkup = (float)($this->defaultMarkup ?? $shared['markup_percent'] ?? $shared['markup'] ?? 100.0);
+        // Desambigua se o markup veio como multiplicador (ex: 1.4) ou percentual (ex: 40.0 ou 100.0)
+        if ($rawMarkup > 0.0 && $rawMarkup < 10.0) {
+            $markupMultiplier = $rawMarkup;
+        } elseif ($rawMarkup >= 10.0) {
+            $markupMultiplier = 1.0 + ($rawMarkup / 100.0);
+        } else {
             $markupMultiplier = 1.4;
         }
 
@@ -68,12 +73,12 @@ class FinancialPricingStation implements AssemblyStationInterface
             if ($this->currencyConverter !== null) {
                 $rate = $this->currencyConverter->getExchangeRate($currency, 'BRL');
                 if ($rate <= 0.0) {
-                    $rate = (float)($this->defaultRate ?? $shared['exchange_rate'] ?? 5.50);
+                    $rate = (float)($this->defaultRate ?? $shared['exchange_rate'] ?? 5.80);
                 }
                 $costBrl = $rawPrice * $rate;
             } else {
                 // Fallback conservador de câmbio
-                $exchangeRate = (float)($this->defaultRate ?? $shared['exchange_rate'] ?? 5.50);
+                $exchangeRate = (float)($this->defaultRate ?? $shared['exchange_rate'] ?? 5.80);
                 $costBrl = $rawPrice * $exchangeRate;
             }
         }

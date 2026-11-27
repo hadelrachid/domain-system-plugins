@@ -69,7 +69,7 @@ class FreightInspectionStation implements AssemblyStationInterface
             $id = (string)$context->get('id', $context->get('productId', ''));
             if ($id !== '' && is_numeric($id)) {
                 try {
-                    $selectedSku = null;
+                    $selectedSku = '';
                     $skus = $context->get('skus', []);
                     if (!empty($skus) && is_array($skus)) {
                         $selectedSku = (string)($skus[0]['sku_id'] ?? '');
@@ -85,6 +85,25 @@ class FreightInspectionStation implements AssemblyStationInterface
                     $freightRes = $this->apiClient->queryFreight($freightReq);
                     if (!empty($freightRes) && is_array($freightRes)) {
                         $context->set('freight_info', $freightRes);
+
+                        $deliveryOpts = $freightRes['delivery_options']['delivery_option_d_t_o']
+                            ?? ($freightRes['delivery_options'] ?? ($freightRes['aeop_freight_calculate_result_for_buyer_d_t_o_list'] ?? []));
+                        if (is_array($deliveryOpts) && isset($deliveryOpts['code'])) {
+                            $deliveryOpts = [$deliveryOpts];
+                        }
+                        if (is_array($deliveryOpts) && !empty($deliveryOpts[0]) && is_array($deliveryOpts[0])) {
+                            $firstOpt = $deliveryOpts[0];
+                            $context->set('shipping_fee', (float)($firstOpt['shipping_fee_cent'] ?? ($firstOpt['shipping_fee'] ?? 0.0)));
+                            $context->set('is_free_shipping', !empty($firstOpt['free_shipping']) || ((float)($firstOpt['shipping_fee'] ?? 0.0) <= 0.0));
+                            if (!empty($firstOpt['delivery_date_desc']) && preg_match('/(\d+)/', (string)$firstOpt['delivery_date_desc'], $dm)) {
+                                $context->set('expected_delivery_days', (int)$dm[1]);
+                            }
+                            if (empty($freightRes['ship_from_country']) && !empty($firstOpt['ship_from_country'])) {
+                                $freightRes['ship_from_country'] = $firstOpt['ship_from_country'];
+                                $context->set('freight_info', $freightRes);
+                            }
+                        }
+
                         $productPayload = array_merge($context->getRawData(), $context->getProcessedData(), ['freight' => $freightRes]);
                         if ($this->originResolver !== null) {
                             $origin = $this->originResolver->resolve($productPayload);

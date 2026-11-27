@@ -32,6 +32,24 @@ final class DomainDropSchemaEnsurer
         }
 
         try {
+            $migrationsDir = dirname(__DIR__) . '/migrations';
+            foreach ([
+                '2026_11_10_000001_create_domain_drop_tables.php',
+                '2026_11_12_000001_create_customer_disputes_and_mediation.php',
+                '2026_11_16_000001_create_domain_drop_demand_table.php',
+                '2026_11_16_000002_create_domain_drop_demand_activity_logs_table.php',
+                '2026_11_18_000001_add_shipping_address_to_customers.php',
+                '2026_11_27_000001_add_order_dossier_columns_and_indexes.php',
+            ] as $file) {
+                $path = $migrationsDir . '/' . $file;
+                if (is_file($path)) {
+                    $migration = require $path;
+                    if (is_array($migration) && isset($migration['up']) && is_callable($migration['up'])) {
+                        ($migration['up'])($pdo);
+                    }
+                }
+            }
+
             // Garante coluna period_year_month na tabela de demanda se a tabela já existir previamente
             $driver = (string)$pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
             if ($driver === 'sqlite') {
@@ -54,6 +72,9 @@ final class DomainDropSchemaEnsurer
                 if ($checkOrders && $checkOrders->fetchColumn() !== false) {
                     $oCols = $pdo->query("PRAGMA table_info(domain_drop_orders)");
                     $oColNames = $oCols ? array_column($oCols->fetchAll(PDO::FETCH_ASSOC), 'name') : [];
+                    if (!in_array('selected_sku', $oColNames, true)) {
+                        $pdo->exec("ALTER TABLE domain_drop_orders ADD COLUMN selected_sku TEXT NULL");
+                    }
                     if (!in_array('selected_color', $oColNames, true)) {
                         $pdo->exec("ALTER TABLE domain_drop_orders ADD COLUMN selected_color TEXT NULL");
                     }
@@ -86,6 +107,14 @@ final class DomainDropSchemaEnsurer
                     if ($dCols && $dCols->fetchColumn() === false) {
                         $pdo->exec("ALTER TABLE domain_drop_product_demand ADD COLUMN `period_year_month` VARCHAR(7) NOT NULL DEFAULT ''");
                     }
+                    $dScore = $pdo->query("SHOW COLUMNS FROM domain_drop_product_demand LIKE 'demand_score'");
+                    if ($dScore && $dScore->fetchColumn() === false) {
+                        $pdo->exec("ALTER TABLE domain_drop_product_demand ADD COLUMN `demand_score` INT NOT NULL DEFAULT 0");
+                    }
+                    $dCat = $pdo->query("SHOW COLUMNS FROM domain_drop_product_demand LIKE 'category_slug'");
+                    if ($dCat && $dCat->fetchColumn() === false) {
+                        $pdo->exec("ALTER TABLE domain_drop_product_demand ADD COLUMN `category_slug` VARCHAR(64) NOT NULL DEFAULT 'geral'");
+                    }
                 }
                 $checkCatalog = $pdo->query("SHOW TABLES LIKE 'domain_drop_catalog'");
                 if ($checkCatalog && $checkCatalog->fetchColumn() !== false) {
@@ -97,6 +126,9 @@ final class DomainDropSchemaEnsurer
                 if ($checkOrders && $checkOrders->fetchColumn() !== false) {
                     $cols = $pdo->query("SHOW COLUMNS FROM domain_drop_orders");
                     $colNames = $cols ? array_column($cols->fetchAll(PDO::FETCH_ASSOC), 'Field') : [];
+                    if (!in_array('selected_sku', $colNames, true)) {
+                        $pdo->exec("ALTER TABLE domain_drop_orders ADD COLUMN `selected_sku` VARCHAR(100) NULL");
+                    }
                     if (!in_array('selected_color', $colNames, true)) {
                         $pdo->exec("ALTER TABLE domain_drop_orders ADD COLUMN `selected_color` VARCHAR(100) NULL");
                     }
@@ -124,22 +156,6 @@ final class DomainDropSchemaEnsurer
                 }
             }
 
-            $migrationsDir = dirname(__DIR__) . '/migrations';
-            foreach ([
-                '2026_11_10_000001_create_domain_drop_tables.php',
-                '2026_11_12_000001_create_customer_disputes_and_mediation.php',
-                '2026_11_16_000001_create_domain_drop_demand_table.php',
-                '2026_11_16_000002_create_domain_drop_demand_activity_logs_table.php',
-                '2026_11_18_000001_add_shipping_address_to_customers.php',
-            ] as $file) {
-                $path = $migrationsDir . '/' . $file;
-                if (is_file($path)) {
-                    $migration = require $path;
-                    if (is_array($migration) && isset($migration['up']) && is_callable($migration['up'])) {
-                        ($migration['up'])($pdo);
-                    }
-                }
-            }
             if (self::schemaAlreadyPresent($pdo)) {
                 self::$ensuredConnections[$pdo] = true;
             }
@@ -163,7 +179,7 @@ final class DomainDropSchemaEnsurer
                 $c2 = $pdo->query("SHOW TABLES LIKE 'domain_drop_disputes'");
                 $c3 = $pdo->query("SHOW TABLES LIKE 'domain_drop_product_demand'");
                 $c4 = $pdo->query("SHOW TABLES LIKE 'domain_drop_demand_activity_logs'");
-                $cols = $pdo->query("SHOW COLUMNS FROM domain_drop_orders LIKE 'seller_origin'");
+                $cols = $pdo->query("SHOW COLUMNS FROM domain_drop_orders LIKE 'fulfillment_dossier'");
                 $cAddr = $pdo->query("SHOW COLUMNS FROM domain_drop_customers LIKE 'shipping_zip'");
                 return $c0 !== false && $c0->fetchColumn() !== false
                     && $c1 !== false && $c1->fetchColumn() !== false
@@ -190,7 +206,8 @@ final class DomainDropSchemaEnsurer
                 && $c2 !== false && $c2->fetchColumn() !== false
                 && $c3 !== false && $c3->fetchColumn() !== false
                 && $c4 !== false && $c4->fetchColumn() !== false
-                && in_array('seller_origin', $colNames, true)
+                && in_array('fulfillment_dossier', $colNames, true)
+                && in_array('selected_sku', $colNames, true)
                 && in_array('shipping_zip', $custColNames, true);
         } catch (Throwable $e) {
             return false;

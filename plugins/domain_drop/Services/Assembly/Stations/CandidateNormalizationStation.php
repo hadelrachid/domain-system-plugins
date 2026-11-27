@@ -36,12 +36,17 @@ class CandidateNormalizationStation implements AssemblyStationInterface
         }
 
         $id = (string) $id;
-        $title = trim((string)(
-            $raw['title'] 
-            ?? $raw['product_title'] 
-            ?? $raw['subject'] 
-            ?? ($raw['ae_item_base_info_dto']['subject'] ?? '')
-        ));
+
+        $baseInfo = is_array($raw['ae_item_base_info_dto'] ?? null)
+            ? $raw['ae_item_base_info_dto']
+            : (is_array($raw['result']['ae_item_base_info_dto'] ?? null) ? $raw['result']['ae_item_base_info_dto'] : []);
+
+        $rawTitle = $raw['title'] ?? $raw['product_title'] ?? $raw['subject'] ?? ($baseInfo['subject'] ?? '');
+        if (is_array($rawTitle)) {
+            $rawTitle = $rawTitle['displayTitle'] ?? ($rawTitle['title'] ?? '');
+        }
+        $title = trim((string)preg_replace('/\p{Han}+/u', '', (string)$rawTitle));
+        $title = trim((string)preg_replace('/\s+/', ' ', $title));
 
         if ($title === '') {
             $title = 'Produto ' . $id;
@@ -56,28 +61,47 @@ class CandidateNormalizationStation implements AssemblyStationInterface
         $context->set('category_name', $raw['category_name'] ?? $raw['category'] ?? 'Geral');
 
         // Pré-extração de imagem se já disponível no candidato
-        $img = trim((string)(
-            $raw['itemMainPic'] 
+        $rawImg = $raw['itemMainPic'] 
             ?? $raw['product_main_image_url'] 
             ?? $raw['image_url'] 
             ?? $raw['pic_url'] 
-            ?? ($raw['image'] ?? '')
-        ));
+            ?? ($raw['image'] ?? '');
+        if (is_array($rawImg)) {
+            $rawImg = $rawImg['imgUrl'] ?? ($rawImg['url'] ?? '');
+        }
+        $img = trim((string)$rawImg);
+        if (str_starts_with($img, '//')) {
+            $img = 'https:' . $img;
+        }
         if ($img !== '') {
             $context->set('main_image', $img);
             $context->set('image_url', $img);
         }
 
-        // Pré-extração de preço de custo se já disponível
-        $candidatePrice = (float)(
-            $raw['targetSalePrice'] 
+        // Pré-extração de moeda e preço de custo se já disponível
+        $rawCurrency = strtoupper(trim((string)(
+            $raw['salePriceCurrency']
+            ?? $raw['target_sale_price_currency']
+            ?? $raw['currency']
+            ?? ($baseInfo['currency_code'] ?? 'USD')
+        )));
+        $context->set('currency', $rawCurrency !== '' ? $rawCurrency : 'USD');
+
+        if (!empty($raw['cost_price_brl']) && is_numeric($raw['cost_price_brl'])) {
+            $context->set('cost_price_brl', (float)$raw['cost_price_brl']);
+        }
+
+        $priceRaw = $raw['targetSalePrice'] 
             ?? ($raw['target_sale_price']
             ?? ($raw['salePrice'] 
             ?? ($raw['sale_price']
             ?? ($raw['cost_price_usd'] 
             ?? ($raw['cost_usd']
-            ?? ($raw['price'] ?? 0.0))))))
-        );
+            ?? ($raw['price'] ?? null))))));
+        if (is_array($priceRaw)) {
+            $priceRaw = $priceRaw['minPrice'] ?? ($priceRaw['amount'] ?? ($priceRaw['value'] ?? 0.0));
+        }
+        $candidatePrice = is_numeric($priceRaw) ? (float)$priceRaw : 0.0;
         if ($candidatePrice > 0.0) {
             $context->set('raw_price', $candidatePrice);
             $context->set('cost_price_usd', $candidatePrice);
@@ -85,9 +109,15 @@ class CandidateNormalizationStation implements AssemblyStationInterface
         }
 
         // Informações de avaliação e volume se disponíveis
-        $rating = $raw['evaluateRate'] ?? ($raw['evaluate_rate'] ?? ($raw['rating'] ?? null));
-        if ($rating !== null && is_numeric($rating)) {
-            $context->set('rating', (float)$rating);
+        $rating = $raw['evaluateRate'] ?? ($raw['evaluate_rate'] ?? ($raw['rating'] ?? ($baseInfo['avg_evaluation_rating'] ?? null)));
+        if ($rating !== null) {
+            $numRating = is_numeric($rating) ? (float)$rating : (float)str_replace(['%', ','], ['', '.'], (string)$rating);
+            if ($numRating > 5.0) {
+                $numRating = round(($numRating / 100.0) * 5.0, 1);
+            }
+            if ($numRating > 0.0) {
+                $context->set('rating', $numRating);
+            }
         }
         $orders = $raw['orders'] ?? ($raw['volume'] ?? ($raw['orders_count'] ?? null));
         if ($orders !== null && is_numeric($orders)) {

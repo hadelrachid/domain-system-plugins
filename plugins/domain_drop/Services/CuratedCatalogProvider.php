@@ -1696,7 +1696,7 @@ class CuratedCatalogProvider implements CuratedCatalogProviderInterface
         foreach ($colors as $cIdx => $color) {
             $colorSlug = strtoupper(preg_replace('/[^A-Za-z0-9]+/', '', $color) ?: (string)$cIdx);
             foreach ($sizes as $sIdx => $size) {
-                $sizeCode = strtok($size, ' ') ?: (string)$sIdx;
+                $sizeCode = strtoupper(preg_replace('/[^A-Za-z0-9]+/', '', $size)) ?: (string)$sIdx;
                 $variants[] = [
                     'sku_id'         => "{$productId}-{$colorSlug}-{$sizeCode}",
                     'sku_attr'       => '14:' . (200000180 + $cIdx) . ';5:' . (100014064 + $sIdx),

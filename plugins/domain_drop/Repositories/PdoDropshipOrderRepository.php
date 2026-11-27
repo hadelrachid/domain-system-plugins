@@ -62,16 +62,20 @@ class PdoDropshipOrderRepository implements DropshipOrderRepositoryInterface
             ':updated_at'          => $updatedAt,
         ];
 
+        $origin = strtoupper((string)($data['seller_origin'] ?? 'BR'));
+        $defaultDays = ($origin === 'CN') ? 25 : 7;
+
         $optionalMap = [
-            'seller_origin'          => strtoupper((string)($data['seller_origin'] ?? 'BR')),
+            'seller_origin'          => $origin,
             'seller_name'            => isset($data['seller_name']) ? (string)$data['seller_name'] : null,
             'seller_email'           => isset($data['seller_email']) ? (string)$data['seller_email'] : null,
-            'expected_delivery_days' => isset($data['expected_delivery_days']) ? max(1, (int)$data['expected_delivery_days']) : 7,
+            'expected_delivery_days' => isset($data['expected_delivery_days']) ? max(1, (int)$data['expected_delivery_days']) : $defaultDays,
             'sdk_delivered_at'       => isset($data['sdk_delivered_at']) ? (string)$data['sdk_delivered_at'] : null,
             'sdk_tracking_summary'   => isset($data['sdk_tracking_summary']) ? (string)$data['sdk_tracking_summary'] : null,
             'product_slug'           => isset($data['product_slug']) ? (string)$data['product_slug'] : null,
             'product_title'          => isset($data['product_title']) ? (string)$data['product_title'] : null,
             'aliexpress_product_id'  => isset($data['aliexpress_product_id']) ? (string)$data['aliexpress_product_id'] : null,
+            'selected_sku'           => isset($data['selected_sku']) ? (string)$data['selected_sku'] : null,
             'selected_color'         => isset($data['selected_color']) ? (string)$data['selected_color'] : null,
             'selected_size'          => isset($data['selected_size']) ? (string)$data['selected_size'] : null,
             'quantity'               => isset($data['quantity']) ? max(1, (int)$data['quantity']) : 1,
@@ -80,7 +84,7 @@ class PdoDropshipOrderRepository implements DropshipOrderRepositoryInterface
             'shipping_type'          => isset($data['shipping_type']) ? (string)$data['shipping_type'] : null,
             'shipping_cost_brl'      => isset($data['shipping_cost_brl']) ? (float)$data['shipping_cost_brl'] : 0.0,
             'fulfillment_dossier'    => isset($data['fulfillment_dossier'])
-                ? (is_array($data['fulfillment_dossier']) ? json_encode($data['fulfillment_dossier'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : (string)$data['fulfillment_dossier'])
+                ? (is_array($data['fulfillment_dossier']) ? (json_encode($data['fulfillment_dossier'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?: null) : (string)$data['fulfillment_dossier'])
                 : null,
         ];
 
@@ -142,6 +146,65 @@ class PdoDropshipOrderRepository implements DropshipOrderRepositoryInterface
         if ($status === 'delivered' && in_array('sdk_delivered_at', $this->getTableColumns(), true)) {
             $fields[] = 'sdk_delivered_at = COALESCE(sdk_delivered_at, :delivered_at)';
             $params[':delivered_at'] = date('Y-m-d H:i:s');
+        }
+
+        $sql = "UPDATE domain_drop_orders SET " . implode(', ', $fields) . " WHERE order_ref = :ref";
+        $stmt = $this->pdo->prepare($sql);
+
+        return $stmt->execute($params);
+    }
+
+    public function updateOrderDossier(string $orderRef, array $data): bool
+    {
+        $existingCols = $this->getTableColumns();
+        $fields = ['updated_at = :updated_at'];
+        $params = [
+            ':ref'        => $orderRef,
+            ':updated_at' => date('Y-m-d H:i:s'),
+        ];
+
+        $mapping = [
+            'status'              => 'status',
+            'customer_name'       => 'customer_name',
+            'customer_email'      => 'customer_email',
+            'customer_document'   => 'customer_document',
+            'total_paid_brl'      => 'total_paid_brl',
+            'product_title'       => 'product_title',
+            'product_slug'        => 'product_slug',
+            'aliexpress_product_id' => 'aliexpress_product_id',
+            'selected_sku'        => 'selected_sku',
+            'selected_color'      => 'selected_color',
+            'selected_size'       => 'selected_size',
+            'quantity'            => 'quantity',
+            'supplier_url'        => 'supplier_url',
+            'supplier_store'      => 'supplier_store',
+            'shipping_type'       => 'shipping_type',
+            'shipping_cost_brl'   => 'shipping_cost_brl',
+            'seller_origin'       => 'seller_origin',
+            'seller_name'         => 'seller_name',
+            'seller_email'        => 'seller_email',
+            'expected_delivery_days' => 'expected_delivery_days',
+        ];
+
+        foreach ($mapping as $key => $col) {
+            if (isset($data[$key]) && in_array($col, $existingCols, true)) {
+                $fields[] = "{$col} = :{$key}";
+                $params[":{$key}"] = $data[$key];
+            }
+        }
+
+        if (isset($data['shipping_address']) && in_array('shipping_address', $existingCols, true)) {
+            $fields[] = "shipping_address = :shipping_address";
+            $params[':shipping_address'] = is_array($data['shipping_address'])
+                ? (json_encode($data['shipping_address'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?: null)
+                : (string)$data['shipping_address'];
+        }
+
+        if (isset($data['fulfillment_dossier']) && in_array('fulfillment_dossier', $existingCols, true)) {
+            $fields[] = "fulfillment_dossier = :fulfillment_dossier";
+            $params[':fulfillment_dossier'] = is_array($data['fulfillment_dossier'])
+                ? (json_encode($data['fulfillment_dossier'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?: null)
+                : (string)$data['fulfillment_dossier'];
         }
 
         $sql = "UPDATE domain_drop_orders SET " . implode(', ', $fields) . " WHERE order_ref = :ref";
@@ -233,11 +296,14 @@ class PdoDropshipOrderRepository implements DropshipOrderRepositoryInterface
 
         if (!empty($filters['search'])) {
             $term = '%' . (string)$filters['search'] . '%';
-            $where[] = "(order_ref LIKE :q1 OR customer_name LIKE :q2 OR customer_email LIKE :q3 OR tracking_code LIKE :q4)";
+            $where[] = "(order_ref LIKE :q1 OR customer_name LIKE :q2 OR customer_email LIKE :q3 OR tracking_code LIKE :q4 OR product_title LIKE :q5 OR aliexpress_order_id LIKE :q6 OR supplier_store LIKE :q7)";
             $params[':q1'] = $term;
             $params[':q2'] = $term;
             $params[':q3'] = $term;
             $params[':q4'] = $term;
+            $params[':q5'] = $term;
+            $params[':q6'] = $term;
+            $params[':q7'] = $term;
         }
 
         $sql = "SELECT * FROM domain_drop_orders";

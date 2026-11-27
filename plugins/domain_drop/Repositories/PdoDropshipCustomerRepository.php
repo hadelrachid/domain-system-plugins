@@ -244,6 +244,30 @@ class PdoDropshipCustomerRepository implements DropshipCustomerRepositoryInterfa
             $params[':shipping_state'] = trim((string)$data['shipping_state']) !== '' ? strtoupper(trim((string)$data['shipping_state'])) : null;
         }
 
+        // Sincroniza default_shipping_address se algum dado de envio for atualizado
+        $hasShippingUpdate = isset($data['shipping_zip']) || isset($data['shipping_address'])
+            || isset($data['shipping_number']) || isset($data['shipping_complement'])
+            || isset($data['shipping_neighborhood']) || isset($data['shipping_city'])
+            || isset($data['shipping_state']);
+
+        if ($hasShippingUpdate) {
+            $existing = $this->findById($id);
+            $existingParsed = $existing['parsed_shipping_address'] ?? [];
+            $newAddressPayload = [
+                'zip'          => $data['shipping_zip'] ?? ($existingParsed['zip'] ?? null),
+                'street'       => $data['shipping_address'] ?? ($existingParsed['street'] ?? null),
+                'number'       => $data['shipping_number'] ?? ($existingParsed['number'] ?? null),
+                'complement'   => $data['shipping_complement'] ?? ($existingParsed['complement'] ?? null),
+                'neighborhood' => $data['shipping_neighborhood'] ?? ($existingParsed['neighborhood'] ?? null),
+                'city'         => $data['shipping_city'] ?? ($existingParsed['city'] ?? null),
+                'state'        => isset($data['shipping_state']) ? strtoupper(trim((string)$data['shipping_state'])) : ($existingParsed['state'] ?? null),
+                'phone'        => $data['phone'] ?? ($existingParsed['phone'] ?? ($existing['phone'] ?? null)),
+                'cpf'          => $data['cpf'] ?? ($existingParsed['cpf'] ?? ($existing['cpf'] ?? null)),
+            ];
+            $fields[] = 'default_shipping_address = :default_shipping_address';
+            $params[':default_shipping_address'] = json_encode($newAddressPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
+
         if (empty($fields)) {
             return false;
         }

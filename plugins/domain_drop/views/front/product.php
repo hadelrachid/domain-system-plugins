@@ -67,7 +67,7 @@ if ($eanCode !== '') {
 ?>
 <!-- Dados Estruturados Schema.org / Google Shopping & Rich Snippets -->
 <script type="application/ld+json">
-<?= json_encode($schemaData, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) ?>
+<?= json_encode($schemaData, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE | JSON_PRETTY_PRINT) ?>
 </script>
 
 <div class="domain-drop-product-page" style="max-width: 1200px; margin: 0 auto; padding: 24px 15px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #cbd5e1; box-sizing: border-box;">
@@ -1283,14 +1283,14 @@ document.addEventListener('keydown', function(e) {
 
 // Disparo Inteligente de Demanda (Beacon/Keepalive)
 var productTrackingData = {
-    product_id: <?= json_encode((string)($product->aliexpressId ?: (string)$product->id)) ?>,
-    title: <?= json_encode((string)$product->title) ?>,
-    category: <?= json_encode((string)$product->category) ?>
+    product_id: <?= json_encode((string)($product->aliexpressId ?: (string)$product->id), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE) ?>,
+    title: <?= json_encode((string)$product->title, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE) ?>,
+    category: <?= json_encode((string)$product->category, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE) ?>
 };
 
 function trackProductAction(actionType) {
     if (!productTrackingData.product_id) return;
-    var base = <?= json_encode($baseUrl) ?>;
+    var base = <?= json_encode($baseUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     var endpoint = (base ? base.replace(/\/+$/, '') : '') + '/api/drop/track-demand';
     var payload = JSON.stringify({
         product_id: productTrackingData.product_id,
@@ -1428,17 +1428,25 @@ function showDropToast(options) {
     var titleColor = isAlert ? '#fca5a5' : '#6ee7b7';
     var icon = isAlert ? '⚠️' : '✅';
 
+    function escapeToast(str) {
+        var d = document.createElement('div');
+        d.textContent = str || '';
+        return d.innerHTML;
+    }
+    var safeTitle = escapeToast(title);
+    var safeMessage = escapeToast(message);
+
     toast.className = 'drop-toast-item';
     toast.style.cssText = 'pointer-events: auto; background: linear-gradient(135deg, rgba(20, 24, 33, 0.96) 0%, rgba(30, 35, 48, 0.96) 100%); border: 1px solid rgba(255,255,255,0.12); border-left: 4px solid ' + borderColor + '; border-radius: 12px; padding: 16px 18px; box-shadow: 0 16px 36px rgba(0,0,0,0.65), 0 0 20px ' + (isAlert ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)') + '; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); display: flex; flex-direction: column; gap: 8px; animation: dropToastSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; transition: all 0.35s ease; font-family: inherit;';
 
     toast.innerHTML = '<div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">' +
         '<div style="display: flex; align-items: center; gap: 8px;">' +
             '<span style="font-size: 18px; line-height: 1;">' + icon + '</span>' +
-            '<strong style="color: ' + titleColor + '; font-size: 14px; font-weight: 700; line-height: 1.3;">' + title + '</strong>' +
+            '<strong style="color: ' + titleColor + '; font-size: 14px; font-weight: 700; line-height: 1.3;">' + safeTitle + '</strong>' +
         '</div>' +
         '<button type="button" style="background: none; border: none; color: #94a3b8; font-size: 18px; cursor: pointer; padding: 0 4px; line-height: 1; transition: color 0.2s;" onmouseover="this.style.color=\'#fff\'" onmouseout="this.style.color=\'#94a3b8\'" onclick="this.closest(\'.drop-toast-item\').remove();">&times;</button>' +
     '</div>' +
-    '<div style="color: #cbd5e1; font-size: 13px; line-height: 1.45;">' + message + '</div>' +
+    '<div style="color: #cbd5e1; font-size: 13px; line-height: 1.45;">' + safeMessage + '</div>' +
     '<div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: #94a3b8; margin-top: 4px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 6px;">' +
         '<span>🛡️</span>' +
         '<span>Segurança e Transparência CDC / Procon • Nenhuma cobrança indevida</span>' +

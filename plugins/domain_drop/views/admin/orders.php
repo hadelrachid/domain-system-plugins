@@ -165,7 +165,7 @@ foreach ($orders as $ordItem) {
                         };
                         $ordDisputes = is_array($o['disputes'] ?? null) ? $o['disputes'] : [];
                         $latestDispute = $ordDisputes[0] ?? null;
-                        ?>
+
                         $shipAddr = [];
                         if (!empty($o['shipping_address'])) {
                             if (is_array($o['shipping_address'])) {
@@ -179,12 +179,15 @@ foreach ($orders as $ordItem) {
                         $colorVal = $o['selected_color'] ?? ($shipAddr['selected_color'] ?? '');
                         $sizeVal = $o['selected_size'] ?? ($shipAddr['selected_size'] ?? '');
                         $qtyVal = (int)($o['quantity'] ?? ($shipAddr['quantity'] ?? 1));
-                        $suppUrl = (string)($o['supplier_url'] ?? ($shipAddr['supplier_url'] ?? ''));
+                        $suppUrl = trim((string)($o['supplier_url'] ?? ($shipAddr['supplier_url'] ?? '')));
+                        if ($suppUrl !== '' && !preg_match('#^https?://#i', $suppUrl)) {
+                            $suppUrl = '';
+                        }
                         if ($suppUrl === '' && !empty($o['aliexpress_product_id'])) {
-                            $suppUrl = 'https://pt.aliexpress.com/item/' . $e($o['aliexpress_product_id']) . '.html?country=BR&locale=pt_BR&currency=BRL';
+                            $suppUrl = 'https://pt.aliexpress.com/item/' . rawurlencode((string)$o['aliexpress_product_id']) . '.html?country=BR&locale=pt_BR&currency=BRL';
                         }
                         if ($suppUrl === '' && !empty($o['product_title'])) {
-                            $suppUrl = 'https://www.aliexpress.com/wholesale?SearchText=' . urlencode((string)$o['product_title']);
+                            $suppUrl = 'https://www.aliexpress.com/wholesale?SearchText=' . rawurlencode((string)$o['product_title']);
                         }
 
                         $formattedFullAddress = trim(
@@ -260,7 +263,7 @@ foreach ($orders as $ordItem) {
                                     <?php endif; ?>
 
                                     <!-- Botão Copiar Dossiê Cópia Carbono -->
-                                    <button type="button" onclick="copyDossierClipboard(this, <?= htmlspecialchars(json_encode($clipText), ENT_QUOTES, 'UTF-8') ?>)" style="width: 100%; background: rgba(240, 208, 96, 0.14); border: 1px solid rgba(240, 208, 96, 0.4); color: #F0D060; padding: 5px 8px; border-radius: 5px; font-size: 11px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 5px;">
+                                    <button type="button" data-dossier="<?= $e($clipText) ?>" onclick="copyDossierClipboard(this, this.getAttribute('data-dossier') || '')" style="width: 100%; background: rgba(240, 208, 96, 0.14); border: 1px solid rgba(240, 208, 96, 0.4); color: #F0D060; padding: 5px 8px; border-radius: 5px; font-size: 11px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 5px;">
                                         <i class="fas fa-copy"></i> 📋 Copiar Dossiê de Expedição
                                     </button>
                                 </div>
@@ -442,30 +445,39 @@ foreach ($orders as $ordItem) {
 
 <script>
 function copyDossierClipboard(btn, text) {
-    if (!navigator.clipboard) {
+    if (!btn.dataset.origHtml) {
+        btn.dataset.origHtml = btn.innerHTML;
+        btn.dataset.origBorder = btn.style.borderColor || '';
+        btn.dataset.origColor = btn.style.color || '';
+        btn.dataset.origBg = btn.style.background || '';
+    }
+    function fallbackCopy(val) {
         var ta = document.createElement('textarea');
-        ta.value = text;
+        ta.value = val;
         ta.style.position = 'fixed';
         ta.style.opacity = '0';
         document.body.appendChild(ta);
         ta.select();
-        try {
-            document.execCommand('copy');
-        } catch (e) {}
+        try { document.execCommand('copy'); } catch (e) {}
         document.body.removeChild(ta);
-    } else {
-        navigator.clipboard.writeText(text);
     }
-    var orig = btn.innerHTML;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).catch(function() { fallbackCopy(text); });
+    } else {
+        fallbackCopy(text);
+    }
     btn.innerHTML = '✅ Copiado com Sucesso!';
     btn.style.borderColor = '#10b981';
     btn.style.color = '#34d399';
     btn.style.background = 'rgba(16, 185, 129, 0.2)';
     setTimeout(function() {
-        btn.innerHTML = orig;
-        btn.style.borderColor = 'rgba(255,255,255,0.2)';
-        btn.style.color = '#e2e8f0';
-        btn.style.background = 'rgba(255,255,255,0.06)';
+        if (btn.dataset.origHtml) {
+            btn.innerHTML = btn.dataset.origHtml;
+            btn.style.borderColor = btn.dataset.origBorder;
+            btn.style.color = btn.dataset.origColor;
+            btn.style.background = btn.dataset.origBg;
+            delete btn.dataset.origHtml;
+        }
     }, 2500);
 }
 </script>

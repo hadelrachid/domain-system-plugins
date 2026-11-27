@@ -266,6 +266,20 @@ class DropshipAdminController
             $videoUrl = 'https:' . $videoUrl;
         }
 
+        $host = strtolower((string)parse_url($videoUrl, PHP_URL_HOST));
+        $scheme = strtolower((string)parse_url($videoUrl, PHP_URL_SCHEME));
+        if (!in_array($scheme, ['http', 'https'], true) || $host === '') {
+            $this->session->setFlash('error', 'URL de vídeo com protocolo inválido.');
+            return Response::redirect($baseUrl . '/admin/dropship');
+        }
+
+        // Bloqueia IPs privados e loopback (SSRF prevention)
+        $ip = gethostbyname($host);
+        if ($ip !== $host && !filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+            $this->session->setFlash('error', 'Acesso a endereços de rede privada não é permitido.');
+            return Response::redirect($baseUrl . '/admin/dropship');
+        }
+
         $cleanSlug = preg_replace('/[^a-zA-Z0-9_-]/', '-', $slug ?: 'produto') ?: 'video';
         $filename = "{$cleanSlug}-video.mp4";
 
@@ -280,6 +294,7 @@ class DropshipAdminController
         $ch = curl_init($videoUrl);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
         curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
         curl_setopt($ch, CURLOPT_TIMEOUT, 120);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
@@ -932,7 +947,7 @@ class DropshipAdminController
             $this->session->setFlash('success', $msg);
         } catch (Throwable $e) {
             $prodId = (int)$id;
-            $autoPurge = !empty($request->getParsedBody()['auto_purge']);
+            $autoPurge = filter_var($request->input('auto_purge', false), FILTER_VALIDATE_BOOLEAN);
             $isNotFoundOnSupplier = str_starts_with($e->getMessage(), 'PAGINA_NAO_ENCONTRADA:')
                 || stripos($e->getMessage(), 'Página não encontrada') !== false
                 || stripos($e->getMessage(), 'não foi encontrado') !== false
@@ -1244,8 +1259,10 @@ class DropshipAdminController
             return Response::redirect($baseUrl . '/admin/dropship');
         }
 
-        $body = $request->getParsedBody();
-        $rawIds = $body['ids'] ?? [];
+        $jsonBody = $request->json();
+        $rawIds = (is_array($jsonBody) && array_key_exists('ids', $jsonBody))
+            ? $jsonBody['ids']
+            : $request->input('ids', []);
         if (is_string($rawIds)) {
             $rawIds = json_decode($rawIds, true) ?: [];
         }
@@ -1525,10 +1542,19 @@ class DropshipAdminController
         if ($freteTipo === 'gratis') {
             $freteGratis = true;
             $freteValor = 0.0;
+        } elseif ($freteValor <= 0.0) {
+            return new JsonResponse(['success' => false, 'message' => 'Informe um valor maior que R$ 0,00 para frete pago/expresso.'], 422);
         }
 
         // 4. Link oficial do Fornecedor / AliExpress
         $aliexpressUrl = trim((string)$request->input('aliexpress_url', ''));
+        if ($aliexpressUrl !== '') {
+            $parsedAe = parse_url($aliexpressUrl);
+            $aeScheme = strtolower((string)($parsedAe['scheme'] ?? ''));
+            if (!filter_var($aliexpressUrl, FILTER_VALIDATE_URL) || !in_array($aeScheme, ['http', 'https'], true)) {
+                return new JsonResponse(['success' => false, 'message' => 'URL do fornecedor inválida. Utilize http:// ou https://.'], 422);
+            }
+        }
 
         // 5. Atualização de atributos estruturados
         $attributes = $product->attributes;
@@ -1583,7 +1609,9 @@ class DropshipAdminController
 
         $existingVariants = $product->getVariants();
         $existingMap = [];
+        $usedSkuIds = [];
         foreach ($existingVariants as $ev) {
+            $usedSkuIds[] = $ev->skuId;
             $c = $ev->options['Cor'] ?? ($ev->options['cor'] ?? ($ev->options['Color'] ?? ''));
             $s = $ev->options['Tamanho'] ?? ($ev->options['tamanho'] ?? ($ev->options['Size'] ?? ''));
             $key = mb_strtolower(trim((string)$c)) . '|' . mb_strtolower(trim((string)$s));
@@ -1608,7 +1636,15 @@ class DropshipAdminController
                 $lookupKey = mb_strtolower(trim((string)$cVal)) . '|' . mb_strtolower(trim((string)$sVal));
                 $match = $existingMap[$lookupKey] ?? null;
 
-                $skuId = $match ? $match->skuId : ('sku_' . $product->aliexpressId . '_' . $counter);
+                if ($match) {
+                    $skuId = $match->skuId;
+                } else {
+                    do {
+                        $candidate = 'sku_' . $product->aliexpressId . '_' . $counter++;
+                    } while (in_array($candidate, $usedSkuIds, true));
+                    $skuId = $candidate;
+                }
+                $usedSkuIds[] = $skuId;
                 $skuAttr = $match ? $match->skuAttr : '';
                 $priceBrl = $match ? $match->priceBrl : $product->salePriceBrl;
                 $costUsd = $match ? $match->costPriceUsd : $product->costPriceUsd;
@@ -1732,9 +1768,9 @@ class DropshipAdminController
             || ($hasHeader && (string)$request->header('Sec-Fetch-Dest', '') === 'empty');
     }
 
-    private function parseCurrency(string|float|int|null $value): float
+    private function parseCurrency(mixed $value): float
     {
-        if ($value === null) {
+        if ($value === null || is_array($value) || is_object($value)) {
             return 0.0;
         }
         if (is_numeric($value)) {

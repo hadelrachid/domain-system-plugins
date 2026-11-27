@@ -48,7 +48,9 @@ class ProductDetailExtractionStation implements AssemblyStationInterface
                 } else {
                     $detailResponse = [];
                 }
-                $result = $detailResponse['aliexpress_ds_product_get_response']['result'] ?? $detailResponse['result'] ?? null;
+                $result = $detailResponse['aliexpress_ds_product_get_response']['result'] 
+                    ?? ($detailResponse['result'] 
+                    ?? (isset($detailResponse['ae_item_base_info_dto']) || isset($detailResponse['ae_item_sku_info_dtos']) ? $detailResponse : null));
 
                 if (!$result) {
                     // Se a API não retornou detalhes mas o produto já possui preço e imagem válidos (ex: fallback curado), prossegue sem abortar
@@ -56,32 +58,53 @@ class ProductDetailExtractionStation implements AssemblyStationInterface
                         return $context->abort($this->getName(), "Produto {$id} não retornou detalhes ou foi removido (404)");
                     }
                 } else {
-                    $title = $result['item_title'] ?? $result['subject'] ?? $result['product_title'] ?? $context->get('title');
+                    $baseInfo = is_array($result['ae_item_base_info_dto'] ?? null) ? $result['ae_item_base_info_dto'] : [];
+                    $multiMedia = is_array($result['ae_multimedia_info_dto'] ?? null) ? $result['ae_multimedia_info_dto'] : [];
+
+                    $title = $result['item_title'] ?? $result['subject'] ?? $result['product_title'] ?? ($baseInfo['subject'] ?? $context->get('title'));
                     $context->set('title', $title);
+                    if (!empty($baseInfo['detail']) || !empty($result['product_description'])) {
+                        $context->set('description', (string)($result['product_description'] ?? $baseInfo['detail']));
+                    }
+                    if (!empty($baseInfo['currency_code'])) {
+                        $context->set('currency', strtoupper((string)$baseInfo['currency_code']));
+                    }
 
                     // Imagem principal e galeria
                     if (!empty($result['item_main_image_url'])) {
-                        $mainImage = $result['item_main_image_url'];
+                        $mainImage = (string)$result['item_main_image_url'];
                     } elseif (!empty($result['product_main_image_url'])) {
-                        $mainImage = $result['product_main_image_url'];
+                        $mainImage = (string)$result['product_main_image_url'];
                     } elseif (!empty($result['image_url'])) {
-                        $mainImage = $result['image_url'];
+                        $mainImage = (string)$result['image_url'];
                     }
-                    if (!empty($result['item_image_urls'])) {
-                        $images = is_array($result['item_image_urls']) ? $result['item_image_urls'] : explode(';', (string)$result['item_image_urls']);
+                    $rawGallery = $result['item_image_urls'] ?? ($multiMedia['image_urls'] ?? null);
+                    if (!empty($rawGallery)) {
+                        $images = is_array($rawGallery) ? $rawGallery : array_filter(array_map('trim', explode(';', (string)$rawGallery)));
+                        if ($mainImage === '' && !empty($images[0])) {
+                            $mainImage = (string)$images[0];
+                        }
                     }
 
                     // Preço bruto vindo da resposta do detalhe
-                    $resPrice = (float)($result['target_sale_price'] ?? ($result['targetSalePrice'] ?? ($result['sale_price'] ?? ($result['salePrice'] ?? ($result['price'] ?? 0.0)))));
+                    $resPrice = (float)($result['target_sale_price'] ?? ($result['targetSalePrice'] ?? ($result['sale_price'] ?? ($result['salePrice'] ?? ($result['price'] ?? ($baseInfo['offer_sale_price'] ?? 0.0))))));
                     if ($price <= 0.0 && $resPrice > 0.0) {
                         $price = $resPrice;
                     }
 
-                    // Extração de SKUs
-                    $skuMatrix = $result['ae_item_sku_info_dtos']['ae_item_sku_info_d_t_o'] ?? [];
+                    // Extração robusta de SKUs (suporta lista direta, wrapper d_t_o e SKU único associativo)
+                    $rawSkus = $result['ae_item_sku_info_dtos']['ae_item_sku_info_d_t_o']
+                        ?? ($result['ae_item_sku_info_dtos'] ?? []);
+                    $skuMatrix = [];
+                    if (is_array($rawSkus) && !empty($rawSkus)) {
+                        $skuMatrix = (isset($rawSkus['sku_id']) || isset($rawSkus['id']) || isset($rawSkus['offer_sale_price']) || isset($rawSkus['sku_price']))
+                            ? [$rawSkus]
+                            : $rawSkus;
+                    }
                     if (!empty($skuMatrix)) {
                         $parsedSkus = [];
                         foreach ($skuMatrix as $sku) {
+                            if (!is_array($sku)) continue;
                             $skuPrice = (float)($sku['offer_sale_price'] ?? $sku['sku_price'] ?? 0.0);
                             $skuStock = (int)($sku['sku_available_stock'] ?? $sku['ipm_sku_stock'] ?? 0);
                             $skuId = (string)($sku['sku_id'] ?? '');

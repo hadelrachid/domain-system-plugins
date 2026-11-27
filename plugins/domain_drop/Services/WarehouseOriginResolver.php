@@ -40,13 +40,12 @@ class WarehouseOriginResolver implements WarehouseOriginResolverInterface
             return self::ORIGIN_BR;
         }
 
-        // 2. Campo de expedição física (ship_from / send_goods_country_code / delivery.shippingFrom / target_warehouse_origin)
+        // 2. Campo de expedição física (ship_from / send_goods_country_code / delivery.shippingFrom / ship_from_country)
         $shipFrom = strtoupper(trim((string)(
             $rawItem['ship_from']
-            ?? $rawItem['send_goods_country_code']
-            ?? ($rawItem['delivery']['shippingFrom'] ?? '')
-            ?? ($rawItem['ship_from_country'] ?? '')
-            ?? ($rawItem['target_warehouse_origin'] ?? '')
+            ?? ($rawItem['send_goods_country_code']
+            ?? ($rawItem['delivery']['shippingFrom']
+            ?? ($rawItem['ship_from_country'] ?? '')))
         )));
 
         if (in_array($shipFrom, ['BR', 'BRAZIL', 'BRASIL'], true)) {

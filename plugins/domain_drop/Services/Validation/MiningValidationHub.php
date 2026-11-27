@@ -55,11 +55,12 @@ class MiningValidationHub
 
             $baseInfo = $item['ae_item_base_info_dto'] ?? [];
             $itemId = (string)(
-                $item['itemId'] 
+                $item['id']
+                ?? ($item['itemId'] 
                 ?? ($item['product_id'] 
                 ?? ($baseInfo['product_id'] 
                 ?? ($item['item_id'] 
-                ?? ($item['productId'] ?? (is_numeric($key) ? '' : (string)$key)))))
+                ?? ($item['productId'] ?? (is_numeric($key) ? '' : (string)$key))))))
             );
 
             if ($itemId !== '') {

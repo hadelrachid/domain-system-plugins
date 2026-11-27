@@ -1595,6 +1595,9 @@
             if (e.key === 'Escape') {
                 closePriceModal();
                 closeImagesModal();
+                if (typeof closeProductConfigModal === 'function') {
+                    closeProductConfigModal();
+                }
             }
         });
 
@@ -3313,11 +3316,12 @@
                 globalCount++;
             }
 
+            const escapedTitle = escapeHtml(item.title || 'Produto');
             textRows.push(`${num}. ${item.title}: ${status}`);
             htmlRows.push(`
                 <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 4px 0; border-bottom: 1px dashed rgba(255,255,255,0.05);">
-                    <div style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${item.title}">
-                        <strong style="color: #94a3b8;">${num}.</strong> ${item.title}
+                    <div style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapedTitle}">
+                        <strong style="color: #94a3b8;">${num}.</strong> ${escapedTitle}
                     </div>
                     <div style="white-space: nowrap;">${badgeHtml}</div>
                 </div>

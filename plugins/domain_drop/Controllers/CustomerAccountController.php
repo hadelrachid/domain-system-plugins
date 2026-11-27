@@ -89,7 +89,7 @@ class CustomerAccountController
             $this->session->setFlash('error', 'A senha deve conter no mínimo 8 caracteres.');
             return Response::redirect($baseUrl . '/cadastro' . $redirectQuery);
         }
-        if ($confirm !== '' && $password !== $confirm) {
+        if ($password !== $confirm) {
             $this->session->setFlash('error', 'A confirmação de senha não confere.');
             return Response::redirect($baseUrl . '/cadastro' . $redirectQuery);
         }
@@ -192,7 +192,7 @@ class CustomerAccountController
     private function sanitizeRedirect(string $raw): string
     {
         $raw = trim($raw);
-        if ($raw === '' || !str_starts_with($raw, '/') || str_starts_with($raw, '//') || str_contains($raw, '://') || str_contains($raw, "\r") || str_contains($raw, "\n")) {
+        if ($raw === '' || !str_starts_with($raw, '/') || str_starts_with($raw, '//') || str_contains($raw, '\\') || str_contains($raw, '://') || preg_match('/[\x00-\x1F\x7F]/', $raw)) {
             return '';
         }
         return $raw;
@@ -414,11 +414,14 @@ class CustomerAccountController
             $cleanManualRef = preg_replace('/[^A-Za-z0-9\-_#\/]/', '', $manualOrderRef) ?: '';
             $cleanManualRef = substr(strtoupper($cleanManualRef), 0, 60);
             if ($cleanManualRef !== '') {
-                $orderRef = $cleanManualRef;
                 $candidateOrder = $this->orderRepo->findByOrderRef($cleanManualRef);
                 // Garante que o cliente só vincule metadados/produto de pedidos que pertencem a ele (evita IDOR)
                 if ($candidateOrder !== null && strtolower(trim((string)($candidateOrder['customer_email'] ?? ''))) === strtolower(trim($customerEmail))) {
                     $order = $candidateOrder;
+                    $orderRef = $cleanManualRef;
+                } else {
+                    $orderRef = 'GERAL';
+                    $isGeneralInquiry = true;
                 }
             } else {
                 $orderRef = 'GERAL';

@@ -47,13 +47,18 @@ class MediaSanitizationStation implements AssemblyStationInterface
             $mainImage = trim((string)$context->get('image', ''));
         }
 
+        if (str_starts_with($mainImage, '//')) {
+            $mainImage = 'https:' . $mainImage;
+        }
+
         if ($mainImage === '') {
             return $context->abort($this->getName(), 'Produto sem imagem principal autêntica');
         }
 
         // Validação básica de formato e esquema de URL
-        if (!filter_var($mainImage, FILTER_VALIDATE_URL)) {
-            return $context->abort($this->getName(), 'URL da imagem principal inválida ou malformada');
+        $scheme = strtolower((string)parse_url($mainImage, PHP_URL_SCHEME));
+        if (!in_array($scheme, ['https', 'http'], true) || !filter_var($mainImage, FILTER_VALIDATE_URL)) {
+            return $context->abort($this->getName(), 'URL da imagem principal inválida ou esquema inseguro');
         }
 
         // Rejeita placeholders conhecidos ou imagens sintéticas
@@ -80,8 +85,12 @@ class MediaSanitizationStation implements AssemblyStationInterface
 
         if (is_array($images)) {
             foreach ($images as $img) {
-                $imgUrl = trim((string)$img);
-                if ($imgUrl !== '' && $imgUrl !== $mainImage && filter_var($imgUrl, FILTER_VALIDATE_URL)) {
+                $imgUrl = is_array($img) ? trim((string)($img['imgUrl'] ?? ($img['url'] ?? ''))) : trim((string)$img);
+                if (str_starts_with($imgUrl, '//')) {
+                    $imgUrl = 'https:' . $imgUrl;
+                }
+                $imgScheme = strtolower((string)parse_url($imgUrl, PHP_URL_SCHEME));
+                if ($imgUrl !== '' && $imgUrl !== $mainImage && in_array($imgScheme, ['https', 'http'], true) && filter_var($imgUrl, FILTER_VALIDATE_URL)) {
                     $validImages[] = $imgUrl;
                 }
             }
@@ -131,9 +140,7 @@ class MediaSanitizationStation implements AssemblyStationInterface
             if ($statusCode >= 200 && $statusCode < 400) {
                 return true;
             }
-            if ($statusCode >= 400) {
-                return false;
-            }
+            return false;
         }
 
         return true;
