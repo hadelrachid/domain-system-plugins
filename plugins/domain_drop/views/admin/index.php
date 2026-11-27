@@ -911,13 +911,14 @@
                         }
                         ?>
 
+                        <div id="prod-category-badge-<?= (int)$prod->id ?>" style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px); color: #F0D060; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; z-index: 2; box-shadow: 0 2px 6px rgba(0,0,0,0.4);" title="Categoria: <?= htmlspecialchars($prod->category ?: 'Dropship') ?>">
+                            <i class="fas fa-tag" style="color: #fbbf24; font-size: 10px;"></i>
+                            <span id="prod-category-text-<?= (int)$prod->id ?>"><?= htmlspecialchars($prod->category ?: 'Dropship') ?></span>
+                        </div>
+
                         <?php if (!empty($prodVideoUrl)): ?>
-                            <div style="position: absolute; top: 10px; left: 10px; background: rgba(147, 51, 234, 0.9); backdrop-filter: blur(4px); color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.4);" title="Vídeo demonstrativo em alta definição disponível">
+                            <div style="position: absolute; top: 38px; left: 10px; background: rgba(147, 51, 234, 0.9); backdrop-filter: blur(4px); color: #fff; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.4); z-index: 2;" title="Vídeo demonstrativo em alta definição disponível">
                                 <i class="fas fa-play-circle"></i> Vídeo HD
-                            </div>
-                        <?php else: ?>
-                            <div style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">
-                                <?= htmlspecialchars($prod->category ?: 'Dropship') ?>
                             </div>
                         <?php endif; ?>
 
@@ -957,7 +958,7 @@
                                     <span style="font-size: 10px; color: #94a3b8; font-weight: 700; text-transform: uppercase;" title="Clique para alterar a categoria deste produto">
                                         <i class="fas fa-tag" style="color: #fbbf24;"></i> Cat:
                                     </span>
-                                    <select class="admin-prod-category-select" data-product-id="<?= (int)$prod->id ?>" onchange="updateProductCategory(<?= (int)$prod->id ?>, this.value)" style="background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.18); color: #F0D060; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px; outline: none; cursor: pointer; max-width: 140px; text-overflow: ellipsis; white-space: nowrap;">
+                                    <select class="admin-prod-category-select" id="prod-category-select-<?= (int)$prod->id ?>" data-product-id="<?= (int)$prod->id ?>" onchange="updateProductCategory(<?= (int)$prod->id ?>, this.value)" style="background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.18); color: #F0D060; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px; outline: none; cursor: pointer; max-width: 140px; text-overflow: ellipsis; white-space: nowrap;">
                                         <?php 
                                         $officialCommercialCats = \DomainSystem\Plugins\domain_drop\Services\CategoryTaxonomyService::getCommercialCategories();
                                         $availableCats = !empty($categories) ? array_unique(array_merge($categories, $officialCommercialCats)) : $officialCommercialCats;
@@ -2315,6 +2316,32 @@
             .then(function(data) {
                 if (data.success) {
                     showToastFeedback(data.message, 'success');
+                    var updatedCat = data.category || newCategory;
+
+                    // 1. Atualiza o texto do badge de categoria na imagem do card
+                    var catText = document.getElementById('prod-category-text-' + productId);
+                    if (catText) {
+                        catText.textContent = updatedCat;
+                    }
+
+                    // 2. Feedback visual com brilho suave no badge de categoria
+                    var catBadge = document.getElementById('prod-category-badge-' + productId);
+                    if (catBadge) {
+                        catBadge.title = 'Categoria: ' + updatedCat;
+                        catBadge.style.transition = 'all 0.3s ease';
+                        catBadge.style.background = 'rgba(240, 208, 96, 0.4)';
+                        catBadge.style.boxShadow = '0 0 12px rgba(240, 208, 96, 0.6)';
+                        setTimeout(function() {
+                            catBadge.style.background = 'rgba(0,0,0,0.75)';
+                            catBadge.style.boxShadow = '0 2px 6px rgba(0,0,0,0.4)';
+                        }, 700);
+                    }
+
+                    // 3. Atualiza o valor selecionado no combobox caso tenha sido normalizado
+                    var catSel = document.getElementById('prod-category-select-' + productId);
+                    if (catSel && catSel.value !== updatedCat) {
+                        catSel.value = updatedCat;
+                    }
                 } else {
                     showToastFeedback(data.message || 'Erro ao alterar categoria', 'error');
                 }
