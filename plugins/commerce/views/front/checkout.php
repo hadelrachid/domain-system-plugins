@@ -175,12 +175,23 @@ $effectiveThumb = !empty($courseImage) ? $courseImage : $fallbackThumb;
                     </div>
 
                     <?php if ($isPhysicalOrDropship && $hasVariants): ?>
+                        <?php
+                        $selectedVariantArray = is_object($selectedVariant) && method_exists($selectedVariant, 'toArray')
+                            ? $selectedVariant->toArray()
+                            : (is_array($selectedVariant) ? $selectedVariant : []);
+                        $selectedVariantTitle = is_object($selectedVariant) && method_exists($selectedVariant, 'getShortLabel')
+                            ? $selectedVariant->getShortLabel()
+                            : ($selectedVariantArray['title'] ?? (!empty($selectedVariantArray['options']) ? implode(' / ', $selectedVariantArray['options']) : 'Opção selecionada'));
+                        $selectedVariantOptions = is_object($selectedVariant) && isset($selectedVariant->options) && is_array($selectedVariant->options)
+                            ? $selectedVariant->options
+                            : ($selectedVariantArray['options'] ?? []);
+                        ?>
                         <!-- Seletor de Variações de Roupas / Cores / Tamanhos no Checkout -->
                         <div id="checkout_variant_selector_box" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.09); border-radius: 8px; padding: 12px; margin-bottom: 14px;">
                             <div style="font-size: 0.78rem; font-weight: 700; color: #F0D060; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px;">
                                 <span>🎨 Variação Escolhida (Cor &amp; Tamanho)</span>
                                 <span id="checkout_variant_title_badge" style="color: #4ade80; font-size: 0.75rem; font-weight: 600;">
-                                    <?= htmlspecialchars($selectedVariant['title'] ?? 'Opção selecionada') ?>
+                                    <?= htmlspecialchars($selectedVariantTitle) ?>
                                 </span>
                             </div>
                             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px;">
@@ -189,7 +200,7 @@ $effectiveThumb = !empty($courseImage) ? $courseImage : $fallbackThumb;
                                         <label style="display: block; font-size: 0.72rem; color: #94a3b8; font-weight: 600; margin-bottom: 4px;"><?= htmlspecialchars($axisName) ?>:</label>
                                         <select class="ds-field-input ds-checkout-variant-axis" data-axis="<?= htmlspecialchars($axisName) ?>" onchange="onCheckoutVariantAxisChange()" style="padding: 6px 10px; font-size: 0.82rem; height: 34px; background: #0c0f12; border-color: rgba(255,255,255,0.18); border-radius: 6px; color: #fff;">
                                             <?php
-                                            $currentVal = $selectedVariant['options'][$axisName] ?? '';
+                                            $currentVal = $selectedVariantOptions[$axisName] ?? '';
                                             foreach ($options as $optVal):
                                                 $isSelected = ($optVal === $currentVal);
                                             ?>
@@ -202,10 +213,17 @@ $effectiveThumb = !empty($courseImage) ? $courseImage : $fallbackThumb;
                                 <?php endforeach; ?>
                             </div>
                         </div>
-                    <?php elseif ($isPhysicalOrDropship && !empty($selectedVariant['title'])): ?>
-                        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 6px 10px; margin-bottom: 12px; font-size: 0.76rem; color: #94a3b8;">
-                            Modelo / Opção: <strong style="color: #4ade80;"><?= htmlspecialchars($selectedVariant['title']) ?></strong>
-                        </div>
+                    <?php elseif ($isPhysicalOrDropship && !empty($selectedVariant)): ?>
+                        <?php
+                        $singleVariantTitle = is_object($selectedVariant) && method_exists($selectedVariant, 'getShortLabel')
+                            ? $selectedVariant->getShortLabel()
+                            : (is_array($selectedVariant) ? ($selectedVariant['title'] ?? '') : '');
+                        ?>
+                        <?php if ($singleVariantTitle !== ''): ?>
+                            <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 6px 10px; margin-bottom: 12px; font-size: 0.76rem; color: #94a3b8;">
+                                Modelo / Opção: <strong style="color: #4ade80;"><?= htmlspecialchars($singleVariantTitle) ?></strong>
+                            </div>
+                        <?php endif; ?>
                     <?php endif; ?>
 
                     <?php if ($isPhysicalOrDropship && $sellerInfo !== null): ?>
@@ -571,21 +589,24 @@ $effectiveThumb = !empty($courseImage) ? $courseImage : $fallbackThumb;
             }
 
             if (matched) {
+                var skuVal = matched.sku_id || matched.skuId || matched.sku || '';
                 var skuInput = document.getElementById('item_sku');
-                if (skuInput) skuInput.value = matched.sku || '';
+                if (skuInput) skuInput.value = skuVal;
 
                 var titleBadge = document.getElementById('checkout_variant_title_badge');
                 if (titleBadge) {
-                    titleBadge.textContent = matched.title || (Object.values(selectedOpts).join(' / '));
+                    titleBadge.textContent = matched.title || matched.short_label || (Object.values(selectedOpts).join(' / '));
                 }
 
-                if (matched.image) {
+                var imgVal = matched.image_url || matched.imageUrl || matched.image || '';
+                if (imgVal) {
                     var thumb = document.querySelector('.ds-checkout-course-thumb');
-                    if (thumb) thumb.src = matched.image;
+                    if (thumb) thumb.src = imgVal;
                 }
 
-                if (matched.price_brl && parseFloat(matched.price_brl) > 0) {
-                    unitPrice = parseFloat(matched.price_brl);
+                var priceVal = matched.price_brl || matched.priceBrl || matched.price || 0;
+                if (priceVal && parseFloat(priceVal) > 0) {
+                    unitPrice = parseFloat(priceVal);
                     var unitPriceEl = document.getElementById('checkout_unit_price_val');
                     if (unitPriceEl) unitPriceEl.textContent = 'R$ ' + formatBrlAmount(unitPrice);
                     updateOrderTotalsUI();
