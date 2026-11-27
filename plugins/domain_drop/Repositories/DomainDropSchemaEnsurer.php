@@ -49,6 +49,36 @@ final class DomainDropSchemaEnsurer
                         $pdo->exec("ALTER TABLE domain_drop_product_demand ADD COLUMN category_slug TEXT NOT NULL DEFAULT 'geral'");
                     }
                 }
+
+                $checkOrders = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='domain_drop_orders'");
+                if ($checkOrders && $checkOrders->fetchColumn() !== false) {
+                    $oCols = $pdo->query("PRAGMA table_info(domain_drop_orders)");
+                    $oColNames = $oCols ? array_column($oCols->fetchAll(PDO::FETCH_ASSOC), 'name') : [];
+                    if (!in_array('selected_color', $oColNames, true)) {
+                        $pdo->exec("ALTER TABLE domain_drop_orders ADD COLUMN selected_color TEXT NULL");
+                    }
+                    if (!in_array('selected_size', $oColNames, true)) {
+                        $pdo->exec("ALTER TABLE domain_drop_orders ADD COLUMN selected_size TEXT NULL");
+                    }
+                    if (!in_array('quantity', $oColNames, true)) {
+                        $pdo->exec("ALTER TABLE domain_drop_orders ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1");
+                    }
+                    if (!in_array('supplier_url', $oColNames, true)) {
+                        $pdo->exec("ALTER TABLE domain_drop_orders ADD COLUMN supplier_url TEXT NULL");
+                    }
+                    if (!in_array('supplier_store', $oColNames, true)) {
+                        $pdo->exec("ALTER TABLE domain_drop_orders ADD COLUMN supplier_store TEXT NULL");
+                    }
+                    if (!in_array('shipping_type', $oColNames, true)) {
+                        $pdo->exec("ALTER TABLE domain_drop_orders ADD COLUMN shipping_type TEXT NULL");
+                    }
+                    if (!in_array('shipping_cost_brl', $oColNames, true)) {
+                        $pdo->exec("ALTER TABLE domain_drop_orders ADD COLUMN shipping_cost_brl REAL NOT NULL DEFAULT 0.0");
+                    }
+                    if (!in_array('fulfillment_dossier', $oColNames, true)) {
+                        $pdo->exec("ALTER TABLE domain_drop_orders ADD COLUMN fulfillment_dossier TEXT NULL");
+                    }
+                }
             } elseif ($driver === 'mysql') {
                 $checkDemand = $pdo->query("SHOW TABLES LIKE 'domain_drop_product_demand'");
                 if ($checkDemand && $checkDemand->fetchColumn() !== false) {
@@ -62,6 +92,35 @@ final class DomainDropSchemaEnsurer
                     try {
                         $pdo->exec("ALTER TABLE domain_drop_catalog MODIFY `attributes` MEDIUMTEXT NULL, MODIFY `images` MEDIUMTEXT NULL, MODIFY `description` MEDIUMTEXT NULL");
                     } catch (Throwable $e) {}
+                }
+                $checkOrders = $pdo->query("SHOW TABLES LIKE 'domain_drop_orders'");
+                if ($checkOrders && $checkOrders->fetchColumn() !== false) {
+                    $cols = $pdo->query("SHOW COLUMNS FROM domain_drop_orders");
+                    $colNames = $cols ? array_column($cols->fetchAll(PDO::FETCH_ASSOC), 'Field') : [];
+                    if (!in_array('selected_color', $colNames, true)) {
+                        $pdo->exec("ALTER TABLE domain_drop_orders ADD COLUMN `selected_color` VARCHAR(100) NULL");
+                    }
+                    if (!in_array('selected_size', $colNames, true)) {
+                        $pdo->exec("ALTER TABLE domain_drop_orders ADD COLUMN `selected_size` VARCHAR(100) NULL");
+                    }
+                    if (!in_array('quantity', $colNames, true)) {
+                        $pdo->exec("ALTER TABLE domain_drop_orders ADD COLUMN `quantity` INT NOT NULL DEFAULT 1");
+                    }
+                    if (!in_array('supplier_url', $colNames, true)) {
+                        $pdo->exec("ALTER TABLE domain_drop_orders ADD COLUMN `supplier_url` TEXT NULL");
+                    }
+                    if (!in_array('supplier_store', $colNames, true)) {
+                        $pdo->exec("ALTER TABLE domain_drop_orders ADD COLUMN `supplier_store` VARCHAR(255) NULL");
+                    }
+                    if (!in_array('shipping_type', $colNames, true)) {
+                        $pdo->exec("ALTER TABLE domain_drop_orders ADD COLUMN `shipping_type` VARCHAR(100) NULL");
+                    }
+                    if (!in_array('shipping_cost_brl', $colNames, true)) {
+                        $pdo->exec("ALTER TABLE domain_drop_orders ADD COLUMN `shipping_cost_brl` DECIMAL(10,2) NOT NULL DEFAULT 0.00");
+                    }
+                    if (!in_array('fulfillment_dossier', $colNames, true)) {
+                        $pdo->exec("ALTER TABLE domain_drop_orders ADD COLUMN `fulfillment_dossier` MEDIUMTEXT NULL");
+                    }
                 }
             }
 

@@ -1,8 +1,8 @@
 {
     "name": "domain_drop",
-    "version": "2.10.6",
+    "version": "2.10.7",
     "author": "Rachid",
-    "description": "Motor autônomo de dropshipping e mineração em Linha de Montagem SOLID integrado ao AliExpress Open Platform (App ISV 558628), precificação dinâmica e enriquecimento por IA.",
+    "description": "Motor autônomo de dropshipping e mineração em Linha de Montagem SOLID integrado ao AliExpress Open Platform (App ISV 558628), configurações de card com tags de tamanho e cor, política de frete personalizada, precificação dinâmica e enriquecimento por IA.",
     "display_name": "DomainDrop",
     "admin_url": "/admin/dropship",
     "core": false,

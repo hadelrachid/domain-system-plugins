@@ -1034,6 +1034,9 @@
                                     <button type="button" onclick="openImagesModal(<?= (int)$prod->id ?>)" style="height: 26px; padding: 0 8px; font-size: 11px; font-weight: 600; color: #45f3ff; background: rgba(69, 243, 255, 0.08); border: 1px solid rgba(69, 243, 255, 0.25); border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; box-sizing: border-box; line-height: 1;" title="Visualizar, editar e sincronizar imagens do produto">
                                         <i class="fas fa-images"></i> Imagens
                                     </button>
+                                    <button type="button" onclick="openProductConfigModal(<?= (int)$prod->id ?>)" style="height: 26px; padding: 0 8px; font-size: 11px; font-weight: 600; color: #c084fc; background: rgba(192, 132, 252, 0.12); border: 1px solid rgba(192, 132, 252, 0.35); border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; box-sizing: border-box; line-height: 1;" title="Configurações do Card: Tamanhos, Cores, Frete e Fornecedor">
+                                        <i class="fas fa-cog"></i> ⚙️ Ajustes
+                                    </button>
                                 <?php endif; ?>
                             </div>
 
@@ -1396,6 +1399,168 @@
         </div>
     </div>
 
+    <!-- Modal de Configurações do Card (Tamanhos, Cores, Frete e Fornecedor) -->
+    <div id="modalProductConfig" style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); display: none; align-items: center; justify-content: center; z-index: 10000; padding: 16px;">
+        <div style="background: #0f172a; border: 1.5px solid rgba(192, 132, 252, 0.45); border-radius: 14px; width: 100%; max-width: 680px; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0,0,0,0.7), 0 0 35px rgba(168,85,247,0.2); animation: dsModalIn 0.2s ease;">
+            
+            <!-- Header -->
+            <div style="padding: 18px 22px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: flex-start; background: rgba(168, 85, 247, 0.06);">
+                <div style="flex: 1; padding-right: 14px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 18px;">⚙️</span>
+                        <h3 style="margin: 0; color: #fff; font-size: 16px; font-weight: 700;">Ajustes de Variações, Tamanhos, Cores & Frete</h3>
+                    </div>
+                    <div id="configModalProductTitle" style="color: #cbd5e1; font-size: 13px; font-weight: 600; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 560px;"></div>
+                </div>
+                <button type="button" onclick="closeProductConfigModal()" style="background: transparent; border: none; color: #94a3b8; font-size: 20px; cursor: pointer; padding: 4px 8px; line-height: 1;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#94a3b8'">&times;</button>
+            </div>
+
+            <!-- Body -->
+            <div style="padding: 20px 22px; display: flex; flex-direction: column; gap: 18px;">
+                
+                <!-- Status Message Banner -->
+                <div id="configModalStatus" style="display: none; padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 600;"></div>
+
+                <!-- Link do Fornecedor / Botão de Inspeção Original -->
+                <div style="background: rgba(255, 107, 107, 0.08); border: 1px solid rgba(255, 107, 107, 0.3); border-radius: 8px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <div style="font-size: 12px; font-weight: 700; color: #ff8787;">
+                            <i class="fas fa-search-plus"></i> Fornecedor Original no AliExpress
+                        </div>
+                        <div style="font-size: 11px; color: #cbd5e1; margin-top: 2px;">
+                            Verifique os tamanhos e medidas descritas na página original do vendedor
+                        </div>
+                    </div>
+                    <a id="configModalSupplierLink" href="#" target="_blank" rel="noopener noreferrer" style="background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 11.5px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(239, 68, 68, 0.35);">
+                        <i class="fas fa-external-link-alt"></i> Abrir Anúncio AliExpress ↗
+                    </a>
+                </div>
+
+                <!-- 1. BLOCO DE TAMANHOS (TAGS) -->
+                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+                        <span style="font-size: 13px; font-weight: 700; color: #facc15; display: flex; align-items: center; gap: 6px;">
+                            <span>📏</span> <span>Tamanhos Disponíveis para o Comprador</span>
+                        </span>
+                        <span id="configSizesCountBadge" style="font-size: 11px; color: #cbd5e1; background: rgba(250, 204, 21, 0.15); border: 1px solid rgba(250, 204, 21, 0.3); padding: 1px 7px; border-radius: 10px; font-weight: 600;">0 tamanhos</span>
+                    </div>
+                    <div style="font-size: 11.5px; color: #94a3b8; margin-bottom: 10px;">
+                        O cliente será obrigado a escolher um destes tamanhos na loja antes de comprar.
+                    </div>
+
+                    <!-- Tags Container -->
+                    <div id="configSizesContainer" style="display: flex; flex-wrap: wrap; gap: 6px; min-height: 34px; padding: 8px; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; margin-bottom: 10px; align-items: center;">
+                        <span style="color: #64748b; font-size: 12px; font-style: italic;">Nenhum tamanho cadastrado. Adicione abaixo.</span>
+                    </div>
+
+                    <!-- Input + Adicionar -->
+                    <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                        <input type="text" id="configNewSizeInput" placeholder="Digite um tamanho e tecle Enter (ex: P, M, 42, G1)..." onkeydown="if(event.key==='Enter'){event.preventDefault();addConfigSizeTag();}" style="flex: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(250, 204, 21, 0.3); color: #fff; padding: 7px 12px; border-radius: 6px; font-size: 12.5px; outline: none;">
+                        <button type="button" onclick="addConfigSizeTag()" style="background: rgba(250, 204, 21, 0.15); border: 1px solid rgba(250, 204, 21, 0.4); color: #facc15; padding: 7px 14px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer;">
+                            <i class="fas fa-plus"></i> Adicionar
+                        </button>
+                    </div>
+
+                    <!-- Presets Rápidos de Tamanhos -->
+                    <div style="display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
+                        <span style="font-size: 10.5px; color: #94a3b8; font-weight: 600;">Atalhos rápidos:</span>
+                        <button type="button" onclick="addConfigSizeTag('P')" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; padding: 2px 7px; border-radius: 4px; font-size: 11px; cursor: pointer;">+ P</button>
+                        <button type="button" onclick="addConfigSizeTag('M')" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; padding: 2px 7px; border-radius: 4px; font-size: 11px; cursor: pointer;">+ M</button>
+                        <button type="button" onclick="addConfigSizeTag('G')" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; padding: 2px 7px; border-radius: 4px; font-size: 11px; cursor: pointer;">+ G</button>
+                        <button type="button" onclick="addConfigSizeTag('GG')" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; padding: 2px 7px; border-radius: 4px; font-size: 11px; cursor: pointer;">+ GG</button>
+                        <button type="button" onclick="addConfigSizeTag('XG')" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; padding: 2px 7px; border-radius: 4px; font-size: 11px; cursor: pointer;">+ XG</button>
+                        <button type="button" onclick="addConfigSizeTag('Tamanho Único')" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; padding: 2px 7px; border-radius: 4px; font-size: 11px; cursor: pointer;">+ Único</button>
+                        <button type="button" onclick="addSizesBatch(['P','M','G','GG'])" style="background: rgba(250, 204, 21, 0.12); border: 1px solid rgba(250, 204, 21, 0.35); color: #facc15; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; cursor: pointer;">+ Grade P/M/G/GG</button>
+                        <button type="button" onclick="addSizesBatch(['36','37','38','39','40','41','42'])" style="background: rgba(69, 243, 255, 0.12); border: 1px solid rgba(69, 243, 255, 0.35); color: #45f3ff; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; cursor: pointer;">+ Calçados 36-42</button>
+                    </div>
+                </div>
+
+                <!-- 2. BLOCO DE CORES (TAGS) -->
+                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+                        <span style="font-size: 13px; font-weight: 700; color: #c084fc; display: flex; align-items: center; gap: 6px;">
+                            <span>🎨</span> <span>Cores Disponíveis para Escolha</span>
+                        </span>
+                        <span id="configColorsCountBadge" style="font-size: 11px; color: #cbd5e1; background: rgba(192, 132, 252, 0.15); border: 1px solid rgba(192, 132, 252, 0.3); padding: 1px 7px; border-radius: 10px; font-weight: 600;">0 cores</span>
+                    </div>
+                    <div style="font-size: 11.5px; color: #94a3b8; margin-bottom: 10px;">
+                        Cada cor aparecerá como botão com swatch na página do produto.
+                    </div>
+
+                    <!-- Tags Container -->
+                    <div id="configColorsContainer" style="display: flex; flex-wrap: wrap; gap: 6px; min-height: 34px; padding: 8px; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; margin-bottom: 10px; align-items: center;">
+                        <span style="color: #64748b; font-size: 12px; font-style: italic;">Nenhuma cor cadastrada. Adicione abaixo.</span>
+                    </div>
+
+                    <!-- Input + Adicionar -->
+                    <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                        <input type="text" id="configNewColorInput" placeholder="Digite uma cor e tecle Enter (ex: Preto, Branco, Azul Royal)..." onkeydown="if(event.key==='Enter'){event.preventDefault();addConfigColorTag();}" style="flex: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(192, 132, 252, 0.3); color: #fff; padding: 7px 12px; border-radius: 6px; font-size: 12.5px; outline: none;">
+                        <button type="button" onclick="addConfigColorTag()" style="background: rgba(192, 132, 252, 0.15); border: 1px solid rgba(192, 132, 252, 0.4); color: #c084fc; padding: 7px 14px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer;">
+                            <i class="fas fa-plus"></i> Adicionar
+                        </button>
+                    </div>
+
+                    <!-- Presets Rápidos de Cores -->
+                    <div style="display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
+                        <span style="font-size: 10.5px; color: #94a3b8; font-weight: 600;">Atalhos rápidos:</span>
+                        <button type="button" onclick="addConfigColorTag('Preto')" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; padding: 2px 7px; border-radius: 4px; font-size: 11px; cursor: pointer;">⚫ Preto</button>
+                        <button type="button" onclick="addConfigColorTag('Branco')" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; padding: 2px 7px; border-radius: 4px; font-size: 11px; cursor: pointer;">⚪ Branco</button>
+                        <button type="button" onclick="addConfigColorTag('Cinza')" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; padding: 2px 7px; border-radius: 4px; font-size: 11px; cursor: pointer;">🔘 Cinza</button>
+                        <button type="button" onclick="addConfigColorTag('Azul')" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; padding: 2px 7px; border-radius: 4px; font-size: 11px; cursor: pointer;">🔵 Azul</button>
+                        <button type="button" onclick="addConfigColorTag('Vermelho')" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; padding: 2px 7px; border-radius: 4px; font-size: 11px; cursor: pointer;">🔴 Vermelho</button>
+                        <button type="button" onclick="addConfigColorTag('Rosa')" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; padding: 2px 7px; border-radius: 4px; font-size: 11px; cursor: pointer;">🌸 Rosa</button>
+                        <button type="button" onclick="addConfigColorTag('Bege')" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; padding: 2px 7px; border-radius: 4px; font-size: 11px; cursor: pointer;">🟤 Bege</button>
+                        <button type="button" onclick="addConfigColorTag('Verde')" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; padding: 2px 7px; border-radius: 4px; font-size: 11px; cursor: pointer;">🟢 Verde</button>
+                    </div>
+                </div>
+
+                <!-- 3. BLOCO DE FRETE -->
+                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 14px;">
+                    <div style="font-size: 13px; font-weight: 700; color: #34d399; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                        <span>🚚</span> <span>Política de Frete & Envio</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px;">
+                        <div>
+                            <label style="display: block; font-size: 11.5px; color: #cbd5e1; margin-bottom: 4px; font-weight: 600;">Tipo de Frete:</label>
+                            <select id="configFreteTipo" onchange="toggleShippingTypeInput(this.value)" style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(52, 211, 153, 0.35); color: #fff; padding: 7px 10px; border-radius: 6px; font-size: 12.5px; outline: none;">
+                                <option value="gratis">🚚 Frete Grátis para todo o Brasil (Padrão)</option>
+                                <option value="pago">📦 Frete Fixo / Pago (R$)</option>
+                                <option value="expresso">⚡ Frete Expresso Sedex</option>
+                            </select>
+                        </div>
+                        <div id="configFreteValorGroup" style="display: none;">
+                            <label style="display: block; font-size: 11.5px; color: #cbd5e1; margin-bottom: 4px; font-weight: 600;">Valor do Frete (R$):</label>
+                            <input type="number" step="0.01" min="0" id="configFreteValor" placeholder="19.90" style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(52, 211, 153, 0.35); color: #fff; padding: 7px 10px; border-radius: 6px; font-size: 12.5px; outline: none; box-sizing: border-box;">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. BLOCO DE URL DO FORNECEDOR -->
+                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 14px;">
+                    <label style="display: block; font-size: 12px; font-weight: 700; color: #60a5fa; margin-bottom: 6px;">
+                        🔗 Link Direto do Fornecedor / Anúncio Original (AliExpress):
+                    </label>
+                    <input type="url" id="configAliexpressUrl" placeholder="https://pt.aliexpress.com/item/..." style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(96, 165, 250, 0.3); color: #fff; padding: 7px 12px; border-radius: 6px; font-size: 12.5px; outline: none; box-sizing: border-box;">
+                    <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">
+                        Usado para inspecionar fotos, descrições e detalhes do vendedor a qualquer momento.
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Footer -->
+            <div style="padding: 14px 22px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.25);">
+                <button type="button" onclick="closeProductConfigModal()" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #cbd5e1; padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                    Cancelar
+                </button>
+                <button type="button" id="btnSaveProductConfig" onclick="saveProductConfig()" style="background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%); border: none; color: #fff; padding: 9px 22px; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 14px rgba(168, 85, 247, 0.35);">
+                    <i class="fas fa-save"></i> Salvar Ajustes & Atualizar Loja
+                </button>
+            </div>
+
+        </div>
+    </div>
+
     <style>
         @keyframes dsModalIn {
             from { opacity: 0; transform: scale(0.96); }
@@ -1554,6 +1719,51 @@
             $isBr = (!empty($p->attributes['origem_brasil']) || (($p->attributes['ship_from'] ?? '') === 'BR'));
             $isCn = (!empty($p->attributes['origem_china']) || (($p->attributes['ship_from'] ?? '') === 'CN'));
             $isReal = !empty($p->aliexpressId) && preg_match('/^\d{10,24}$/', (string)$p->aliexpressId);
+
+            $directAeUrl = !empty($p->attributes['aliexpress_url']) ? (string)$p->attributes['aliexpress_url'] : '';
+            if (empty($directAeUrl) && $isReal) {
+                $directAeUrl = 'https://pt.aliexpress.com/item/' . (string)$p->aliexpressId . '.html?country=BR&locale=pt_BR&currency=BRL';
+            }
+            if (empty($directAeUrl)) {
+                $directAeUrl = 'https://www.aliexpress.com/wholesale?SearchText=' . urlencode($p->title);
+            }
+
+            $sizesArr = [];
+            if (!empty($p->attributes['variation_axes']['Tamanho']) && is_array($p->attributes['variation_axes']['Tamanho'])) {
+                $sizesArr = $p->attributes['variation_axes']['Tamanho'];
+            } elseif (!empty($p->attributes['variation_axes']['Size']) && is_array($p->attributes['variation_axes']['Size'])) {
+                $sizesArr = $p->attributes['variation_axes']['Size'];
+            } elseif (!empty($p->attributes['tamanhos_disponiveis']) && is_array($p->attributes['tamanhos_disponiveis'])) {
+                $sizesArr = $p->attributes['tamanhos_disponiveis'];
+            } else {
+                foreach ($p->getVariants() as $v) {
+                    $s = $v->options['Tamanho'] ?? ($v->options['tamanho'] ?? ($v->options['Size'] ?? ''));
+                    if ($s !== '' && !in_array($s, $sizesArr, true)) {
+                        $sizesArr[] = $s;
+                    }
+                }
+            }
+
+            $colorsArr = [];
+            if (!empty($p->attributes['variation_axes']['Cor']) && is_array($p->attributes['variation_axes']['Cor'])) {
+                $colorsArr = $p->attributes['variation_axes']['Cor'];
+            } elseif (!empty($p->attributes['variation_axes']['Color']) && is_array($p->attributes['variation_axes']['Color'])) {
+                $colorsArr = $p->attributes['variation_axes']['Color'];
+            } elseif (!empty($p->attributes['cores_disponiveis']) && is_array($p->attributes['cores_disponiveis'])) {
+                $colorsArr = $p->attributes['cores_disponiveis'];
+            } else {
+                foreach ($p->getVariants() as $v) {
+                    $c = $v->options['Cor'] ?? ($v->options['cor'] ?? ($v->options['Color'] ?? ''));
+                    if ($c !== '' && !in_array($c, $colorsArr, true)) {
+                        $colorsArr[] = $c;
+                    }
+                }
+            }
+
+            $freteGratis = !isset($p->attributes['frete_gratis']) || (bool)$p->attributes['frete_gratis'];
+            $freteTipo = (string)($p->attributes['frete_tipo'] ?? ($freteGratis ? 'gratis' : 'pago'));
+            $freteValor = (float)($p->attributes['frete_valor'] ?? 0.0);
+
             $mediaMap[(string)(int)$p->id] = [
                 'id'               => (int)$p->id,
                 'title'            => (string)$p->title,
@@ -1570,6 +1780,13 @@
                 'downloadVideoUrl' => $baseUrl . '/admin/dropship/download-video?id=' . (int)$p->id,
                 'images'           => $imgs,
                 'imagesCount'      => count($imgs),
+                'directAeUrl'      => $directAeUrl,
+                'aliexpressUrl'    => (string)($p->attributes['aliexpress_url'] ?? ''),
+                'sizes'            => array_values($sizesArr),
+                'colors'           => array_values($colorsArr),
+                'freteGratis'      => (bool)$freteGratis,
+                'freteTipo'        => (string)$freteTipo,
+                'freteValor'       => (float)$freteValor,
             ];
         }
         ?>
@@ -2513,6 +2730,315 @@
                 toast.style.display = 'none';
             }, 3500);
         }
+
+        // =========================================================================
+        // Configurações do Card (Tamanhos, Cores, Frete e Fornecedor AliExpress)
+        // =========================================================================
+        let activeProductConfigId = null;
+        let currentConfigSizes = [];
+        let currentConfigColors = [];
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            var div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function openProductConfigModal(id) {
+            const prod = dropshipProductsMedia ? dropshipProductsMedia[String(id)] : null;
+            if (!prod) return;
+
+            activeProductConfigId = id;
+            currentConfigSizes = Array.isArray(prod.sizes) ? [...prod.sizes] : [];
+            currentConfigColors = Array.isArray(prod.colors) ? [...prod.colors] : [];
+
+            const titleEl = document.getElementById('configModalProductTitle');
+            if (titleEl) {
+                titleEl.textContent = (prod.title || 'Produto #' + id) + ' (ID AliExpress: ' + (prod.aliexpressId || 'N/A') + ')';
+                titleEl.title = prod.title || '';
+            }
+
+            const suppLink = document.getElementById('configModalSupplierLink');
+            if (suppLink) {
+                suppLink.href = prod.directAeUrl || (prod.aliexpressUrl || '#');
+            }
+
+            const urlInput = document.getElementById('configAliexpressUrl');
+            if (urlInput) {
+                urlInput.value = prod.aliexpressUrl || prod.directAeUrl || '';
+            }
+
+            const freteTipoSelect = document.getElementById('configFreteTipo');
+            const freteValorInput = document.getElementById('configFreteValor');
+            const fTipo = prod.freteTipo || (prod.freteGratis ? 'gratis' : 'pago');
+            if (freteTipoSelect) {
+                freteTipoSelect.value = fTipo;
+            }
+            if (freteValorInput) {
+                freteValorInput.value = (prod.freteValor !== undefined && prod.freteValor !== null) ? parseFloat(prod.freteValor).toFixed(2) : '0.00';
+            }
+            toggleShippingTypeInput(fTipo);
+
+            renderConfigSizeTags();
+            renderConfigColorTags();
+
+            const st = document.getElementById('configModalStatus');
+            if (st) {
+                st.style.display = 'none';
+                st.textContent = '';
+            }
+
+            const modal = document.getElementById('modalProductConfig');
+            if (modal) modal.style.display = 'flex';
+        }
+
+        function closeProductConfigModal() {
+            const modal = document.getElementById('modalProductConfig');
+            if (modal) modal.style.display = 'none';
+            activeProductConfigId = null;
+        }
+
+        const configModalEl = document.getElementById('modalProductConfig');
+        if (configModalEl) {
+            configModalEl.addEventListener('click', function(e) {
+                if (e.target === this) closeProductConfigModal();
+            });
+        }
+
+        function toggleShippingTypeInput(val) {
+            const group = document.getElementById('configFreteValorGroup');
+            if (group) {
+                group.style.display = (val === 'pago' || val === 'expresso') ? 'block' : 'none';
+            }
+        }
+
+        function renderConfigSizeTags() {
+            const container = document.getElementById('configSizesContainer');
+            const badge = document.getElementById('configSizesCountBadge');
+            if (!container) return;
+
+            if (badge) {
+                badge.textContent = currentConfigSizes.length + (currentConfigSizes.length === 1 ? ' tamanho' : ' tamanhos');
+            }
+
+            if (currentConfigSizes.length === 0) {
+                container.innerHTML = '<span style="color: #64748b; font-size: 12px; font-style: italic;">Nenhum tamanho cadastrado. Adicione abaixo.</span>';
+                return;
+            }
+
+            let html = '';
+            currentConfigSizes.forEach((sz, idx) => {
+                html += `<span style="background: rgba(250, 204, 21, 0.15); border: 1px solid rgba(250, 204, 21, 0.45); color: #facc15; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px;">
+                    <span>${escapeHtml(sz)}</span>
+                    <button type="button" onclick="removeConfigSizeTag(${idx})" style="background: none; border: none; color: #facc15; font-size: 14px; cursor: pointer; padding: 0; line-height: 1;" title="Remover">&times;</button>
+                </span>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function addConfigSizeTag(val) {
+            const input = document.getElementById('configNewSizeInput');
+            let sizeVal = val ? String(val).trim() : (input ? input.value.trim() : '');
+            if (!sizeVal) return;
+
+            if (/^[a-z]{1,4}$/i.test(sizeVal)) {
+                sizeVal = sizeVal.toUpperCase();
+            }
+
+            if (!currentConfigSizes.includes(sizeVal)) {
+                currentConfigSizes.push(sizeVal);
+                renderConfigSizeTags();
+            }
+            if (input && !val) input.value = '';
+        }
+
+        function addSizesBatch(arr) {
+            if (!Array.isArray(arr)) return;
+            arr.forEach(s => {
+                let v = String(s).trim();
+                if (/^[a-z]{1,4}$/i.test(v)) v = v.toUpperCase();
+                if (v && !currentConfigSizes.includes(v)) {
+                    currentConfigSizes.push(v);
+                }
+            });
+            renderConfigSizeTags();
+        }
+
+        function removeConfigSizeTag(idx) {
+            if (idx >= 0 && idx < currentConfigSizes.length) {
+                currentConfigSizes.splice(idx, 1);
+                renderConfigSizeTags();
+            }
+        }
+
+        function renderConfigColorTags() {
+            const container = document.getElementById('configColorsContainer');
+            const badge = document.getElementById('configColorsCountBadge');
+            if (!container) return;
+
+            if (badge) {
+                badge.textContent = currentConfigColors.length + (currentConfigColors.length === 1 ? ' cor' : ' cores');
+            }
+
+            if (currentConfigColors.length === 0) {
+                container.innerHTML = '<span style="color: #64748b; font-size: 12px; font-style: italic;">Nenhuma cor cadastrada. Adicione abaixo.</span>';
+                return;
+            }
+
+            const colorHexMap = {
+                'preto': '#18181b', 'preta': '#18181b', 'black': '#18181b', 'grafite': '#374151',
+                'branco': '#f8fafc', 'branca': '#f8fafc', 'white': '#f8fafc',
+                'cinza': '#64748b', 'prata': '#cbd5e1',
+                'azul': '#3b82f6', 'marinho': '#1e3a8a',
+                'vermelho': '#ef4444', 'vermelha': '#ef4444', 'vinho': '#881337',
+                'rosa': '#f472b6', 'pink': '#ec4899', 'rose': '#fb7185',
+                'verde': '#22c55e', 'oliva': '#65a30d',
+                'bege': '#d6d3d1', 'marrom': '#78350f',
+                'amarelo': '#facc15', 'dourado': '#f59e0b',
+                'roxo': '#a855f7', 'roxa': '#a855f7', 'laranja': '#f97316'
+            };
+
+            let html = '';
+            currentConfigColors.forEach((col, idx) => {
+                const cLower = col.toLowerCase();
+                let swatchHex = '#a855f7';
+                for (let k in colorHexMap) {
+                    if (cLower.includes(k)) {
+                        swatchHex = colorHexMap[k];
+                        break;
+                    }
+                }
+
+                html += `<span style="background: rgba(192, 132, 252, 0.15); border: 1px solid rgba(192, 132, 252, 0.45); color: #e9d5ff; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px;">
+                    <span style="width: 10px; height: 10px; border-radius: 50%; background: ${swatchHex}; border: 1px solid rgba(255,255,255,0.4);"></span>
+                    <span>${escapeHtml(col)}</span>
+                    <button type="button" onclick="removeConfigColorTag(${idx})" style="background: none; border: none; color: #e9d5ff; font-size: 14px; cursor: pointer; padding: 0; line-height: 1;" title="Remover">&times;</button>
+                </span>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function addConfigColorTag(val) {
+            const input = document.getElementById('configNewColorInput');
+            let colVal = val ? String(val).trim() : (input ? input.value.trim() : '');
+            if (!colVal) return;
+
+            colVal = colVal.charAt(0).toUpperCase() + colVal.slice(1);
+
+            if (!currentConfigColors.includes(colVal)) {
+                currentConfigColors.push(colVal);
+                renderConfigColorTags();
+            }
+            if (input && !val) input.value = '';
+        }
+
+        function removeConfigColorTag(idx) {
+            if (idx >= 0 && idx < currentConfigColors.length) {
+                currentConfigColors.splice(idx, 1);
+                renderConfigColorTags();
+            }
+        }
+
+        async function saveProductConfig() {
+            if (!activeProductConfigId) return;
+
+            const btn = document.getElementById('btnSaveProductConfig');
+            const statusEl = document.getElementById('configModalStatus');
+            const originalText = btn ? btn.innerHTML : '';
+
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando Ajustes...';
+            }
+
+            const fTipo = document.getElementById('configFreteTipo').value;
+            const fValor = parseFloat(document.getElementById('configFreteValor').value) || 0.0;
+            const fGratis = (fTipo === 'gratis') ? '1' : '0';
+            const aeUrl = document.getElementById('configAliexpressUrl').value.trim();
+
+            const payload = new URLSearchParams();
+            payload.append('csrf_token', dropshipCsrfToken);
+            payload.append('_token', dropshipCsrfToken);
+            payload.append('sizes', currentConfigSizes.join(', '));
+            payload.append('colors', currentConfigColors.join(', '));
+            payload.append('frete_tipo', fTipo);
+            payload.append('frete_gratis', fGratis);
+            payload.append('frete_valor', fValor);
+            payload.append('aliexpress_url', aeUrl);
+
+            try {
+                const resp = await fetch(baseAdminUrl + '/product/' + activeProductConfigId + '/config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: payload.toString()
+                });
+
+                const data = await resp.json();
+
+                if (data.success) {
+                    const prod = dropshipProductsMedia[String(activeProductConfigId)];
+                    if (prod) {
+                        prod.sizes = data.sizes || currentConfigSizes;
+                        prod.colors = data.colors || currentConfigColors;
+                        prod.freteTipo = data.frete_tipo || fTipo;
+                        prod.freteGratis = data.frete_gratis;
+                        prod.freteValor = data.frete_valor;
+                        if (data.aliexpress_url) prod.aliexpressUrl = data.aliexpress_url;
+                    }
+
+                    if (statusEl) {
+                        statusEl.style.display = 'block';
+                        statusEl.style.background = 'rgba(16, 185, 129, 0.15)';
+                        statusEl.style.border = '1px solid rgba(16, 185, 129, 0.4)';
+                        statusEl.style.color = '#34d399';
+                        statusEl.textContent = data.message || 'Configurações e variações salvas com sucesso!';
+                    }
+
+                    if (typeof showToastFeedback === 'function') {
+                        showToastFeedback(data.message, 'success');
+                    }
+
+                    setTimeout(() => {
+                        closeProductConfigModal();
+                    }, 1400);
+                } else {
+                    if (statusEl) {
+                        statusEl.style.display = 'block';
+                        statusEl.style.background = 'rgba(239, 68, 68, 0.15)';
+                        statusEl.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+                        statusEl.style.color = '#f87171';
+                        statusEl.textContent = data.message || 'Erro ao salvar ajustes.';
+                    }
+                }
+            } catch (err) {
+                if (statusEl) {
+                    statusEl.style.display = 'block';
+                    statusEl.style.background = 'rgba(239, 68, 68, 0.15)';
+                    statusEl.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+                    statusEl.style.color = '#f87171';
+                    statusEl.textContent = 'Erro de rede ou servidor ao salvar ajustes: ' + err.message;
+                }
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                }
+            }
+        }
+
+        window.openProductConfigModal = openProductConfigModal;
+        window.closeProductConfigModal = closeProductConfigModal;
+        window.addConfigSizeTag = addConfigSizeTag;
+        window.addSizesBatch = addSizesBatch;
+        window.removeConfigSizeTag = removeConfigSizeTag;
+        window.addConfigColorTag = addConfigColorTag;
+        window.removeConfigColorTag = removeConfigColorTag;
+        window.toggleShippingTypeInput = toggleShippingTypeInput;
+        window.saveProductConfig = saveProductConfig;
 
         window.openDeleteProductModal = openDeleteProductModal;
         window.closeDeleteProductModal = closeDeleteProductModal;

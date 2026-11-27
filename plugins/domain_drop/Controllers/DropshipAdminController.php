@@ -1452,6 +1452,234 @@ class DropshipAdminController
         return Response::redirect($baseUrl . '/admin/dropship');
     }
 
+    public function updateProductConfig(Request $request, string $id): ResponseInterface
+    {
+        $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
+
+        if (!$this->verifyCsrf($request)) {
+            if ($this->isAjaxOrJson($request)) {
+                return new JsonResponse(['success' => false, 'message' => 'Token de segurança expirado.'], 403);
+            }
+            $this->session->setFlash('error', 'Token de segurança expirado.');
+            return Response::redirect($baseUrl . '/admin/dropship');
+        }
+
+        $productId = (int)$id;
+        $product = $this->catalogRepo->findById($productId);
+        if ($product === null) {
+            if ($this->isAjaxOrJson($request)) {
+                return new JsonResponse(['success' => false, 'message' => 'Produto não encontrado.'], 404);
+            }
+            $this->session->setFlash('error', 'Produto não encontrado.');
+            return Response::redirect($baseUrl . '/admin/dropship');
+        }
+
+        // 1. Processamento e higienização de Tamanhos
+        $rawSizes = $request->input('sizes');
+        $sizesList = [];
+        if (is_array($rawSizes)) {
+            $sizesList = $rawSizes;
+        } elseif (is_string($rawSizes)) {
+            $sizesList = explode(',', $rawSizes);
+        }
+        $cleanSizes = [];
+        foreach ($sizesList as $s) {
+            $s = trim((string)$s);
+            if ($s !== '') {
+                if (preg_match('/^[a-z]{1,4}$/i', $s)) {
+                    $s = strtoupper($s);
+                }
+                if (!in_array($s, $cleanSizes, true)) {
+                    $cleanSizes[] = $s;
+                }
+            }
+        }
+
+        // 2. Processamento e higienização de Cores
+        $rawColors = $request->input('colors');
+        $colorsList = [];
+        if (is_array($rawColors)) {
+            $colorsList = $rawColors;
+        } elseif (is_string($rawColors)) {
+            $colorsList = explode(',', $rawColors);
+        }
+        $cleanColors = [];
+        foreach ($colorsList as $c) {
+            $c = trim((string)$c);
+            if ($c !== '') {
+                $c = mb_convert_case($c, MB_CASE_TITLE, 'UTF-8');
+                if (!in_array($c, $cleanColors, true)) {
+                    $cleanColors[] = $c;
+                }
+            }
+        }
+
+        // 3. Processamento de Política de Frete
+        $rawFreteGratis = $request->input('frete_gratis');
+        $freteGratis = ($rawFreteGratis === true || $rawFreteGratis === 1 || $rawFreteGratis === '1' || $rawFreteGratis === 'true');
+        $freteTipo = trim((string)$request->input('frete_tipo', 'gratis'));
+        if (!in_array($freteTipo, ['gratis', 'pago', 'expresso'], true)) {
+            $freteTipo = $freteGratis ? 'gratis' : 'pago';
+        }
+        $freteValor = max(0.0, $this->parseCurrency($request->input('frete_valor', 0.0)));
+        if ($freteTipo === 'gratis') {
+            $freteGratis = true;
+            $freteValor = 0.0;
+        }
+
+        // 4. Link oficial do Fornecedor / AliExpress
+        $aliexpressUrl = trim((string)$request->input('aliexpress_url', ''));
+
+        // 5. Atualização de atributos estruturados
+        $attributes = $product->attributes;
+
+        if (!empty($cleanSizes)) {
+            $attributes['tamanhos_disponiveis'] = $cleanSizes;
+            if (!isset($attributes['variation_axes']) || !is_array($attributes['variation_axes'])) {
+                $attributes['variation_axes'] = [];
+            }
+            $attributes['variation_axes']['Tamanho'] = $cleanSizes;
+        } else {
+            unset($attributes['tamanhos_disponiveis']);
+            if (isset($attributes['variation_axes']['Tamanho'])) {
+                unset($attributes['variation_axes']['Tamanho']);
+            }
+            if (isset($attributes['variation_axes']['Size'])) {
+                unset($attributes['variation_axes']['Size']);
+            }
+        }
+
+        if (!empty($cleanColors)) {
+            $attributes['cores_disponiveis'] = $cleanColors;
+            if (!isset($attributes['variation_axes']) || !is_array($attributes['variation_axes'])) {
+                $attributes['variation_axes'] = [];
+            }
+            $attributes['variation_axes']['Cor'] = $cleanColors;
+        } else {
+            unset($attributes['cores_disponiveis']);
+            if (isset($attributes['variation_axes']['Cor'])) {
+                unset($attributes['variation_axes']['Cor']);
+            }
+            if (isset($attributes['variation_axes']['Color'])) {
+                unset($attributes['variation_axes']['Color']);
+            }
+        }
+
+        if (empty($attributes['variation_axes'])) {
+            unset($attributes['variation_axes']);
+        }
+
+        $attributes['frete_gratis'] = $freteGratis;
+        $attributes['frete_tipo'] = $freteTipo;
+        $attributes['frete_valor'] = $freteValor;
+
+        if ($aliexpressUrl !== '') {
+            $attributes['aliexpress_url'] = $aliexpressUrl;
+        }
+
+        // 6. Reconstituição da Matriz SKU (Product Variants Matrix)
+        $colorMatrix = !empty($cleanColors) ? $cleanColors : [null];
+        $sizeMatrix = !empty($cleanSizes) ? $cleanSizes : [null];
+
+        $existingVariants = $product->getVariants();
+        $existingMap = [];
+        foreach ($existingVariants as $ev) {
+            $c = $ev->options['Cor'] ?? ($ev->options['cor'] ?? ($ev->options['Color'] ?? ''));
+            $s = $ev->options['Tamanho'] ?? ($ev->options['tamanho'] ?? ($ev->options['Size'] ?? ''));
+            $key = mb_strtolower(trim((string)$c)) . '|' . mb_strtolower(trim((string)$s));
+            $existingMap[$key] = $ev;
+        }
+
+        $newVariants = [];
+        $counter = 1;
+        foreach ($colorMatrix as $cVal) {
+            foreach ($sizeMatrix as $sVal) {
+                $options = [];
+                if ($cVal !== null && $cVal !== '') {
+                    $options['Cor'] = $cVal;
+                }
+                if ($sVal !== null && $sVal !== '') {
+                    $options['Tamanho'] = $sVal;
+                }
+                if (empty($options)) {
+                    continue;
+                }
+
+                $lookupKey = mb_strtolower(trim((string)$cVal)) . '|' . mb_strtolower(trim((string)$sVal));
+                $match = $existingMap[$lookupKey] ?? null;
+
+                $skuId = $match ? $match->skuId : ('sku_' . $product->aliexpressId . '_' . $counter);
+                $skuAttr = $match ? $match->skuAttr : '';
+                $priceBrl = $match ? $match->priceBrl : $product->salePriceBrl;
+                $costUsd = $match ? $match->costPriceUsd : $product->costPriceUsd;
+                $imgUrl = $match ? $match->imageUrl : $product->mainImageUrl;
+                $stock = $match ? $match->stock : 100;
+                $ean = $match ? $match->eanCode : '';
+
+                $newVariants[] = [
+                    'sku_id'         => $skuId,
+                    'sku_attr'       => $skuAttr,
+                    'options'        => $options,
+                    'price_brl'      => $priceBrl,
+                    'cost_price_usd' => $costUsd,
+                    'image_url'      => $imgUrl,
+                    'stock'          => $stock,
+                    'ean_code'       => $ean,
+                ];
+                $counter++;
+            }
+        }
+
+        if (!empty($newVariants)) {
+            $attributes['variants'] = $newVariants;
+        } else {
+            unset($attributes['variants']);
+        }
+
+        $updatedProduct = new DropshipProductDto(
+            aliexpressId: $product->aliexpressId,
+            title: $product->title,
+            slug: $product->slug,
+            costPriceUsd: $product->costPriceUsd,
+            salePriceBrl: $product->salePriceBrl,
+            mainImageUrl: $product->mainImageUrl,
+            images: $product->images,
+            category: $product->category,
+            description: $product->description,
+            rating: $product->rating,
+            ordersCount: $product->ordersCount,
+            attributes: $attributes,
+            status: $product->status,
+            id: $product->id
+        );
+
+        $this->catalogRepo->save($updatedProduct);
+
+        $msg = "⚙️ Configurações e variações de '{$product->title}' atualizadas com sucesso! " .
+               (count($cleanSizes) > 0 ? "Tamanhos: " . implode(', ', $cleanSizes) . ". " : "") .
+               (count($cleanColors) > 0 ? "Cores: " . implode(', ', $cleanColors) . ". " : "") .
+               "Frete: " . ($freteGratis ? 'Grátis' : 'R$ ' . number_format($freteValor, 2, ',', '.')) . ".";
+
+        if ($this->isAjaxOrJson($request)) {
+            return new JsonResponse([
+                'success'         => true,
+                'message'         => $msg,
+                'product_id'      => $productId,
+                'sizes'           => $cleanSizes,
+                'colors'          => $cleanColors,
+                'variants_count'  => count($newVariants),
+                'frete_gratis'    => $freteGratis,
+                'frete_tipo'      => $freteTipo,
+                'frete_valor'     => $freteValor,
+                'frete_formatted' => $freteGratis ? 'Frete Grátis' : 'R$ ' . number_format($freteValor, 2, ',', '.'),
+                'aliexpress_url'  => $attributes['aliexpress_url'] ?? '',
+            ]);
+        }
+
+        $this->session->setFlash('success', $msg);
+        return Response::redirect($baseUrl . '/admin/dropship');
+    }
+
     public function toggleDailyCycle(Request $request): ResponseInterface
     {
         $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';

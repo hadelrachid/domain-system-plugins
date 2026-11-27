@@ -166,20 +166,109 @@ foreach ($orders as $ordItem) {
                         $ordDisputes = is_array($o['disputes'] ?? null) ? $o['disputes'] : [];
                         $latestDispute = $ordDisputes[0] ?? null;
                         ?>
+                        $shipAddr = [];
+                        if (!empty($o['shipping_address'])) {
+                            if (is_array($o['shipping_address'])) {
+                                $shipAddr = $o['shipping_address'];
+                            } elseif (is_string($o['shipping_address'])) {
+                                $decoded = @json_decode($o['shipping_address'], true);
+                                $shipAddr = is_array($decoded) ? $decoded : ['raw' => $o['shipping_address']];
+                            }
+                        }
+
+                        $colorVal = $o['selected_color'] ?? ($shipAddr['selected_color'] ?? '');
+                        $sizeVal = $o['selected_size'] ?? ($shipAddr['selected_size'] ?? '');
+                        $qtyVal = (int)($o['quantity'] ?? ($shipAddr['quantity'] ?? 1));
+                        $suppUrl = (string)($o['supplier_url'] ?? ($shipAddr['supplier_url'] ?? ''));
+                        if ($suppUrl === '' && !empty($o['aliexpress_product_id'])) {
+                            $suppUrl = 'https://pt.aliexpress.com/item/' . $e($o['aliexpress_product_id']) . '.html?country=BR&locale=pt_BR&currency=BRL';
+                        }
+                        if ($suppUrl === '' && !empty($o['product_title'])) {
+                            $suppUrl = 'https://www.aliexpress.com/wholesale?SearchText=' . urlencode((string)$o['product_title']);
+                        }
+
+                        $formattedFullAddress = trim(
+                            ($shipAddr['street'] ?? ($shipAddr['raw'] ?? ''))
+                            . (!empty($shipAddr['number']) ? ', Nº ' . $shipAddr['number'] : '')
+                            . (!empty($shipAddr['complement']) ? ' (' . $shipAddr['complement'] . ')' : '')
+                            . (!empty($shipAddr['neighborhood']) ? ' - Bairro ' . $shipAddr['neighborhood'] : '')
+                            . (!empty($shipAddr['city']) ? ', ' . $shipAddr['city'] : '')
+                            . (!empty($shipAddr['state']) ? ' - ' . $shipAddr['state'] : '')
+                            . (!empty($shipAddr['zip']) ? ' | CEP: ' . $shipAddr['zip'] : '')
+                        );
+
+                        $clipText = (string)($shipAddr['formatted_clipboard'] ?? '');
+                        if ($clipText === '') {
+                            $clipText = "=== DADOS PARA PEDIDO MANUAL NO ALIEXPRESS ===\n"
+                                . "REFERÊNCIA: " . ($o['order_ref'] ?? '') . "\n"
+                                . "PRODUTO: " . ($o['product_title'] ?? '') . "\n"
+                                . "LINK ALIEXPRESS: " . $suppUrl . "\n"
+                                . ($colorVal !== '' ? "COR: {$colorVal}\n" : "")
+                                . ($sizeVal !== '' ? "TAMANHO: {$sizeVal}\n" : "")
+                                . "QUANTIDADE: {$qtyVal}\n\n"
+                                . "--- ENDEREÇO DE ENTREGA NO BRASIL ---\n"
+                                . "DESTINATÁRIO: " . ($o['customer_name'] ?? '') . "\n"
+                                . "CPF: " . ($o['customer_document'] ?? ($shipAddr['cpf'] ?? '')) . "\n"
+                                . "TELEFONE: " . ($shipAddr['phone'] ?? '') . "\n"
+                                . "ENDEREÇO: " . ($shipAddr['street'] ?? ($shipAddr['raw'] ?? '')) . ", Nº " . ($shipAddr['number'] ?? '') . (!empty($shipAddr['complement']) ? ' (' . $shipAddr['complement'] . ')' : '') . "\n"
+                                . "BAIRRO: " . ($shipAddr['neighborhood'] ?? '') . "\n"
+                                . "CIDADE: " . ($shipAddr['city'] ?? '') . " - " . ($shipAddr['state'] ?? '') . "\n"
+                                . "CEP: " . ($shipAddr['zip'] ?? '');
+                        }
+                        ?>
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.06); vertical-align: top;">
-                            <td style="padding: 14px 16px; font-family: monospace; font-weight: 600; color: #fff;">
-                                <?= $e($o['order_ref'] ?? '') ?>
+                            <td style="padding: 14px 16px; font-family: monospace; font-weight: 600; color: #fff; min-width: 250px;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                                    <span><?= $e($o['order_ref'] ?? '') ?></span>
+                                    <span style="font-size: 10.5px; padding: 1px 6px; border-radius: 4px; background: rgba(255,255,255,0.08); color: #cbd5e1; font-weight: 500; font-family: sans-serif;">
+                                        ID #<?= (int)($o['id'] ?? 0) ?>
+                                    </span>
+                                </div>
                                 <div style="font-size: 11px; color: var(--text-muted, #94a3b8); font-family: sans-serif; margin-top: 2px;">
                                     <?= $e($o['created_at'] ?? '') ?>
                                 </div>
-                                <div style="font-weight: 700; color: #5cd67d; font-size: 12.5px; margin-top: 6px;">
+                                <div style="font-weight: 700; color: #5cd67d; font-size: 13px; margin-top: 4px;">
                                     R$ <?= number_format((float)($o['total_paid_brl'] ?? 0.0), 2, ',', '.') ?>
+                                </div>
+
+                                <!-- Detalhes do Produto, Variações e Fornecedor -->
+                                <div style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; font-family: sans-serif;">
+                                    <div style="font-size: 12px; font-weight: 700; color: #fff; line-height: 1.35; margin-bottom: 6px;">
+                                        📦 <?= $e($o['product_title'] ?? 'Produto Dropshipping') ?>
+                                    </div>
+                                    <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px;">
+                                        <?php if ($colorVal !== ''): ?>
+                                            <span style="background: rgba(168,85,247,0.18); border: 1px solid rgba(168,85,247,0.45); color: #e9d5ff; padding: 2px 6px; border-radius: 4px; font-size: 10.5px; font-weight: 700;">
+                                                🎨 Cor: <?= $e($colorVal) ?>
+                                            </span>
+                                        <?php endif; ?>
+                                        <?php if ($sizeVal !== ''): ?>
+                                            <span style="background: rgba(250,204,21,0.18); border: 1px solid rgba(250,204,21,0.45); color: #facc15; padding: 2px 6px; border-radius: 4px; font-size: 10.5px; font-weight: 700;">
+                                                📏 Tam: <?= $e($sizeVal) ?>
+                                            </span>
+                                        <?php endif; ?>
+                                        <span style="background: rgba(69,243,255,0.15); border: 1px solid rgba(69,243,255,0.4); color: #45f3ff; padding: 2px 6px; border-radius: 4px; font-size: 10.5px; font-weight: 700;">
+                                            Qtd: <?= $qtyVal ?>
+                                        </span>
+                                    </div>
+
+                                    <!-- Botão de Contingência Manual 1-Clique no AliExpress -->
+                                    <?php if ($suppUrl !== ''): ?>
+                                        <a href="<?= $e($suppUrl) ?>" target="_blank" rel="noopener noreferrer" style="width: 100%; box-sizing: border-box; background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; text-decoration: none; padding: 5px 8px; border-radius: 5px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 5px; box-shadow: 0 2px 8px rgba(239, 68, 68, 0.35); margin-bottom: 6px;" title="Abrir produto no AliExpress para compra manual imediata em caso de falha na API">
+                                            <i class="fas fa-shopping-cart"></i> 🛒 Comprar no AliExpress (1-Clique) ↗
+                                        </a>
+                                    <?php endif; ?>
+
+                                    <!-- Botão Copiar Dossiê Cópia Carbono -->
+                                    <button type="button" onclick="copyDossierClipboard(this, <?= htmlspecialchars(json_encode($clipText), ENT_QUOTES, 'UTF-8') ?>)" style="width: 100%; background: rgba(240, 208, 96, 0.14); border: 1px solid rgba(240, 208, 96, 0.4); color: #F0D060; padding: 5px 8px; border-radius: 5px; font-size: 11px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 5px;">
+                                        <i class="fas fa-copy"></i> 📋 Copiar Dossiê de Expedição
+                                    </button>
                                 </div>
                             </td>
 
-                            <td style="padding: 14px 16px;">
+                            <td style="padding: 14px 16px; min-width: 250px;">
                                 <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                    <span style="font-weight: 600; color: #fff;"><?= $e($o['customer_name'] ?? 'Cliente') ?></span>
+                                    <span style="font-weight: 700; color: #fff; font-size: 13.5px;"><?= $e($o['customer_name'] ?? 'Cliente') ?></span>
                                     <?php if (!empty($o['is_registered_customer'])): ?>
                                         <span style="font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 99px; background: rgba(16,185,129,0.15); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.35);">Cadastrado</span>
                                     <?php else: ?>
@@ -187,8 +276,27 @@ foreach ($orders as $ordItem) {
                                     <?php endif; ?>
                                 </div>
                                 <div style="font-size: 12px; color: var(--text-muted, #94a3b8); margin-top: 2px;"><?= $e($o['customer_email'] ?? '') ?></div>
-                                <div style="font-size: 11px; margin-top: 6px; color: #cbd5e1; display: flex; align-items: center; gap: 4px;">
-                                    Fornecedor: <strong><?= $slaOrigin === 'BR' ? (\DomainSystem\Plugins\domain_drop\Helpers\FlagHelper::br(14, 10) . ' Brasil (7d)') : (\DomainSystem\Plugins\domain_drop\Helpers\FlagHelper::cn(14, 10) . ' China (' . (int)($sla['expected_days'] ?? 25) . 'd)') ?></strong>
+                                <?php if (!empty($o['customer_document'])): ?>
+                                    <div style="font-size: 11px; color: #cbd5e1; margin-top: 2px;">
+                                        CPF: <strong style="color: #fff;"><?= $e($o['customer_document']) ?></strong>
+                                    </div>
+                                <?php endif; ?>
+                                <?php if (!empty($shipAddr['phone'])): ?>
+                                    <div style="font-size: 11px; color: #cbd5e1; margin-top: 2px;">
+                                        Tel/WhatsApp: <strong style="color: #45f3ff;"><?= $e($shipAddr['phone']) ?></strong>
+                                    </div>
+                                <?php endif; ?>
+
+                                <!-- Endereço Formatado de Entrega -->
+                                <?php if ($formattedFullAddress !== ''): ?>
+                                    <div style="margin-top: 8px; padding: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; font-size: 11.5px; color: #cbd5e1; line-height: 1.4;">
+                                        <div style="font-weight: 700; color: #34d399; font-size: 11px; margin-bottom: 2px;">📍 Endereço de Entrega:</div>
+                                        <?= $e($formattedFullAddress) ?>
+                                    </div>
+                                <?php endif; ?>
+
+                                <div style="font-size: 11px; margin-top: 8px; color: #cbd5e1; display: flex; align-items: center; gap: 4px;">
+                                    Fornecedor: <strong><?= $slaOrigin === 'BR' ? (\DomainSystem\Plugins\domain_drop\Helpers\FlagHelper::br(14, 10) . ' ' . $e($o['seller_name'] ?: 'Distribuidor BR (7d)')) : (\DomainSystem\Plugins\domain_drop\Helpers\FlagHelper::cn(14, 10) . ' ' . $e($o['seller_name'] ?: 'Fornecedor China') . ' (' . (int)($sla['expected_days'] ?? 25) . 'd)') ?></strong>
                                 </div>
                             </td>
 
@@ -331,3 +439,33 @@ foreach ($orders as $ordItem) {
     <?php endif; ?>
 
 </div>
+
+<script>
+function copyDossierClipboard(btn, text) {
+    if (!navigator.clipboard) {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+            document.execCommand('copy');
+        } catch (e) {}
+        document.body.removeChild(ta);
+    } else {
+        navigator.clipboard.writeText(text);
+    }
+    var orig = btn.innerHTML;
+    btn.innerHTML = '✅ Copiado com Sucesso!';
+    btn.style.borderColor = '#10b981';
+    btn.style.color = '#34d399';
+    btn.style.background = 'rgba(16, 185, 129, 0.2)';
+    setTimeout(function() {
+        btn.innerHTML = orig;
+        btn.style.borderColor = 'rgba(255,255,255,0.2)';
+        btn.style.color = '#e2e8f0';
+        btn.style.background = 'rgba(255,255,255,0.06)';
+    }, 2500);
+}
+</script>

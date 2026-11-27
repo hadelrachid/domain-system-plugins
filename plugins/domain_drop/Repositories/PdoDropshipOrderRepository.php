@@ -72,6 +72,16 @@ class PdoDropshipOrderRepository implements DropshipOrderRepositoryInterface
             'product_slug'           => isset($data['product_slug']) ? (string)$data['product_slug'] : null,
             'product_title'          => isset($data['product_title']) ? (string)$data['product_title'] : null,
             'aliexpress_product_id'  => isset($data['aliexpress_product_id']) ? (string)$data['aliexpress_product_id'] : null,
+            'selected_color'         => isset($data['selected_color']) ? (string)$data['selected_color'] : null,
+            'selected_size'          => isset($data['selected_size']) ? (string)$data['selected_size'] : null,
+            'quantity'               => isset($data['quantity']) ? max(1, (int)$data['quantity']) : 1,
+            'supplier_url'           => isset($data['supplier_url']) ? (string)$data['supplier_url'] : null,
+            'supplier_store'         => isset($data['supplier_store']) ? (string)$data['supplier_store'] : null,
+            'shipping_type'          => isset($data['shipping_type']) ? (string)$data['shipping_type'] : null,
+            'shipping_cost_brl'      => isset($data['shipping_cost_brl']) ? (float)$data['shipping_cost_brl'] : 0.0,
+            'fulfillment_dossier'    => isset($data['fulfillment_dossier'])
+                ? (is_array($data['fulfillment_dossier']) ? json_encode($data['fulfillment_dossier'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : (string)$data['fulfillment_dossier'])
+                : null,
         ];
 
         $existingCols = $this->getTableColumns();

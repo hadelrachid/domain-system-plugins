@@ -484,6 +484,7 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
             $router->addRoute('POST', '/admin/dropship/product/{id}/price', [DropshipAdminController::class, 'updatePrice'], 'domain_drop', ['admin']);
             $router->addRoute('POST', '/admin/dropship/product/{id}/category', [DropshipAdminController::class, 'updateCategory'], 'domain_drop', ['admin']);
             $router->addRoute('POST', '/admin/dropship/product/{id}/origin', [DropshipAdminController::class, 'updateOrigin'], 'domain_drop', ['admin']);
+            $router->addRoute('POST', '/admin/dropship/product/{id}/config', [DropshipAdminController::class, 'updateProductConfig'], 'domain_drop', ['admin']);
             $router->addRoute('POST', '/admin/dropship/toggle-daily-cycle', [DropshipAdminController::class, 'toggleDailyCycle'], 'domain_drop', ['admin']);
             $router->addRoute('POST', '/admin/dropship/run-daily-cycle', [DropshipAdminController::class, 'runDailyCycle'], 'domain_drop', ['admin']);
             $router->addRoute('POST', '/admin/dropship/mine-category-step', [DropshipAdminController::class, 'mineCategoryStep'], 'domain_drop', ['admin']);
@@ -572,6 +573,11 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
                         $productSlug = null;
                         $productTitle = null;
                         $aeProductId = null;
+                        $supplierUrl = null;
+                        $selectedColor = null;
+                        $selectedSize = null;
+                        $requestedSku = trim((string)($payload['sku'] ?? ($payload['shipping_address']['sku'] ?? ($_GET['sku'] ?? ($_POST['sku'] ?? '')))));
+                        $qty = max(1, (int)($payload['quantity'] ?? ($payload['shipping_address']['quantity'] ?? 1)));
 
                         if ($itemId > 0) {
                             try {
@@ -589,17 +595,101 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
                                     $productSlug = $productDto->slug;
                                     $productTitle = $productDto->title;
                                     $aeProductId = $productDto->aliexpressId;
+
+                                    $supplierUrl = !empty($productDto->attributes['aliexpress_url'])
+                                        ? (string)$productDto->attributes['aliexpress_url']
+                                        : 'https://pt.aliexpress.com/item/' . $aeProductId . '.html?country=BR&locale=pt_BR&currency=BRL';
+
+                                    // Resolve variação comprada (Cor, Tamanho, SKU)
+                                    $variant = null;
+                                    if ($requestedSku !== '') {
+                                        $variant = $productDto->findVariantBySku($requestedSku);
+                                    }
+                                    if ($variant !== null) {
+                                        $selectedColor = $variant->options['Cor'] ?? ($variant->options['cor'] ?? ($variant->options['Color'] ?? null));
+                                        $selectedSize = $variant->options['Tamanho'] ?? ($variant->options['tamanho'] ?? ($variant->options['Size'] ?? null));
+                                    } else {
+                                        $selectedColor = $payload['color'] ?? ($payload['cor'] ?? ($_GET['cor'] ?? ($_POST['cor'] ?? null)));
+                                        $selectedSize = $payload['size'] ?? ($payload['tamanho'] ?? ($_GET['tamanho'] ?? ($_POST['tamanho'] ?? null)));
+                                    }
                                 }
                             } catch (Throwable $e) {
                             }
                         }
 
+                        // Normalização do endereço e criação do Dossiê Cópia Carbono (Contingência de Compra Manual no Fornecedor)
+                        $shipAddr = is_array($payload['shipping_address'] ?? null) ? $payload['shipping_address'] : [];
+                        $custName = (string)($payload['customer_name'] ?? 'Cliente');
+                        $custEmail = (string)($payload['customer_email'] ?? '');
+                        $custDoc = (string)($payload['customer_document'] ?? ($payload['customer_cpf'] ?? ''));
+                        $custPhone = (string)($payload['customer_phone'] ?? ($shipAddr['phone'] ?? ''));
+
+                        $shippingMethod = (string)($shipAddr['shipping_method'] ?? 'Frete Padrão com Rastreio');
+                        $shippingPrice = (float)($shipAddr['shipping_price'] ?? 0.0);
+
+                        $formattedClipboard = "=== CÓPIA CARBONO / DOSSIÊ DE EXPEDIÇÃO DROPSHIPPING ===\n"
+                            . "REFERÊNCIA DO PEDIDO: {$orderRef}\n"
+                            . "FORNECEDOR ALIEXPRESS: {$sellerName}\n"
+                            . "PRODUTO: {$productTitle}\n"
+                            . "ID ALIEXPRESS: {$aeProductId}\n"
+                            . "LINK DO ANÚNCIO: {$supplierUrl}\n"
+                            . "QUANTIDADE: {$qty}\n"
+                            . ($selectedColor ? "COR: {$selectedColor}\n" : "")
+                            . ($selectedSize ? "TAMANHO: {$selectedSize}\n" : "")
+                            . ($requestedSku ? "SKU: {$requestedSku}\n" : "")
+                            . "TOTAL PAGO: R$ " . number_format((float)($payload['total'] ?? 0.0), 2, ',', '.') . "\n"
+                            . "TIPO DE ENVIO: {$shippingMethod}\n\n"
+                            . "--- DADOS DO COMPRADOR PARA ENTREGA NO ALIEXPRESS ---\n"
+                            . "DESTINATÁRIO: {$custName}\n"
+                            . "CPF: {$custDoc}\n"
+                            . "TELEFONE: {$custPhone}\n"
+                            . "E-MAIL: {$custEmail}\n"
+                            . "ENDEREÇO: " . ($shipAddr['street'] ?? '') . ", Nº " . ($shipAddr['number'] ?? '') . (!empty($shipAddr['complement']) ? ' (' . $shipAddr['complement'] . ')' : '') . "\n"
+                            . "BAIRRO: " . ($shipAddr['neighborhood'] ?? '') . "\n"
+                            . "CIDADE: " . ($shipAddr['city'] ?? '') . " - " . ($shipAddr['state'] ?? '') . "\n"
+                            . "CEP: " . ($shipAddr['zip'] ?? '');
+
+                        $dossier = [
+                            'order_ref'             => $orderRef,
+                            'product_id'            => $itemId,
+                            'aliexpress_product_id' => $aeProductId,
+                            'supplier_store'        => $sellerName,
+                            'supplier_url'          => $supplierUrl,
+                            'product_title'         => $productTitle,
+                            'quantity'              => $qty,
+                            'selected_color'        => $selectedColor,
+                            'selected_size'         => $selectedSize,
+                            'selected_sku'          => $requestedSku,
+                            'unit_price_brl'        => (float)($payload['unit_price'] ?? 0.0),
+                            'total_paid_brl'        => (float)($payload['total'] ?? 0.0),
+                            'shipping_type'         => $shippingMethod,
+                            'shipping_cost_brl'     => $shippingPrice,
+                            'customer' => [
+                                'name'     => $custName,
+                                'email'    => $custEmail,
+                                'cpf'      => $custDoc,
+                                'phone'    => $custPhone,
+                                'address'  => $shipAddr,
+                            ],
+                            'formatted_clipboard'   => $formattedClipboard,
+                            'instructions'          => "1. Abra o link do fornecedor no AliExpress ({$supplierUrl})\n2. Selecione Cor [{$selectedColor}] e Tamanho [{$selectedSize}]\n3. Cole o endereço do comprador no checkout do fornecedor\n4. Efetue o pagamento e copie o ID do pedido gerado para o DomainDrop.",
+                        ];
+
+                        $shipAddr['dossier'] = $dossier;
+                        $shipAddr['carbon_copy'] = $dossier;
+                        $shipAddr['selected_color'] = $selectedColor;
+                        $shipAddr['selected_size'] = $selectedSize;
+                        $shipAddr['quantity'] = $qty;
+                        $shipAddr['supplier_url'] = $supplierUrl;
+                        $shipAddr['supplier_store'] = $sellerName;
+                        $shipAddr['formatted_clipboard'] = $formattedClipboard;
+
                         $newDropOrder = [
                             'order_ref'              => $orderRef,
-                            'customer_name'          => (string)($payload['customer_name'] ?? 'Cliente'),
-                            'customer_email'         => (string)($payload['customer_email'] ?? ''),
-                            'customer_document'      => isset($payload['customer_document']) ? (string)$payload['customer_document'] : null,
-                            'shipping_address'       => isset($payload['shipping_address']) ? $payload['shipping_address'] : null,
+                            'customer_name'          => $custName,
+                            'customer_email'         => $custEmail,
+                            'customer_document'      => $custDoc !== '' ? $custDoc : null,
+                            'shipping_address'       => $shipAddr,
                             'status'                 => 'paid',
                             'total_paid_brl'         => (float)($payload['total'] ?? 0.0),
                             'seller_origin'          => $sellerOrigin,
@@ -608,6 +698,14 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
                             'product_slug'           => $productSlug,
                             'product_title'          => $productTitle,
                             'aliexpress_product_id'  => $aeProductId,
+                            'selected_color'         => $selectedColor,
+                            'selected_size'          => $selectedSize,
+                            'quantity'               => $qty,
+                            'supplier_url'           => $supplierUrl,
+                            'supplier_store'         => $sellerName,
+                            'shipping_type'          => $shippingMethod,
+                            'shipping_cost_brl'      => $shippingPrice,
+                            'fulfillment_dossier'    => $dossier,
                         ];
                         $orderRepo->create($newDropOrder);
 

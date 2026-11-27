@@ -155,8 +155,13 @@ if ($eanCode !== '') {
                             <span>🌐 Importação Oficial (Rastreamento Oficial)</span>
                         </span>
                     <?php endif; ?>
-                    <span style="background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.3); color: #34d399; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 5px;">
-                        <span>🚚 Frete Grátis Disponível • Opção Sedex</span>
+                    <?php
+                    $isFreeShipping = !isset($product->attributes['frete_gratis']) || (bool)$product->attributes['frete_gratis'];
+                    $shippingType = (string)($product->attributes['frete_tipo'] ?? ($isFreeShipping ? 'gratis' : 'pago'));
+                    $shippingFee = (float)($product->attributes['frete_valor'] ?? 0.0);
+                    ?>
+                    <span style="background: <?= $isFreeShipping ? 'rgba(16,185,129,0.12)' : 'rgba(56,189,248,0.12)' ?>; border: 1px solid <?= $isFreeShipping ? 'rgba(16,185,129,0.3)' : 'rgba(56,189,248,0.3)' ?>; color: <?= $isFreeShipping ? '#34d399' : '#38bdf8' ?>; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 5px;">
+                        <span>🚚 <?= $isFreeShipping ? 'Frete Grátis Disponível • Opção Sedex' : ('Frete R$ ' . number_format($shippingFee, 2, ',', '.') . ' • Opção Sedex') ?></span>
                     </span>
                 </div>
 
@@ -239,7 +244,7 @@ if ($eanCode !== '') {
                     </span>
                 </div>
 
-                <?php if ($product->hasVariants()): ?>
+                <?php if ($product->hasVariants() || !empty($product->attributes['variation_axes'])): ?>
                     <?php
                     $axes = $product->getVariationAxes();
                     $variantsList = $product->getVariants();
@@ -366,7 +371,7 @@ if ($eanCode !== '') {
 
                         <div style="display: flex; flex-direction: column; gap: 8px;">
                             <!-- Opção 1: Frete Padrão com Rastreio -->
-                            <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,210,132,0.06); border: 1px solid rgba(0,210,132,0.3); border-radius: 8px; padding: 10px 12px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; background: <?= $isFreeShipping ? 'rgba(0,210,132,0.06)' : 'rgba(56,189,248,0.06)' ?>; border: 1px solid <?= $isFreeShipping ? 'rgba(0,210,132,0.3)' : 'rgba(56,189,248,0.3)' ?>; border-radius: 8px; padding: 10px 12px;">
                                 <div>
                                     <div style="font-size: 12.5px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 6px;">
                                         <span>📦</span> <span>Frete Padrão com Rastreamento</span>
@@ -376,7 +381,11 @@ if ($eanCode !== '') {
                                     </div>
                                 </div>
                                 <div style="text-align: right; padding-left: 10px;">
-                                    <span style="font-size: 12.5px; font-weight: 800; color: #00d284; text-transform: uppercase;">GRÁTIS</span>
+                                    <?php if ($isFreeShipping): ?>
+                                        <span style="font-size: 12.5px; font-weight: 800; color: #00d284; text-transform: uppercase;">GRÁTIS</span>
+                                    <?php else: ?>
+                                        <span style="font-size: 12.5px; font-weight: 800; color: #38bdf8; font-weight: 800;">R$ <?= number_format($shippingFee, 2, ',', '.') ?></span>
+                                    <?php endif; ?>
                                 </div>
                             </div>
 
@@ -1019,6 +1028,8 @@ function updateLightbox() {
 var productUnitPriceBrl = <?= json_encode((float)$product->salePriceBrl) ?>;
 var productUnitWeightInGrams = <?= (int)$productWeightGrams ?>;
 var productCheckoutBaseUrl = <?= json_encode($checkoutUrl, JSON_UNESCAPED_SLASHES) ?>;
+var productIsFreeShipping = <?= json_encode($isFreeShipping) ?>;
+var productShippingFee = <?= json_encode($shippingFee) ?>;
 
 function calcProductExpressShipping(qty) {
     var totalWeight = productUnitWeightInGrams * Math.max(1, qty);
@@ -1386,8 +1397,13 @@ function calculateProductShipping(shouldFocus) {
         .catch(function() {
             btn.disabled = false;
             btn.innerHTML = originalBtnText;
-            locText.innerHTML = '📍 Frete Padrão com Rastreio <strong>GRÁTIS</strong> disponível para todo o Brasil!';
-            locText.style.color = '#00d284';
+            if (productIsFreeShipping) {
+                locText.innerHTML = '📍 Frete Padrão com Rastreio <strong>GRÁTIS</strong> disponível para todo o Brasil!';
+                locText.style.color = '#00d284';
+            } else {
+                locText.innerHTML = '📍 Frete Padrão com Rastreio por <strong>R$ ' + parseFloat(productShippingFee).toFixed(2).replace('.', ',') + '</strong> para todo o Brasil!';
+                locText.style.color = '#38bdf8';
+            }
             resultBox.style.display = 'block';
         });
 }
@@ -1446,7 +1462,7 @@ function handleBuyNowClick(event, btn) {
         return false;
     }
 
-    <?php if ($product->hasVariants()): ?>
+    <?php if ($product->hasVariants() || !empty($product->attributes['variation_axes'])): ?>
     var missingAxes = [];
     if (typeof productVariationAxes !== 'undefined' && productVariationAxes) {
         for (var axKey in productVariationAxes) {

@@ -110,7 +110,12 @@
                             <?php endif; ?>
                         </div>
 
-                        <?php $isNational = (!empty($p->attributes['origem_brasil']) || (isset($p->attributes['ship_from']) && $p->attributes['ship_from'] === 'BR')); ?>
+                        <?php 
+                        $isNational = (!empty($p->attributes['origem_brasil']) || (isset($p->attributes['ship_from']) && $p->attributes['ship_from'] === 'BR')); 
+                        $cardFreeShipping = !isset($p->attributes['frete_gratis']) || (bool)$p->attributes['frete_gratis'];
+                        $cardShippingFee = (float)($p->attributes['frete_valor'] ?? 0.0);
+                        $cardSizes = $p->attributes['variation_axes']['Tamanho'] ?? ($p->attributes['tamanhos_disponiveis'] ?? []);
+                        ?>
                         <div style="margin-bottom: 14px;">
                             <div style="font-size: 11px; color: #94a3b8; text-decoration: line-through;">
                                 R$ <?= number_format($refPrice, 2, ',', '.') ?>
@@ -118,9 +123,16 @@
                             <div class="store-card-price" style="font-size: 20px; font-weight: 700; color: #5cd67d; font-family: monospace;">
                                 R$ <?= number_format($p->salePriceBrl, 2, ',', '.') ?>
                             </div>
-                            <div style="font-size: 10px; color: <?= $isNational ? '#4ade80' : '#94a3b8' ?>; margin-top: 2px; font-weight: <?= $isNational ? '600' : 'normal' ?>; display: flex; align-items: center; flex-wrap: wrap;">
-                                <?= $isNational ? (\DomainSystem\Plugins\domain_drop\Helpers\FlagHelper::br(15, 10) . ' Estoque no Brasil • Envio 3 a 7 dias') : 'em até 12x ou Pix com desconto' ?>
+                            <div style="font-size: 10px; color: <?= $isNational ? '#4ade80' : '#94a3b8' ?>; margin-top: 2px; font-weight: <?= $isNational ? '600' : 'normal' ?>; display: flex; align-items: center; flex-wrap: wrap; gap: 4px;">
+                                <span><?= $isNational ? (\DomainSystem\Plugins\domain_drop\Helpers\FlagHelper::br(15, 10) . ' Estoque no Brasil • Envio 3 a 7 dias') : 'em até 12x ou Pix' ?></span>
+                                <span style="color: <?= $cardFreeShipping ? '#34d399' : '#38bdf8' ?>; font-weight: 700;">• <?= $cardFreeShipping ? '🚚 Frete Grátis' : '🚚 Frete R$ ' . number_format($cardShippingFee, 2, ',', '.') ?></span>
                             </div>
+                            <?php if (!empty($cardSizes) && is_array($cardSizes)): ?>
+                                <div style="font-size: 10px; color: #facc15; font-weight: 700; margin-top: 3px; display: flex; align-items: center; gap: 4px;">
+                                    <span>📏 Tam:</span>
+                                    <span><?= htmlspecialchars(implode(', ', array_slice($cardSizes, 0, 4)) . (count($cardSizes) > 4 ? '...' : '')) ?></span>
+                                </div>
+                            <?php endif; ?>
                         </div>
                     </div>
 
