@@ -1,5 +1,5 @@
 {
-    "updated_at": "2026-11-27T23:00:23+01:00",
+    "updated_at": "2026-11-27T23:50:38+01:00",
     "repository": "https://github.com/hadelrachid/domain-system-plugins",
     "plugins": {
         "academy": {
@@ -54,13 +54,13 @@
             "slug": "domain_drop",
             "name": "domain_drop",
             "title": "domain_drop",
-            "version": "2.10.9",
+            "version": "2.10.10",
             "os_version": "2.9",
-            "description": "Motor autônomo de dropshipping e esteira de auditoria com modo quarentena, curadoria humana, seleção em lote, botão Carregar para Site, configurações de card com tags de tamanho e cor, frete flexível e integração oficial AliExpress Open Platform (App ISV 558628).",
+            "description": "Motor autônomo de dropshipping e esteira de auditoria com arquitetura OOP SOLID de Cards polimórficos (AbstractProductCard com especializações Fashion, Tech, NationalStock e Standard), curadoria humana, seleção em lote, botão Carregar para Site, configurações de card com tags de tamanho e cor, frete flexível e integração oficial AliExpress Open Platform (App ISV 558628).",
             "zip_filename": "domain_drop.zip",
             "download_url": "https://github.com/hadelrachid/domain-system-plugins/releases/latest/download/domain_drop.zip",
-            "sha256": "521de6de458e114be3c7c7534d2b1a4d1c96d11b0d1ab199e889f7af37ac6501",
-            "size_bytes": 726431
+            "sha256": "2cf15bc7853347ff2b114011459252fbb290debb94adc9e2c4a4f310c8513a73",
+            "size_bytes": 1443798
         },
         "flextheme": {
             "slug": "flextheme",
