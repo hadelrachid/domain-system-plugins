@@ -1,6 +1,6 @@
 {
     "name": "domain_drop",
-    "version": "2.10.13",
+    "version": "2.10.14",
     "author": "Rachid",
     "description": "Motor autônomo de dropshipping com os 3 Filtros de Sócrates em container dedicado para Outros Vendedores (1º Categoria estrita sem vazamento, 2º Semântica do tipo de item, 3º Especificidade de preço e notas), cards polimórficos OOP SOLID, curadoria humana, esteira de revisão e integração oficial AliExpress Open Platform (App ISV 558628).",
     "display_name": "DomainDrop",

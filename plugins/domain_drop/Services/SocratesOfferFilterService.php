@@ -108,6 +108,7 @@ class SocratesOfferFilterService implements SocratesOfferFilterInterface
             FROM domain_drop_catalog
             WHERE status = 'published'
               AND LOWER(TRIM(category)) IN ({$catPlaceholders})
+              AND LOWER(TRIM(category)) NOT IN ('geral', 'default', '')
               AND id != ?
             ORDER BY {$orderBy}
             LIMIT {$limit}
@@ -117,6 +118,22 @@ class SocratesOfferFilterService implements SocratesOfferFilterInterface
         $stmt->execute($params);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
+        // 2ª Peneira Estrita de Sócrates:
+        // Se há palavras semânticas do produto-alvo e encontramos concorrentes com afinidade real (> 0),
+        // eliminamos sumariamente itens com score 0 (que não compartilham o mesmo tipo de produto).
+        if (!empty($keywords)) {
+            $semanticMatches = array_values(array_filter($rows, function (array $r): bool {
+                return (int)($r['semantic_score'] ?? 0) > 0;
+            }));
+            if (!empty($semanticMatches)) {
+                $rows = $semanticMatches;
+            } else {
+                // Se nenhum item do catálogo possui a mesma semântica (ex: não há outros tops ou outras calças),
+                // a 2ª peneira rejeita a contaminação para não exibir produtos aleatórios.
+                $rows = [];
+            }
+        }
+
         return array_map([$this, 'hydrate'], $rows);
     }
 
@@ -125,6 +142,11 @@ class SocratesOfferFilterService implements SocratesOfferFilterInterface
      */
     public function resolveAllowedCategories(string $category, string $title = ''): array
     {
+        $category = trim($category);
+        if ($category === '' || strcasecmp($category, 'Geral') === 0) {
+            $category = $this->taxonomy->classifyFromText($title, $category);
+        }
+
         $allowed = $this->taxonomy->getFamilyCategories($category, $title);
         if (empty($allowed)) {
             $allowed = [$category];
@@ -134,7 +156,13 @@ class SocratesOfferFilterService implements SocratesOfferFilterInterface
             array_unshift($allowed, $category);
         }
 
-        return array_values(array_unique(array_filter($allowed)));
+        // 1ª Peneira Inviolável: Remove 'geral', 'default' e strings vazias para impedir brechas
+        $allowed = array_filter($allowed, function (string $c): bool {
+            $trimmed = mb_strtolower(trim($c), 'UTF-8');
+            return $trimmed !== '' && $trimmed !== 'geral' && $trimmed !== 'default';
+        });
+
+        return array_values(array_unique($allowed));
     }
 
     /**
