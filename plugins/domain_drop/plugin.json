@@ -1,8 +1,8 @@
 {
     "name": "domain_drop",
-    "version": "2.10.11",
+    "version": "2.10.12",
     "author": "Rachid",
-    "description": "Motor autônomo de dropshipping e esteira de auditoria com arquitetura OOP SOLID de Cards polimórficos (AbstractProductCard com especializações Fashion, Tech, NationalStock e Standard), curadoria humana, seleção em lote, botão Carregar para Site, configurações de card com tags de tamanho e cor, frete flexível, blindagem contra conversão de arrays em títulos da API e integração oficial AliExpress Open Platform (App ISV 558628).",
+    "description": "Motor autônomo de dropshipping e esteira de auditoria com arquitetura OOP SOLID de Cards polimórficos, curadoria humana, recomendação semântica de Outros Vendedores no mesmo produto/nicho com Zero-Contaminação entre departamentos, seleção em lote, botão Carregar para Site, configurações de card com tags de tamanho e cor, frete flexível e integração oficial AliExpress Open Platform (App ISV 558628).",
     "display_name": "DomainDrop",
     "admin_url": "/admin/dropship",
     "core": false,

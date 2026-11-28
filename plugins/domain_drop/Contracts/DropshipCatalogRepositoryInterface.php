@@ -114,9 +114,9 @@ interface DropshipCatalogRepositoryInterface
 
     /**
      * Localiza ofertas similares / outros vendedores para o mesmo tipo de produto ou categoria,
-     * ordenados pelo preço mais acessível (ascendente) para exibição comparativa.
+     * ordenados pelo preço mais acessível (ascendente) ou média para exibição comparativa.
      * 
      * @return array<int, DropshipProductDto>
      */
-    public function findSimilarOffers(int $excludeId, string $category, string $title = '', int $limit = 4): array;
+    public function findSimilarOffers(int $excludeId, string $category, string $title = '', int $limit = 4, float $targetPrice = 0.0): array;
 }

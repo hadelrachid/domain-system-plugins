@@ -533,10 +533,10 @@ if ($eanCode !== '') {
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 14px;">
                 <div>
                     <h2 style="font-size: 20px; font-weight: 700; color: #fff; margin: 0 0 4px 0; display: flex; align-items: center; gap: 8px;">
-                        <span>🏬</span> Outros Vendedores & Ofertas Mais Acessíveis
+                        <span>🏬</span> Outros Vendedores & Ofertas Similares
                     </h2>
                     <p style="margin: 0; font-size: 13px; color: #94a3b8;">
-                        Compare preços e condições de diferentes fornecedores parceiros para itens similares desta categoria.
+                        Compare opções semelhantes de fornecedores parceiros com preços acessíveis e excelente reputação.
                     </p>
                 </div>
                 <span style="background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">
@@ -553,6 +553,7 @@ if ($eanCode !== '') {
                     $offerImg = $offer->mainImageUrl ?: ($offer->images[0] ?? '');
                     $offerUrl = $baseUrl . '/produto/' . htmlspecialchars($offer->slug);
                     $offerCheckoutUrl = $baseUrl . '/checkout/produto/' . (int)$offer->id;
+                    $sellerDisplayName = !empty($offerSeller['store_name']) ? $offerSeller['store_name'] : ($offerSeller['name'] ?? 'Fornecedor Oficial AliExpress');
                     ?>
                     <div style="display: flex; align-items: center; justify-content: space-between; background: #0e1317; border: 1px solid <?= $isCheaper ? 'rgba(34,197,94,0.3)' : 'rgba(255,255,255,0.06)' ?>; border-radius: 10px; padding: 14px 18px; gap: 16px; flex-wrap: wrap; transition: transform 0.2s ease, border-color 0.2s ease;">
                         <!-- Thumbnail & Title -->
@@ -565,7 +566,7 @@ if ($eanCode !== '') {
                                     <?= htmlspecialchars($offer->title) ?>
                                 </a>
                                 <div style="display: flex; align-items: center; gap: 10px; margin-top: 4px; font-size: 12px; color: #94a3b8; flex-wrap: wrap;">
-                                    <span>Vendedor: <strong style="color: #cbd5e1;"><?= htmlspecialchars((string)($offerSeller['name'] ?? 'Fornecedor Oficial AliExpress')) ?></strong></span>
+                                    <span>Vendedor: <strong style="color: #cbd5e1;"><?= htmlspecialchars((string)$sellerDisplayName) ?></strong></span>
                                     <span>•</span>
                                     <span style="color: #F0D060;">★ <?= number_format($offer->rating, 1) ?></span>
                                     <span>•</span>

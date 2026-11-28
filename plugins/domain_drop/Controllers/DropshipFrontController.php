@@ -406,7 +406,8 @@ class DropshipFrontController
             excludeId: (int)$product->id,
             category: (string)$product->category,
             title: (string)$product->title,
-            limit: 4
+            limit: 4,
+            targetPrice: (float)$product->salePriceBrl
         );
 
         ob_start();

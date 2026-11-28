@@ -701,4 +701,111 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
         $params[] = '%' . $raw . '%';
         return "(category = ? OR category LIKE ?)";
     }
+
+    /**
+     * Retorna a lista de categorias irmãs e sinônimos pertencentes à mesma família/nicho semântico.
+     * Garante Zero-Contaminação entre departamentos distintos (ex: Moda jamais mistura com Eletrônicos ou Pet).
+     *
+     * @return array<int, string>
+     */
+    public function getFamilyCategories(string $category): array
+    {
+        $clean = mb_strtolower(preg_replace('/[^\p{L}\p{N}\s&]/u', ' ', $category) ?? $category, 'UTF-8');
+
+        // 1. Família MODA / VESTUÁRIO / CALÇADOS / FITNESS / LINGERIE
+        $fashionTerms = [
+            'moda', 'roupa', 'vestuário', 'vestuario', 'vestido', 'calça', 'calca', 'camisa',
+            'camiseta', 'short', 'lingerie', 'fitness', 'legging', 'biquini', 'maiô', 'calçado',
+            'calcado', 'sapato', 'tênis', 'tenis', 'sandália', 'sandalia', 'cueca', 'sutiã',
+            'sutia', 'jaqueta', 'casaco', 'bolsa', 'feminina', 'masculina', 'intima', 'íntima'
+        ];
+        foreach ($fashionTerms as $term) {
+            if (str_contains($clean, $term)) {
+                return [
+                    'Moda, Roupas & Vestuário',
+                    'Moda Íntima & Lingerie',
+                    'Moda Fitness, Leggings & Academia',
+                    'Roupas, Bolsas & Calçados',
+                    'Roupa Íntima & Pijamas',
+                    'Moda Feminina',
+                    'Moda Masculina',
+                    'Vestuário',
+                    'Calçados',
+                ];
+            }
+        }
+
+        // 2. Família ELETRÔNICOS / SMARTPHONES / SMARTWATCH / GADGETS / ÁUDIO / TV
+        $techTerms = [
+            'eletrônico', 'eletronico', 'celular', 'smartphone', 'smartwatch', 'relógio',
+            'relogio', 'fone', 'bluetooth', 'tws', 'headphone', 'projetor', 'tv', 'tv box',
+            'carregador', 'cabo', 'gamer', 'computador', 'teclado', 'mouse', 'áudio', 'audio',
+            'telefonia', 'gadget', 'drone', 'câmera', 'camera'
+        ];
+        foreach ($techTerms as $term) {
+            if (str_contains($clean, $term)) {
+                return [
+                    'Eletrônicos & Gadget',
+                    'Eletrônicos & Telefonia',
+                    'Smartphones, TVs & Projetores 4K',
+                    'Relógios & Smartwatches',
+                    'Telefones e telecomunicações',
+                    'Áudio',
+                    'Fones Bluetooth TWS',
+                ];
+            }
+        }
+
+        // 3. Família PET SHOP / CUIDADOS ANIMAIS
+        $petTerms = ['pet', 'cão', 'cao', 'gato', 'cachorro', 'animal', 'coleira', 'aquário', 'aquario', 'ração', 'racao'];
+        foreach ($petTerms as $term) {
+            if (str_contains($clean, $term)) {
+                return [
+                    'Pet Shop & Cuidados Animais',
+                    'Pet Shop',
+                    'Animais de Estimação',
+                ];
+            }
+        }
+
+        // 4. Família PEÇAS & ACESSÓRIOS AUTOMOTIVOS
+        $autoTerms = ['automotivo', 'carro', 'moto', 'veículo', 'veiculo', 'pneu', 'farol', 'retrovisor', 'auto'];
+        foreach ($autoTerms as $term) {
+            if (str_contains($clean, $term)) {
+                return [
+                    'Peças & Acessórios Automotivos',
+                    'Automóveis e Motocicletas',
+                    'Acessórios para Veículos',
+                ];
+            }
+        }
+
+        // 5. Família BELEZA, SAÚDE & BEM-ESTAR
+        $beautyTerms = ['beleza', 'saúde', 'saude', 'maquiagem', 'batom', 'cabelo', 'secador', 'depilador', 'pele', 'skin', 'massagem', 'perfume'];
+        foreach ($beautyTerms as $term) {
+            if (str_contains($clean, $term)) {
+                return [
+                    'Beleza, Saúde & Bem-Estar',
+                    'Beleza, Saúde & Maquiagem',
+                    'Beleza e saúde',
+                ];
+            }
+        }
+
+        // 6. Família CASA, ILUMINAÇÃO & CONSTRUÇÃO
+        $homeTerms = ['casa', 'iluminação', 'iluminacao', 'cozinha', 'ferramenta', 'furadeira', 'decoração', 'decoracao', 'organização', 'organizacao', 'construção', 'construcao'];
+        foreach ($homeTerms as $term) {
+            if (str_contains($clean, $term)) {
+                return [
+                    'Casa Inteligente & Organização',
+                    'Casa, Iluminação & Eletro',
+                    'Ferramentas & Construção',
+                    'Ferramentas & Utilidades',
+                    'Casa e jardim',
+                ];
+            }
+        }
+
+        return [$category];
+    }
 }

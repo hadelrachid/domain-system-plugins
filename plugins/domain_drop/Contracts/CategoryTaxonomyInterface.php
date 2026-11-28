@@ -61,4 +61,12 @@ interface CategoryTaxonomyInterface
      * @param array<int, mixed> $params Parâmetros PDO passados por referência
      */
     public function buildSqlFilter(string $requestedCategory, array &$params): string;
+
+    /**
+     * Retorna a lista de categorias irmãs e sinônimos pertencentes à mesma família/nicho semântico.
+     * Garante isolamento estrito (Zero-Contaminação entre nichos).
+     *
+     * @return array<int, string>
+     */
+    public function getFamilyCategories(string $category): array;
 }
