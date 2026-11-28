@@ -167,35 +167,39 @@ $canonicalUrl = $baseUrl . $pageBaseRoute . ($page > 1 ? '?page=' . $page : '');
         <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex: 1; justify-content: flex-end;">
             <a href="<?= htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8') ?>/moda-intima" style="padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; text-decoration: none; background: rgba(236,72,153,0.14); color: #f472b6; border: 1px solid rgba(236,72,153,0.35); white-space: nowrap;">👗 Moda &amp; Íntima</a>
             <!-- Combobox Principal de Categorias (Atualiza o Palco Dinâmico sem recarregar a página!) -->
+            <?php
+            $taxonomyRegistry = new \DomainSystem\Plugins\domain_drop\Services\CategoryTaxonomyService();
+            $activeDeptCode = !empty($selectedCategory) ? ($taxonomyRegistry->getDepartmentByName($selectedCategory)?->code ?? strtolower(trim($selectedCategory))) : '';
+            ?>
             <select id="storeCategoryCombobox" class="store-combobox-select" onchange="if(this.value) filterCatalogDynamically(this.value);">
-                <option value="<?= $baseUrl ?>/loja" <?= empty($selectedCategory) ? 'selected' : '' ?>>
+                <option value="<?= $baseUrl ?>/loja" <?= empty($activeDeptCode) ? 'selected' : '' ?>>
                     🌐 Todas as Categorias (Ver Catálogo Completo)
                 </option>
-                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Eletrônicos & Telefonia') ?>" <?= (stripos($selectedCategory, 'eletrônic') !== false || stripos($selectedCategory, 'telefonia') !== false || stripos($selectedCategory, 'tecnologia') !== false) ? 'selected' : '' ?>>
+                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Eletrônicos & Telefonia') ?>" <?= ($activeDeptCode === 'tech') ? 'selected' : '' ?>>
                     📱 Eletrônicos & Telefonia
                 </option>
-                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Relógios & Smartwatches') ?>" <?= (stripos($selectedCategory, 'relógio') !== false || stripos($selectedCategory, 'relogio') !== false || stripos($selectedCategory, 'smartwatch') !== false || stripos($selectedCategory, 'áudio') !== false || stripos($selectedCategory, 'audio') !== false) ? 'selected' : '' ?>>
+                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Relógios & Smartwatches') ?>" <?= ($activeDeptCode === 'smartwatch') ? 'selected' : '' ?>>
                     ⌚ Relógios & Smartwatches
                 </option>
-                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Casa, Iluminação & Eletro') ?>" <?= (stripos($selectedCategory, 'casa') !== false || stripos($selectedCategory, 'iluminação') !== false || stripos($selectedCategory, 'iluminacao') !== false || stripos($selectedCategory, 'eletro') !== false) ? 'selected' : '' ?>>
+                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Casa, Iluminação & Eletro') ?>" <?= ($activeDeptCode === 'home') ? 'selected' : '' ?>>
                     🏠 Casa, Iluminação & Eletro
                 </option>
-                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Ferramentas & Utilidades') ?>" <?= (stripos($selectedCategory, 'ferramenta') !== false || stripos($selectedCategory, 'utilidade') !== false || stripos($selectedCategory, 'acessorio') !== false || stripos($selectedCategory, 'acessórios') !== false) ? 'selected' : '' ?>>
+                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Ferramentas & Utilidades') ?>" <?= ($activeDeptCode === 'tools') ? 'selected' : '' ?>>
                     🛠️ Ferramentas & Utilidades
                 </option>
-                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Beleza, Saúde & Maquiagem') ?>" <?= (stripos($selectedCategory, 'beleza') !== false || stripos($selectedCategory, 'saúde') !== false || stripos($selectedCategory, 'saude') !== false || stripos($selectedCategory, 'maquiagem') !== false) ? 'selected' : '' ?>>
+                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Beleza, Saúde & Maquiagem') ?>" <?= ($activeDeptCode === 'beauty') ? 'selected' : '' ?>>
                     ✨ Beleza, Saúde & Maquiagem
                 </option>
-                <option value="<?= $baseUrl ?>/loja?cat=Pet+Shop" <?= (stripos($selectedCategory, 'pet') !== false) ? 'selected' : '' ?>>
+                <option value="<?= $baseUrl ?>/loja?cat=Pet+Shop" <?= ($activeDeptCode === 'pets') ? 'selected' : '' ?>>
                     🐾 Pet Shop
                 </option>
-                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Peças & Acessórios Automotivos') ?>" <?= (stripos($selectedCategory, 'automotiv') !== false || stripos($selectedCategory, 'veículo') !== false || stripos($selectedCategory, 'veiculo') !== false) ? 'selected' : '' ?>>
+                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Peças & Acessórios Automotivos') ?>" <?= ($activeDeptCode === 'auto') ? 'selected' : '' ?>>
                     🚗 Peças & Acessórios Automotivos
                 </option>
-                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Roupas, Bolsas & Calçados') ?>" <?= ((stripos($selectedCategory, 'roupa') !== false || stripos($selectedCategory, 'bolsa') !== false || stripos($selectedCategory, 'calçado') !== false || stripos($selectedCategory, 'calcado') !== false || stripos($selectedCategory, 'vestuário') !== false || stripos($selectedCategory, 'vestuario') !== false) && stripos($selectedCategory, 'íntima') === false && stripos($selectedCategory, 'intima') === false) ? 'selected' : '' ?>>
+                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Roupas, Bolsas & Calçados') ?>" <?= ($activeDeptCode === 'fashion') ? 'selected' : '' ?>>
                     👗 Roupas, Bolsas & Calçados
                 </option>
-                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Roupa Íntima & Pijamas') ?>" <?= (stripos($selectedCategory, 'lingerie') !== false || stripos($selectedCategory, 'íntima') !== false || stripos($selectedCategory, 'intima') !== false || stripos($selectedCategory, 'pijama') !== false) ? 'selected' : '' ?>>
+                <option value="<?= $baseUrl ?>/loja?cat=<?= urlencode('Roupa Íntima & Pijamas') ?>" <?= ($activeDeptCode === 'lingerie') ? 'selected' : '' ?>>
                     👙 Roupa Íntima & Pijamas
                 </option>
             </select>

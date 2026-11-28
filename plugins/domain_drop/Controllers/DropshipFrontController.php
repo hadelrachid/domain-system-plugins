@@ -152,6 +152,29 @@ class DropshipFrontController
     }
 
     /**
+     * Contrato REST Oficial de Departamentos e Categorias: GET /api/drop/departments
+     */
+    public function getDepartments(Request $request): ResponseInterface
+    {
+        $registry = null;
+        if (isset($GLOBALS['app'])) {
+            try {
+                $registry = $GLOBALS['app']->getContainer()->make(\DomainSystem\Plugins\domain_drop\Contracts\CategoryRegistryInterface::class);
+            } catch (\Throwable $e) {}
+        }
+
+        if ($registry === null) {
+            $registry = new \DomainSystem\Plugins\domain_drop\Services\CategoryTaxonomyService();
+        }
+
+        $list = array_values(array_map(fn($d) => $d->toArray(), $registry->getAllDepartments()));
+        return Response::json([
+            'success'     => true,
+            'departments' => $list,
+        ]);
+    }
+
+    /**
      * Endpoint de Verificação ao Vivo no Clique de Compra: POST /api/drop/check-availability
      */
     public function checkAvailability(Request $request): ResponseInterface

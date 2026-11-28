@@ -14,6 +14,7 @@ use DomainSystem\Plugins\commerce\Contracts\PurchasableItemResolverInterface;
 use DomainSystem\Plugins\domain_drop\Adapters\DropshipProductPurchasableAdapter;
 use DomainSystem\Plugins\domain_drop\Contracts\AiProductEnricherInterface;
 use DomainSystem\Plugins\domain_drop\Contracts\AliExpressApiClientInterface;
+use DomainSystem\Plugins\domain_drop\Contracts\CategoryRegistryInterface;
 use DomainSystem\Plugins\domain_drop\Contracts\CategoryTaxonomyInterface;
 use DomainSystem\Plugins\domain_drop\Contracts\CurrencyConverterInterface;
 use DomainSystem\Plugins\domain_drop\Contracts\DropshipCatalogRepositoryInterface;
@@ -195,6 +196,10 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
 
         $runtime->singleton(CategoryTaxonomyInterface::class, function () {
             return new CategoryTaxonomyService();
+        });
+
+        $runtime->singleton(CategoryRegistryInterface::class, function () use ($runtime) {
+            return $runtime->make(CategoryTaxonomyInterface::class);
         });
 
         $runtime->singleton(DropshipCatalogRepositoryInterface::class, function () use ($runtime) {
@@ -505,6 +510,7 @@ class Plugin extends AbstractPlugin implements OsExtensionInterface
 
             // 4. Rotas Públicas da Loja Virtual, Páginas Dedicadas & Área do Cliente
             $router->addRoute('GET', '/loja', [\DomainSystem\Plugins\domain_drop\Controllers\DropshipFrontController::class, 'storefront'], 'domain_drop');
+            $router->addRoute('GET', '/api/drop/departments', [\DomainSystem\Plugins\domain_drop\Controllers\DropshipFrontController::class, 'getDepartments'], 'domain_drop');
             $router->addRoute('GET', '/moda-intima', [\DomainSystem\Plugins\domain_drop\Controllers\DropshipFrontController::class, 'fashionAndLingerie'], 'domain_drop');
             $router->addRoute('GET', '/roupas', [\DomainSystem\Plugins\domain_drop\Controllers\DropshipFrontController::class, 'fashionAndLingerie'], 'domain_drop');
             $router->addRoute('GET', '/sexshop', [\DomainSystem\Plugins\domain_drop\Controllers\DropshipFrontController::class, 'sexShop'], 'domain_drop');

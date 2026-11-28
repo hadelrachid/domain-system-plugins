@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace DomainSystem\Plugins\domain_drop\Services;
 
+use DomainSystem\Plugins\domain_drop\Contracts\CategoryRegistryInterface;
 use DomainSystem\Plugins\domain_drop\Contracts\CategoryTaxonomyInterface;
+use DomainSystem\Plugins\domain_drop\DTO\DepartmentDto;
 
 /**
  * Serviço de Taxonomia Canônica Oficial, Classificação Semântica e Filtros SQL (SOLID / SRP).
@@ -12,7 +14,7 @@ use DomainSystem\Plugins\domain_drop\Contracts\CategoryTaxonomyInterface;
  * Totalmente alinhado às 548 categorias oficiais da AliExpress Open Platform (IOP SDK)
  * para produtos em território nacional brasileiro, sem invenção de termos.
  */
-class CategoryTaxonomyService implements CategoryTaxonomyInterface
+class CategoryTaxonomyService implements CategoryTaxonomyInterface, CategoryRegistryInterface
 {
     // Categorias Oficiais alinhadas 1:1 com a AliExpress Open Platform
     public const CAT_TECH         = 'Eletrônicos & Telefonia';          // IDs 44, 509, 7
@@ -423,283 +425,288 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
         return self::CAT_TECH;
     }
 
+    /**
+     * Retorna todos os 11 departamentos oficiais com suas categorias de banco,
+     * IDs do AliExpress e metadados estruturados (Contrato CategoryRegistryInterface).
+     *
+     * @return array<string, DepartmentDto>
+     */
+    public function getAllDepartments(): array
+    {
+        return [
+            'auto' => new DepartmentDto(
+                code: 'auto',
+                name: 'Peças & Acessórios Automotivos',
+                icon: '🚗',
+                aliExpressCategoryIds: [34, 201355758],
+                databaseCategories: [
+                    'Peças & Acessórios Automotivos',
+                    'Peças e acessórios automotivos',
+                    'Acessórios para Veículos',
+                    'Acessórios Auto'
+                ],
+                description: 'Acessórios veiculares, suportes e peças automotivas.'
+            ),
+            'fashion' => new DepartmentDto(
+                code: 'fashion',
+                name: 'Roupas, Bolsas & Calçados',
+                icon: '👗',
+                aliExpressCategoryIds: [200000345, 200000343, 200000346, 200000347, 200000344, 200000348, 1524, 322],
+                databaseCategories: [
+                    'Roupas, Bolsas & Calçados',
+                    'Moda, Roupas & Vestuário',
+                    'Roupas femininas',
+                    'Roupas masculinas',
+                    'Bolsas e malas',
+                    'Sapatos',
+                    'Calçados',
+                    'Vestuário',
+                    'Moda'
+                ],
+                description: 'Vestuário feminino e masculino, casacos, bolsas e calçados.'
+            ),
+            'lingerie' => new DepartmentDto(
+                code: 'lingerie',
+                name: 'Roupa Íntima & Pijamas',
+                icon: '👙',
+                aliExpressCategoryIds: [200574005, 200000851, 200000858, 200000780, 200000778, 200000779, 200000781],
+                databaseCategories: [
+                    'Roupa Íntima & Pijamas',
+                    'Moda Íntima, Lingeries & Pijamas',
+                    'Roupa íntima e pijamas',
+                    'Lingerie',
+                    'Lingeries',
+                    'Moda Íntima',
+                    'Pijamas'
+                ],
+                description: 'Lingeries, pijamas, sutiãs, calcinhas, meias-calça e cuecas.'
+            ),
+            'fitness' => new DepartmentDto(
+                code: 'fitness',
+                name: 'Moda Fitness, Leggings & Academia',
+                icon: '🏃‍♀️',
+                aliExpressCategoryIds: [200000785, 200000349, 200000345, 200000780],
+                databaseCategories: [
+                    'Moda Fitness, Leggings & Academia',
+                    'Moda Fitness',
+                    'Fitness',
+                    'Academia'
+                ],
+                description: 'Tops de sustentação, calças legging suplex e roupas de academia.'
+            ),
+            'tech' => new DepartmentDto(
+                code: 'tech',
+                name: 'Eletrônicos & Telefonia',
+                icon: '📱',
+                aliExpressCategoryIds: [44, 509, 7],
+                databaseCategories: [
+                    'Eletrônicos & Telefonia',
+                    'Eletrônicos & Gadget',
+                    'Eletrônicos de consumo',
+                    'Eletrônicos',
+                    'Áudio',
+                    'Audio',
+                    'Fones Bluetooth TWS'
+                ],
+                description: 'Fones sem fio, caixas de som, carregadores e acessórios tech.'
+            ),
+            'mobile_tv' => new DepartmentDto(
+                code: 'mobile_tv',
+                name: 'Smartphones, TVs & Projetores 4K',
+                icon: '📺',
+                aliExpressCategoryIds: [509, 44, 7],
+                databaseCategories: [
+                    'Smartphones, TVs & Projetores 4K',
+                    'Smartphones',
+                    'Celulares',
+                    'Telefones e telecomunicações'
+                ],
+                description: 'Celulares Xiaomi/POCO, mini projetores 4K e TV boxes.'
+            ),
+            'smartwatch' => new DepartmentDto(
+                code: 'smartwatch',
+                name: 'Relógios & Smartwatches',
+                icon: '⌚',
+                aliExpressCategoryIds: [1511],
+                databaseCategories: [
+                    'Relógios & Smartwatches',
+                    'Relógios',
+                    'Smartwatches & Áudio',
+                    'Smartwatches'
+                ],
+                description: 'Smartwatches esportivos, pulseiras inteligentes e relógios.'
+            ),
+            'home' => new DepartmentDto(
+                code: 'home',
+                name: 'Casa, Iluminação & Eletro',
+                icon: '🏠',
+                aliExpressCategoryIds: [15, 39, 6, 13],
+                databaseCategories: [
+                    'Casa, Iluminação & Eletro',
+                    'Casa Inteligente & Organização',
+                    'Casa e iluminação',
+                    'Casa e jardim'
+                ],
+                description: 'Iluminação inteligente, fitas LED, organizadores e itens de casa.'
+            ),
+            'tools' => new DepartmentDto(
+                code: 'tools',
+                name: 'Ferramentas & Utilidades',
+                icon: '🛠️',
+                aliExpressCategoryIds: [1420, 30],
+                databaseCategories: [
+                    'Ferramentas & Utilidades',
+                    'Ferramentas',
+                    'Segurança e proteção',
+                    'Acessórios Virais & Ferramentas'
+                ],
+                description: 'Alicates, kits de chave de fenda, crimpadores e ferramentas de precisão.'
+            ),
+            'beauty' => new DepartmentDto(
+                code: 'beauty',
+                name: 'Beleza, Saúde & Maquiagem',
+                icon: '✨',
+                aliExpressCategoryIds: [66, 660103],
+                databaseCategories: [
+                    'Beleza, Saúde & Maquiagem',
+                    'Beleza, Cuidados & Estilo',
+                    'Beleza e saúde',
+                    'Saúde & Cuidados',
+                    'Maquiagem'
+                ],
+                description: 'Secadores, escovas alisadoras, maquiagens e cuidados pessoais.'
+            ),
+            'pets' => new DepartmentDto(
+                code: 'pets',
+                name: 'Pet Shop',
+                icon: '🐾',
+                aliExpressCategoryIds: [100006664],
+                databaseCategories: [
+                    'Pet Shop',
+                    'Pet Shop & Cuidados Animais',
+                    'Pet Shop & Pets Virais'
+                ],
+                description: 'Acessórios, coleiras, brinquedos e caminhas para pets.'
+            ),
+        ];
+    }
+
+    public function getDepartmentByCode(string $code): ?DepartmentDto
+    {
+        $code = strtolower(trim($code));
+        $departments = $this->getAllDepartments();
+        return $departments[$code] ?? null;
+    }
+
+    public function getDepartmentByName(string $name): ?DepartmentDto
+    {
+        $clean = mb_strtolower(trim($name), 'UTF-8');
+        if ($clean === '') {
+            return null;
+        }
+
+        $departments = $this->getAllDepartments();
+
+        // 1. Match exato pelo código ou nome oficial
+        foreach ($departments as $code => $dto) {
+            if ($code === $clean || mb_strtolower($dto->name, 'UTF-8') === $clean) {
+                return $dto;
+            }
+        }
+
+        // 2. Match pelas categorias de banco mapeadas
+        foreach ($departments as $dto) {
+            foreach ($dto->databaseCategories as $dbCat) {
+                if (mb_strtolower($dbCat, 'UTF-8') === $clean) {
+                    return $dto;
+                }
+            }
+        }
+
+        // 3. Mapeamentos inequívocos de alta precisão (sem vazamento)
+        if (str_contains($clean, 'automotiv') || str_contains($clean, 'veicular') || str_contains($clean, 'veículo') || str_contains($clean, 'veiculo') || (str_contains($clean, 'peças') && str_contains($clean, 'acessórios') && !str_contains($clean, 'ferramenta'))) {
+            return $departments['auto'];
+        }
+        if (str_contains($clean, 'lingerie') || str_contains($clean, 'íntima') || str_contains($clean, 'intima') || str_contains($clean, 'pijama')) {
+            return $departments['lingerie'];
+        }
+        if (str_contains($clean, 'fitness') || str_contains($clean, 'legging') || str_contains($clean, 'academia')) {
+            return $departments['fitness'];
+        }
+        if (str_contains($clean, 'roupa') || str_contains($clean, 'vestuário') || str_contains($clean, 'vestuario') || str_contains($clean, 'moda') || str_contains($clean, 'bolsa') || str_contains($clean, 'calçado') || str_contains($clean, 'calcado') || str_contains($clean, 'sapato')) {
+            return $departments['fashion'];
+        }
+        if (str_contains($clean, 'celular') || str_contains($clean, 'smartphone') || str_contains($clean, 'projetor') || str_contains($clean, 'tv box')) {
+            return $departments['mobile_tv'];
+        }
+        if (str_contains($clean, 'relogio') || str_contains($clean, 'relógio') || str_contains($clean, 'smartwatch')) {
+            return $departments['smartwatch'];
+        }
+        if (str_contains($clean, 'ferramenta') || str_contains($clean, 'alicate') || str_contains($clean, 'crimpador')) {
+            return $departments['tools'];
+        }
+        if (str_contains($clean, 'pet') || str_contains($clean, 'cachorro') || str_contains($clean, 'gato')) {
+            return $departments['pets'];
+        }
+        if (str_contains($clean, 'beleza') || str_contains($clean, 'maquiagem') || str_contains($clean, 'saúde') || str_contains($clean, 'saude')) {
+            return $departments['beauty'];
+        }
+        if (str_contains($clean, 'casa') || str_contains($clean, 'iluminação') || str_contains($clean, 'iluminacao') || str_contains($clean, 'eletro')) {
+            return $departments['home'];
+        }
+        if (str_contains($clean, 'eletron') || str_contains($clean, 'telefonia') || str_contains($clean, 'áudio') || str_contains($clean, 'audio')) {
+            return $departments['tech'];
+        }
+
+        return null;
+    }
+
+    public function getDatabaseCategoriesFor(string $departmentOrCategory): array
+    {
+        $dept = $this->getDepartmentByCode($departmentOrCategory) ?? $this->getDepartmentByName($departmentOrCategory);
+        if ($dept !== null) {
+            return $dept->databaseCategories;
+        }
+
+        return [$departmentOrCategory];
+    }
+
+    public function toDepartmentJson(): string
+    {
+        $list = array_values(array_map(fn(DepartmentDto $d) => $d->toArray(), $this->getAllDepartments()));
+        return json_encode($list, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+    }
+
+    /**
+     * Constrói cláusula SQL estrita para filtragem na vitrine (Zero-Contaminação entre departamentos).
+     *
+     * Elimina cláusulas frouxas de 'OR title LIKE' que antes vazavam itens de vestuário
+     * para peças automotivas ou ferramentas. Utiliza placeholders parametrizados.
+     */
     public function buildSqlFilter(string $requestedCategory, array &$params): string
     {
         $raw = trim($requestedCategory);
-        $lower = mb_strtolower($raw, 'UTF-8');
-        $clean = preg_replace('/[^\p{L}\p{N}\s&]/u', ' ', $lower) ?? $lower;
-
-        // 0. Filtro específico de Áudio & Fones (Prioridade alta antes de eletrônicos gerais)
-        if ($clean === 'audio' || $clean === 'áudio' || str_starts_with($clean, 'fone') || str_contains($clean, 'ouvido') || str_contains($clean, 'headphone')) {
-            return "(
-                (
-                    category IN ('Áudio', 'Audio', 'Fones Bluetooth TWS')
-                    OR title LIKE '%Fone%'
-                    OR title LIKE '%Tws%'
-                    OR title LIKE '%Headphone%'
-                    OR title LIKE '%Earphone%'
-                    OR title LIKE '%Microfone%'
-                )
-                AND title NOT LIKE '%Smartwatch%'
-                AND title NOT LIKE '%Relógio%'
-                AND title NOT LIKE '%Pulseira%'
-                AND title NOT LIKE '%Chave%'
-                AND title NOT LIKE '%Reparo%'
-            )";
+        if ($raw === '') {
+            return '1=1';
         }
 
-        // 0.1 Filtro específico de Celular / Smartphone
-        if ($clean === 'celular' || $clean === 'smartphone' || $clean === 'celulares') {
-            return "(
-                category IN ('Telefones e telecomunicações', 'Celulares', 'Smartphones')
-                OR title LIKE '%Celular%'
-                OR title LIKE '%Telefone%'
-                OR title LIKE '%Smartphone%'
-            )";
+        $dept = $this->getDepartmentByCode($raw) ?? $this->getDepartmentByName($raw);
+        if ($dept !== null) {
+            $allowed = $dept->databaseCategories;
+            $clauses = [];
+            foreach ($allowed as $catName) {
+                $clauses[] = "(category = ? OR LOWER(category) = ?)";
+                $params[] = $catName;
+                $params[] = mb_strtolower(trim($catName), 'UTF-8');
+            }
+            $clauseStr = implode(' OR ', $clauses);
+            return "(({$clauseStr}) AND LOWER(category) NOT IN ('geral', 'default', ''))";
         }
 
-        // 0.2 Filtro específico de Moda Fitness & Leggings
-        if (str_contains($clean, 'fitness') || str_contains($clean, 'feetness') || str_contains($clean, 'legging') || str_contains($clean, 'academia') || str_contains($clean, 'suplex') || str_contains($clean, 'macaquinho')) {
-            return "(
-                category IN ('Moda Fitness, Leggings & Academia', 'Moda Fitness', 'Fitness', 'Academia')
-                OR category LIKE '%Fitness%'
-                OR category LIKE '%Legging%'
-                OR title LIKE '%Legging%'
-                OR title LIKE '%Suplex%'
-                OR title LIKE '%Macacão%'
-                OR title LIKE '%Macacao%'
-                OR title LIKE '%Macaquinho%'
-                OR title LIKE '%Fitness%'
-                OR title LIKE '%Academia%'
-                OR title LIKE '%Empina Bumbum%'
-            )";
-        }
-
-        // 0.3 Filtro específico de Smartphones, TVs & Projetores 4K
-        if (str_contains($clean, 'projetor') || str_contains($clean, 'tv box') || str_contains($clean, 'smart tv') || str_contains($clean, 'poco') || str_contains($clean, 'magcubic') || str_contains($clean, 'hy300')) {
-            return "(
-                category IN ('Smartphones, TVs & Projetores 4K', 'Smartphones', 'Celulares', 'Projetores', 'TV Box')
-                OR category LIKE '%Smartphone%'
-                OR category LIKE '%Projetor%'
-                OR category LIKE '%TV%'
-                OR title LIKE '%Projetor%'
-                OR title LIKE '%Magcubic%'
-                OR title LIKE '%HY300%'
-                OR title LIKE '%TV Box%'
-                OR title LIKE '%Smartphone%'
-                OR title LIKE '%Poco%'
-                OR title LIKE '%Redmi Note%'
-            )";
-        }
-
-        // 1. Roupa Íntima & Pijamas (ID 200574005)
-        if (str_contains($clean, 'lingerie') || str_contains($clean, 'intima') || str_contains($clean, 'íntima') || str_contains($clean, 'pijama') || str_contains($clean, 'sutia') || str_contains($clean, 'sutiã') || str_contains($clean, 'meia calca') || str_contains($clean, 'meia calça') || str_contains($clean, 'cueca')) {
-            return "(
-                category IN ('Roupa Íntima & Pijamas', 'Roupa íntima', 'Moda Íntima, Lingeries & Pijamas', 'Moda Íntima', 'Lingeries', 'Lingerie')
-                OR category LIKE '%Íntima%'
-                OR category LIKE '%Intima%'
-                OR category LIKE '%Lingerie%'
-                OR title LIKE '%Lingerie%'
-                OR title LIKE '%Sutiã%'
-                OR title LIKE '%Sutia%'
-                OR title LIKE '%Calcinha%'
-                OR title LIKE '%Push Up%'
-                OR title LIKE '%Push-Up%'
-                OR title LIKE '%Pijama%'
-                OR title LIKE '%Baby Doll%'
-                OR title LIKE '%Renda Natalina%'
-                OR title LIKE '%Meia-Calça%'
-                OR title LIKE '%Meia Calça%'
-                OR title LIKE '%Meia Calca%'
-                OR title LIKE '%Arrastão%'
-                OR title LIKE '%Arrastao%'
-                OR title LIKE '%Cueca%'
-                OR title LIKE '%Boxer%'
-            )";
-        }
-
-        // 2. Massagem & Bem-Estar Corporal
-        if (str_contains($clean, 'massageador') || str_contains($clean, 'massagem') || str_contains($clean, 'relaxamento') || str_contains($clean, 'miofascial')) {
-            return "(
-                category IN ('Beleza, Saúde & Maquiagem', 'Beleza, Cuidados & Estilo', 'Saúde e beleza')
-                OR title LIKE '%Massageador%'
-                OR title LIKE '%Relaxamento Muscular%'
-                OR title LIKE '%Rolo De Massagem%'
-            )";
-        }
-
-        // 3. Roupas, Bolsas & Calçados (IDs 200000345, 200000343, 1524, 322)
-        if (str_contains($clean, 'roupa') || str_contains($clean, 'vestuario') || str_contains($clean, 'vestuário') || str_contains($clean, 'moda') || str_contains($clean, 'casaco') || str_contains($clean, 'jaqueta') || str_contains($clean, 'mochila') || str_contains($clean, 'bolsa') || str_contains($clean, 'carteira') || str_contains($clean, 'tenis') || str_contains($clean, 'tênis') || str_contains($clean, 'sapato') || str_contains($clean, 'calcado') || str_contains($clean, 'calçado')) {
-            return "(
-                (
-                    category IN ('Roupas, Bolsas & Calçados', 'Moda, Roupas & Vestuário', 'Roupas femininas', 'Roupas masculinas', 'Bolsas e malas', 'Sapatos', 'Roupas', 'Vestuário', 'Moda')
-                    OR (category LIKE '%Moda%' AND category NOT LIKE '%Íntima%' AND category NOT LIKE '%Intima%')
-                    OR (category LIKE '%Roupa%' AND category NOT LIKE '%Íntima%' AND category NOT LIKE '%Intima%')
-                    OR category LIKE '%Bolsa%'
-                    OR category LIKE '%Sapato%'
-                    OR category LIKE '%Calçado%'
-                    OR title LIKE '%Casaco%'
-                    OR title LIKE '%Jaqueta%'
-                    OR title LIKE '%Corta-Vento%'
-                    OR title LIKE '%Ciclismo%'
-                    OR title LIKE '%Moletom%'
-                    OR title LIKE '%Camisa%'
-                    OR title LIKE '%Calça%'
-                    OR title LIKE '%Mochila%'
-                    OR title LIKE '%Bolsa%'
-                    OR title LIKE '%Carteira%'
-                    OR title LIKE '%Tênis%'
-                    OR title LIKE '%Tenis%'
-                    OR title LIKE '%Sapato%'
-                    OR title LIKE '%Meia%'
-                    OR title LIKE '%Chaveiro%'
-                )
-                AND title NOT LIKE '%Lingerie%'
-                AND title NOT LIKE '%Sutiã%'
-                AND title NOT LIKE '%Calcinha%'
-                AND title NOT LIKE '%Meia-Calça%'
-                AND title NOT LIKE '%Meia Calça%'
-                AND title NOT LIKE '%Cueca%'
-            )";
-        }
-
-        // 4. Pet Shop (ID 100006664)
-        if (str_contains($clean, 'pet') || str_contains($clean, 'cachorro') || str_contains($clean, 'gato') || str_contains($clean, 'cao') || str_contains($clean, 'cão')) {
-            return "(
-                category IN ('Pet Shop', 'Pet Shop & Pets Virais')
-                OR category LIKE '%Pet%'
-                OR title LIKE '%Trela%'
-                OR title LIKE '%Coleira%'
-                OR title LIKE '%Cachorro%'
-                OR title LIKE '% Cães%'
-                OR title LIKE '% Cão %'
-                OR title LIKE '% Cão,%'
-                OR title LIKE '% Cão'
-                OR title LIKE 'Cão %'
-                OR title LIKE '%Gato%'
-            )";
-        }
-
-        // 5. Peças & Acessórios Automotivos (ID 34)
-        if (str_contains($clean, 'veiculo') || str_contains($clean, 'veículo') || str_contains($clean, 'carro') || str_contains($clean, 'automotivo') || str_contains($clean, 'auto') || str_contains($clean, 'moto') || str_contains($clean, 'peça')) {
-            return "(
-                category IN ('Peças & Acessórios Automotivos', 'Peças e acessórios automotivos', 'Acessórios para Veículos', 'Acessórios Auto')
-                OR category LIKE '%Automotiv%'
-                OR category LIKE '%Veículo%'
-                OR category LIKE '%Veiculo%'
-                OR category LIKE '%Auto%'
-                OR title LIKE '%Veicular%'
-                OR title LIKE '%Carro%'
-                OR title LIKE '%Ventilação De Ar%'
-                OR title LIKE '%Suporte Automotivo%'
-                OR title LIKE '%Telemóvel Com Ventosa%'
-            )";
-        }
-
-        // 6. Ferramentas & Utilidades (ID 1420, 30)
-        if (str_contains($clean, 'alicate') || str_contains($clean, 'ferramenta') || str_contains($clean, 'crimpador') || str_contains($clean, 'decapador') || str_contains($clean, 'chave') || str_contains($clean, 'utilidade') || str_contains($clean, 'segurança')) {
-            return "(
-                category IN ('Ferramentas & Utilidades', 'Ferramentas', 'Segurança e proteção', 'Acessórios Virais & Ferramentas', 'Acessórios Virais')
-                OR category LIKE '%Ferramenta%'
-                OR category LIKE '%Alicate%'
-                OR title LIKE '%Alicate%'
-                OR title LIKE '%Crimpador%'
-                OR title LIKE '%Decapador%'
-                OR title LIKE '%Chave De Fenda%'
-                OR title LIKE '%Chaves De Precisão%'
-                OR title LIKE '%Catraca%'
-            )";
-        }
-
-        // 7. Relógios & Smartwatches (ID 1511)
-        if (str_contains($clean, 'smartwatch') || str_contains($clean, 'relogio') || str_contains($clean, 'relógio') || str_contains($clean, 'pulseira') || str_contains($clean, 'watch')) {
-            return "(
-                category IN ('Relógios & Smartwatches', 'Relógios', 'Smartwatches & Áudio', 'Smartwatches')
-                OR category LIKE '%Relógio%'
-                OR category LIKE '%Relogio%'
-                OR category LIKE '%Smartwatch%'
-                OR title LIKE '%Smartwatch%'
-                OR title LIKE '%Relógio%'
-                OR title LIKE '%Relogio%'
-                OR title LIKE '%Apple Watch%'
-                OR title LIKE '%Pulseira%'
-            )";
-        }
-
-        // 8. Beleza, Saúde & Maquiagem (ID 66, 660103)
-        if (str_contains($clean, 'beleza') || str_contains($clean, 'cabelo') || str_contains($clean, 'secador') || str_contains($clean, 'escova') || str_contains($clean, 'saude') || str_contains($clean, 'saúde') || str_contains($clean, 'cuidado') || str_contains($clean, 'maquiagem') || str_contains($clean, 'batom')) {
-            return "(
-                category IN ('Beleza, Saúde & Maquiagem', 'Beleza e saúde', 'Maquiagem', 'Beleza, Cuidados & Estilo', 'Saúde & Cuidados')
-                OR category LIKE '%Beleza%'
-                OR category LIKE '%Saúde%'
-                OR category LIKE '%Saude%'
-                OR category LIKE '%Maquiagem%'
-                OR title LIKE '%Secador%'
-                OR title LIKE '%Escova%'
-                OR title LIKE '%Cabelo%'
-                OR title LIKE '%Modelador%'
-                OR title LIKE '%Barbeador%'
-                OR title LIKE '%Maquiagem%'
-                OR title LIKE '%Batom%'
-                OR title LIKE '%Gloss%'
-                OR title LIKE '%Rímel%'
-                OR title LIKE '%Rimel%'
-                OR title LIKE '%Paleta%'
-                OR title LIKE '%Pincel%'
-                OR title LIKE '%Pincéis%'
-            )";
-        }
-
-        // 9. Casa, Iluminação & Eletro (ID 15, 39, 6, 13)
-        if (str_contains($clean, 'casa') || str_contains($clean, 'led') || str_contains($clean, 'luminaria') || str_contains($clean, 'luminária') || str_contains($clean, 'lampada') || str_contains($clean, 'lâmpada') || str_contains($clean, 'iluminação') || str_contains($clean, 'eletro')) {
-            return "(
-                (
-                    category IN ('Casa, Iluminação & Eletro', 'Casa e jardim', 'Luz e iluminação', 'Eletrodomésticos e Portáteis', 'Melhorias domésticas', 'Casa Inteligente & Organização', 'Casa Inteligente')
-                    OR category LIKE '%Casa%'
-                    OR category LIKE '%Iluminação%'
-                    OR category LIKE '%Iluminacao%'
-                    OR category LIKE '%Luz%'
-                    OR category LIKE '%Eletro%'
-                    OR title LIKE '%Led%'
-                    OR title LIKE '%Luminária%'
-                    OR title LIKE '%Luminaria%'
-                    OR title LIKE '%Lâmpada%'
-                    OR title LIKE '%Lampada%'
-                    OR title LIKE '%Tuya%'
-                    OR title LIKE '%Monitor%'
-                )
-                AND title NOT LIKE '%Trela%'
-                AND title NOT LIKE '%Coleira%'
-            )";
-        }
-
-        // 10. Eletrônicos & Telefonia (ID 44, 509, 7)
-        if (str_contains($clean, 'eletronico') || str_contains($clean, 'eletrônico') || str_contains($clean, 'telefone') || str_contains($clean, 'telefonia') || str_contains($clean, 'computador') || str_contains($clean, 'tecnologia') || str_contains($clean, 'gadget') || str_contains($clean, 'audio') || str_contains($clean, 'áudio') || str_contains($clean, 'fone')) {
-            return "(
-                category IN ('Eletrônicos & Telefonia', 'Eletrônicos', 'Telefones e telecomunicações', 'Computador e escritório', 'Tecnologia & Gadgets', 'Eletrônicos & Gadget', 'Áudio', 'Audio', 'Fones Bluetooth TWS')
-                OR category LIKE '%Eletrônic%'
-                OR category LIKE '%Eletronic%'
-                OR category LIKE '%Telefone%'
-                OR category LIKE '%Computador%'
-                OR category LIKE '%Tecnologia%'
-                OR category LIKE '%Áudio%'
-                OR category LIKE '%Audio%'
-                OR title LIKE '%Projetor%'
-                OR title LIKE '%Console%'
-                OR title LIKE '%Power Bank%'
-                OR title LIKE '%Carregador%'
-                OR title LIKE '%Fone%'
-                OR title LIKE '%Tws%'
-                OR title LIKE '%Headphone%'
-                OR title LIKE '%Earphone%'
-                OR title LIKE '%Microfone%'
-            )";
-        }
-
-        // Fallback genérico seguro
+        // Fallback parametrizado estrito por categoria exata
         $params[] = $raw;
-        $params[] = '%' . $raw . '%';
-        return "(category = ? OR category LIKE ?)";
+        $params[] = mb_strtolower($raw, 'UTF-8');
+        return "((category = ? OR LOWER(category) = ?) AND LOWER(category) NOT IN ('geral', 'default', ''))";
     }
 
     /**

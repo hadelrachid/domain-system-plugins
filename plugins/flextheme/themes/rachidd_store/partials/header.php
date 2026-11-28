@@ -5,6 +5,9 @@ $currentCat = trim((string)($_GET['cat'] ?? ''));
 $currentQ = trim((string)($_GET['q'] ?? ''));
 $currentSort = trim((string)($_GET['sort'] ?? ''));
 
+$headerTaxonomy = new \DomainSystem\Plugins\domain_drop\Services\CategoryTaxonomyService();
+$currentDeptCode = !empty($currentCat) ? ($headerTaxonomy->getDepartmentByName($currentCat)?->code ?? strtolower($currentCat)) : '';
+
 $customerLoggedId = 0;
 $customerLoggedName = '';
 try {
@@ -182,7 +185,7 @@ if ($customerLoggedId <= 0 && isset($_SESSION['customer_id'])) {
         </a>
 
         <!-- Eletrônicos & Telefonia -->
-        <a href="<?= $baseUrl ?>/loja?cat=<?= urlencode('Eletrônicos & Telefonia') ?>#produtos" class="cat-drawer-item <?= (stripos($currentCat, 'eletrônic') !== false || stripos($currentCat, 'telefonia') !== false || stripos($currentCat, 'tecnologia') !== false) ? 'active' : '' ?>">
+        <a href="<?= $baseUrl ?>/loja?cat=<?= urlencode('Eletrônicos & Telefonia') ?>#produtos" class="cat-drawer-item <?= ($currentDeptCode === 'tech') ? 'active' : '' ?>">
             <div style="display: flex; align-items: center;">
                 <span class="item-icon">📱</span>
                 <span>Eletrônicos & Telefonia</span>
@@ -191,7 +194,7 @@ if ($customerLoggedId <= 0 && isset($_SESSION['customer_id'])) {
         </a>
 
         <!-- Relógios & Smartwatches -->
-        <a href="<?= $baseUrl ?>/loja?cat=<?= urlencode('Relógios & Smartwatches') ?>#produtos" class="cat-drawer-item <?= (stripos($currentCat, 'relógio') !== false || stripos($currentCat, 'relogio') !== false || stripos($currentCat, 'smartwatch') !== false) ? 'active' : '' ?>">
+        <a href="<?= $baseUrl ?>/loja?cat=<?= urlencode('Relógios & Smartwatches') ?>#produtos" class="cat-drawer-item <?= ($currentDeptCode === 'smartwatch') ? 'active' : '' ?>">
             <div style="display: flex; align-items: center;">
                 <span class="item-icon">⌚</span>
                 <span>Relógios & Smartwatches</span>
@@ -200,7 +203,7 @@ if ($customerLoggedId <= 0 && isset($_SESSION['customer_id'])) {
         </a>
 
         <!-- Casa, Iluminação & Eletro -->
-        <a href="<?= $baseUrl ?>/loja?cat=<?= urlencode('Casa, Iluminação & Eletro') ?>#produtos" class="cat-drawer-item <?= (stripos($currentCat, 'casa') !== false || stripos($currentCat, 'iluminação') !== false || stripos($currentCat, 'eletro') !== false) ? 'active' : '' ?>">
+        <a href="<?= $baseUrl ?>/loja?cat=<?= urlencode('Casa, Iluminação & Eletro') ?>#produtos" class="cat-drawer-item <?= ($currentDeptCode === 'home') ? 'active' : '' ?>">
             <div style="display: flex; align-items: center;">
                 <span class="item-icon">🏠</span>
                 <span>Casa, Iluminação & Eletro</span>
@@ -209,7 +212,7 @@ if ($customerLoggedId <= 0 && isset($_SESSION['customer_id'])) {
         </a>
 
         <!-- Ferramentas & Utilidades -->
-        <a href="<?= $baseUrl ?>/loja?cat=<?= urlencode('Ferramentas & Utilidades') ?>#produtos" class="cat-drawer-item <?= (stripos($currentCat, 'ferramenta') !== false || stripos($currentCat, 'utilidade') !== false || stripos($currentCat, 'acessorio') !== false) ? 'active' : '' ?>">
+        <a href="<?= $baseUrl ?>/loja?cat=<?= urlencode('Ferramentas & Utilidades') ?>#produtos" class="cat-drawer-item <?= ($currentDeptCode === 'tools') ? 'active' : '' ?>">
             <div style="display: flex; align-items: center;">
                 <span class="item-icon">🛠️</span>
                 <span>Ferramentas & Utilidades</span>
@@ -218,7 +221,7 @@ if ($customerLoggedId <= 0 && isset($_SESSION['customer_id'])) {
         </a>
 
         <!-- Beleza, Saúde & Maquiagem -->
-        <a href="<?= $baseUrl ?>/loja?cat=<?= urlencode('Beleza, Saúde & Maquiagem') ?>#produtos" class="cat-drawer-item <?= (stripos($currentCat, 'beleza') !== false || stripos($currentCat, 'saúde') !== false || stripos($currentCat, 'maquiagem') !== false) ? 'active' : '' ?>">
+        <a href="<?= $baseUrl ?>/loja?cat=<?= urlencode('Beleza, Saúde & Maquiagem') ?>#produtos" class="cat-drawer-item <?= ($currentDeptCode === 'beauty') ? 'active' : '' ?>">
             <div style="display: flex; align-items: center;">
                 <span class="item-icon">✨</span>
                 <span>Beleza, Saúde & Maquiagem</span>
@@ -227,7 +230,7 @@ if ($customerLoggedId <= 0 && isset($_SESSION['customer_id'])) {
         </a>
 
         <!-- Pet Shop -->
-        <a href="<?= $baseUrl ?>/loja?cat=Pet+Shop#produtos" class="cat-drawer-item <?= (stripos($currentCat, 'pet') !== false) ? 'active' : '' ?>">
+        <a href="<?= $baseUrl ?>/loja?cat=Pet+Shop#produtos" class="cat-drawer-item <?= ($currentDeptCode === 'pets') ? 'active' : '' ?>">
             <div style="display: flex; align-items: center;">
                 <span class="item-icon">🐾</span>
                 <span>Pet Shop</span>
@@ -236,7 +239,7 @@ if ($customerLoggedId <= 0 && isset($_SESSION['customer_id'])) {
         </a>
 
         <!-- Peças & Acessórios Automotivos -->
-        <a href="<?= $baseUrl ?>/loja?cat=<?= urlencode('Peças & Acessórios Automotivos') ?>#produtos" class="cat-drawer-item <?= (stripos($currentCat, 'automotiv') !== false || stripos($currentCat, 'veículo') !== false || stripos($currentCat, 'veiculo') !== false) ? 'active' : '' ?>">
+        <a href="<?= $baseUrl ?>/loja?cat=<?= urlencode('Peças & Acessórios Automotivos') ?>#produtos" class="cat-drawer-item <?= ($currentDeptCode === 'auto') ? 'active' : '' ?>">
             <div style="display: flex; align-items: center;">
                 <span class="item-icon">🚗</span>
                 <span>Peças & Acessórios Automotivos</span>
@@ -245,7 +248,7 @@ if ($customerLoggedId <= 0 && isset($_SESSION['customer_id'])) {
         </a>
 
         <!-- Roupas, Bolsas & Calçados -->
-        <a href="<?= $baseUrl ?>/loja?cat=<?= urlencode('Roupas, Bolsas & Calçados') ?>#produtos" class="cat-drawer-item <?= ((stripos($currentCat, 'roupa') !== false || stripos($currentCat, 'bolsa') !== false || stripos($currentCat, 'calçado') !== false || stripos($currentCat, 'vestuário') !== false) && stripos($currentCat, 'íntima') === false) ? 'active' : '' ?>">
+        <a href="<?= $baseUrl ?>/loja?cat=<?= urlencode('Roupas, Bolsas & Calçados') ?>#produtos" class="cat-drawer-item <?= ($currentDeptCode === 'fashion') ? 'active' : '' ?>">
             <div style="display: flex; align-items: center;">
                 <span class="item-icon">👗</span>
                 <span>Roupas, Bolsas & Calçados</span>
@@ -254,7 +257,7 @@ if ($customerLoggedId <= 0 && isset($_SESSION['customer_id'])) {
         </a>
 
         <!-- Roupa Íntima & Pijamas -->
-        <a href="<?= $baseUrl ?>/loja?cat=<?= urlencode('Roupa Íntima & Pijamas') ?>#produtos" class="cat-drawer-item <?= (stripos($currentCat, 'lingerie') !== false || stripos($currentCat, 'íntima') !== false || stripos($currentCat, 'intima') !== false || stripos($currentCat, 'pijama') !== false) ? 'active' : '' ?>">
+        <a href="<?= $baseUrl ?>/loja?cat=<?= urlencode('Roupa Íntima & Pijamas') ?>#produtos" class="cat-drawer-item <?= ($currentDeptCode === 'lingerie') ? 'active' : '' ?>">
             <div style="display: flex; align-items: center;">
                 <span class="item-icon">👙</span>
                 <span>Roupa Íntima & Pijamas</span>
