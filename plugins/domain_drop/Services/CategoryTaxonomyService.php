@@ -708,16 +708,19 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
      *
      * @return array<int, string>
      */
-    public function getFamilyCategories(string $category): array
+    public function getFamilyCategories(string $category, string $title = ''): array
     {
-        $clean = mb_strtolower(preg_replace('/[^\p{L}\p{N}\s&]/u', ' ', $category) ?? $category, 'UTF-8');
+        $combined = trim($category . ' ' . $title);
+        $clean = mb_strtolower(preg_replace('/[^\p{L}\p{N}\s&]/u', ' ', $combined) ?? $combined, 'UTF-8');
 
-        // 1. Família MODA / VESTUÁRIO / CALÇADOS / FITNESS / LINGERIE
+        // 1. Família MODA / VESTUÁRIO / CALÇADOS / FITNESS / LINGERIE / TOPS
         $fashionTerms = [
             'moda', 'roupa', 'vestuário', 'vestuario', 'vestido', 'calça', 'calca', 'camisa',
             'camiseta', 'short', 'lingerie', 'fitness', 'legging', 'biquini', 'maiô', 'calçado',
             'calcado', 'sapato', 'tênis', 'tenis', 'sandália', 'sandalia', 'cueca', 'sutiã',
-            'sutia', 'jaqueta', 'casaco', 'bolsa', 'feminina', 'masculina', 'intima', 'íntima'
+            'sutia', 'jaqueta', 'casaco', 'bolsa', 'feminina', 'feminino', 'masculina', 'masculino',
+            'intima', 'íntima', 'top', 'tops', 'academia', 'suplex', 'macaquinho', 'cropped',
+            'regata', 'body', 'saia', 'bermuda'
         ];
         foreach ($fashionTerms as $term) {
             if (str_contains($clean, $term)) {
@@ -731,6 +734,10 @@ class CategoryTaxonomyService implements CategoryTaxonomyInterface
                     'Moda Masculina',
                     'Vestuário',
                     'Calçados',
+                    'Roupas femininas',
+                    'Roupas masculinas',
+                    'Fitness',
+                    'Academia',
                 ];
             }
         }

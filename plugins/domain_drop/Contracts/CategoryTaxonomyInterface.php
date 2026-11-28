@@ -68,5 +68,5 @@ interface CategoryTaxonomyInterface
      *
      * @return array<int, string>
      */
-    public function getFamilyCategories(string $category): array;
+    public function getFamilyCategories(string $category, string $title = ''): array;
 }

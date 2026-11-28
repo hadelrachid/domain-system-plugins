@@ -7,8 +7,10 @@ namespace DomainSystem\Plugins\domain_drop\Repositories;
 use DomainSystem\Core\Contracts\DatabaseConnectionInterface;
 use DomainSystem\Plugins\domain_drop\Contracts\CategoryTaxonomyInterface;
 use DomainSystem\Plugins\domain_drop\Contracts\DropshipCatalogRepositoryInterface;
+use DomainSystem\Plugins\domain_drop\Contracts\SocratesOfferFilterInterface;
 use DomainSystem\Plugins\domain_drop\DTO\DropshipProductDto;
 use DomainSystem\Plugins\domain_drop\Services\CategoryTaxonomyService;
+use DomainSystem\Plugins\domain_drop\Services\SocratesOfferFilterService;
 use PDO;
 
 /**
@@ -19,16 +21,19 @@ class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
     private DatabaseConnectionInterface|PDO $connection;
     private PDO $pdo;
     private CategoryTaxonomyInterface $taxonomy;
+    private ?SocratesOfferFilterInterface $socratesFilter;
 
     public function __construct(
         DatabaseConnectionInterface|PDO $connection,
-        ?CategoryTaxonomyInterface $taxonomy = null
+        ?CategoryTaxonomyInterface $taxonomy = null,
+        ?SocratesOfferFilterInterface $socratesFilter = null
     ) {
         $this->connection = $connection;
         $this->pdo = $connection instanceof DatabaseConnectionInterface
             ? $connection->getPdo()
             : $connection;
         $this->taxonomy = $taxonomy ?? new CategoryTaxonomyService();
+        $this->socratesFilter = $socratesFilter;
         DomainDropSchemaEnsurer::ensure($this->getPdo());
     }
 
@@ -584,122 +589,18 @@ class PdoDropshipCatalogRepository implements DropshipCatalogRepositoryInterface
         });
     }
 
+    /**
+     * Localiza ofertas similares / outros vendedores através dos 3 Filtros de Sócrates:
+     * 1º Filtro: CATEGORIA (Inviolabilidade do nicho / Zero-Contaminação entre departamentos).
+     * 2º Filtro: SEMÂNTICA (Relevância do tipo de produto no título).
+     * 3º Filtro: ESPECIFICIDADE (Acessibilidade de preço, volume e notas).
+     *
+     * @return array<int, DropshipProductDto>
+     */
     public function findSimilarOffers(int $excludeId, string $category, string $title = '', int $limit = 4, float $targetPrice = 0.0): array
     {
-        $limit = max(1, min(20, $limit));
-        $rows = [];
-        $collectedIds = [$excludeId];
-
-        // 1. Obtém a família de categorias do produto para garantir Zero-Contaminação entre nichos distintos
-        $familyCategories = $this->taxonomy->getFamilyCategories($category);
-
-        // 2. Extrai palavras-chave substantivas do título (ex: "calça", "jeans")
-        $keywords = $this->extractSignificantKeywords($title);
-
-        $orderBy = $targetPrice > 0.0
-            ? "ABS(sale_price_brl - {$targetPrice}) ASC, sale_price_brl ASC, orders_count DESC"
-            : "sale_price_brl ASC, orders_count DESC";
-
-        // ETAPA 1: Busca pelo mesmo produto ou substituto direto (palavras-chave no título DENTRO da mesma família)
-        if (!empty($keywords)) {
-            $kwWhere = ["status = 'published'", "id NOT IN (" . implode(',', array_fill(0, count($collectedIds), '?')) . ")"];
-            $kwParams = $collectedIds;
-
-            // Cláusula de categoria/família
-            $catParams = [];
-            $kwWhere[] = $this->buildCategoryListClause($familyCategories, $catParams);
-            $kwParams = array_merge($kwParams, $catParams);
-
-            // Pelo menos 1 palavra-chave relevante deve estar no título
-            $kwOr = [];
-            foreach ($keywords as $kw) {
-                $kwOr[] = "LOWER(title) LIKE ?";
-                $kwParams[] = '%' . mb_strtolower($kw, 'UTF-8') . '%';
-            }
-            $kwWhere[] = '(' . implode(' OR ', $kwOr) . ')';
-
-            $sql = "SELECT * FROM domain_drop_catalog WHERE " . implode(' AND ', $kwWhere) . " ORDER BY {$orderBy} LIMIT " . ($limit - count($rows));
-            $stmt = $this->pdo->prepare($sql);
-            $stmt->execute($kwParams);
-            $foundRows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-            foreach ($foundRows as $r) {
-                $rows[] = $r;
-                $collectedIds[] = (int)$r['id'];
-            }
-        }
-
-        // ETAPA 2: Se ainda faltarem itens, busca outros produtos da MESMA CATEGORIA exata
-        if (count($rows) < $limit && $category !== '') {
-            $catWhere = ["status = 'published'", "id NOT IN (" . implode(',', array_fill(0, count($collectedIds), '?')) . ")"];
-            $catParams = $collectedIds;
-
-            $specParams = [];
-            $catWhere[] = $this->buildCategoryClause($category, $specParams);
-            $catParams = array_merge($catParams, $specParams);
-
-            $sql = "SELECT * FROM domain_drop_catalog WHERE " . implode(' AND ', $catWhere) . " ORDER BY {$orderBy} LIMIT " . ($limit - count($rows));
-            $stmt = $this->pdo->prepare($sql);
-            $stmt->execute($catParams);
-            $foundRows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-            foreach ($foundRows as $r) {
-                $rows[] = $r;
-                $collectedIds[] = (int)$r['id'];
-            }
-        }
-
-        // ETAPA 3: Se ainda faltarem itens, busca em categorias irmãs da MESMA FAMÍLIA (ex: moda íntima / fitness complementa moda geral)
-        if (count($rows) < $limit && count($familyCategories) > 1) {
-            $famWhere = ["status = 'published'", "id NOT IN (" . implode(',', array_fill(0, count($collectedIds), '?')) . ")"];
-            $famParams = $collectedIds;
-
-            $specParams = [];
-            $famWhere[] = $this->buildCategoryListClause($familyCategories, $specParams);
-            $famParams = array_merge($famParams, $specParams);
-
-            $sql = "SELECT * FROM domain_drop_catalog WHERE " . implode(' AND ', $famWhere) . " ORDER BY {$orderBy} LIMIT " . ($limit - count($rows));
-            $stmt = $this->pdo->prepare($sql);
-            $stmt->execute($famParams);
-            $foundRows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-            foreach ($foundRows as $r) {
-                $rows[] = $r;
-                $collectedIds[] = (int)$r['id'];
-            }
-        }
-
-        // ZERO CONTAMINAÇÃO: NUNCA fazemos fallback para categorias de outros nichos!
-        return array_map([$this, 'hydrate'], $rows);
-    }
-
-    /**
-     * Extrai as palavras-chave mais descritivas do título do produto para localização
-     * de ofertas comparáveis de outros vendedores ou produtos do mesmo tipo.
-     *
-     * @return array<int, string>
-     */
-    private function extractSignificantKeywords(string $title): array
-    {
-        if (trim($title) === '') {
-            return [];
-        }
-
-        $clean = mb_strtolower(preg_replace('/[^\p{L}\p{N}\s]/u', ' ', $title) ?? $title, 'UTF-8');
-        $words = array_filter(explode(' ', $clean), function (string $w): bool {
-            $len = mb_strlen($w, 'UTF-8');
-            if ($len < 3 || is_numeric($w)) {
-                return false;
-            }
-            $stopWords = [
-                'para', 'com', 'sem', 'por', 'uma', 'uns', 'umas', 'que', 'pro', 'max', 'plus',
-                'kit', 'pecas', 'peças', 'lote', 'novo', 'nova', 'novos', 'novas', 'original',
-                'alta', 'qualidade', 'frete', 'gratis', 'grátis', 'brasil', 'pronta', 'entrega',
-                'tipo', 'modelo', 'super', 'mini', 'top', 'premium', 'luxo', 'unidades', 'unidade',
-                'unid', 'versao', 'versão', 'tam', 'tamanho', 'cores', 'envio', 'rapido', 'rápido',
-                'graus', 'portatil', 'portátil', 'fashion', 'casual', 'estilo', 'elegante'
-            ];
-            return !in_array($w, $stopWords, true);
-        });
-
-        return array_values(array_slice(array_unique($words), 0, 4));
+        $filter = $this->socratesFilter ?? new SocratesOfferFilterService($this->getPdo(), $this->taxonomy);
+        return $filter->filter($excludeId, $category, $title, $limit, $targetPrice);
     }
 
     /**
